@@ -45,6 +45,23 @@ The architecture emphasizes a clean separation of concerns between frontend and 
   - All new users default to 'guard' role for security
   - Admin access requires manual database update
 
+- **Password Management System**: Implemented comprehensive password change and recovery features
+  - **Change Password**: Users can change their own password via Settings page (accessible from all dashboards)
+    - API: `POST /api/user/change-password` - Requires current password verification
+    - Frontend: Settings page with password change form (`/settings`)
+  - **Password Recovery**: Forgot password flow with secure token-based reset
+    - API: `POST /api/auth/request-password-reset` - Generates 32-byte secure reset token
+    - API: `POST /api/auth/verify-reset-token/:token` - Validates token and expiry
+    - API: `POST /api/auth/reset-password` - Resets password with valid token
+    - Frontend: Forgot password page (`/forgot-password`) and reset password page (`/reset-password`)
+    - Security: Reset tokens NEVER exposed to clients, only logged server-side for admin distribution
+    - Tokens expire after 1 hour and are single-use (deleted after reset)
+  - **Admin Password Reset**: Admins can directly reset user passwords
+    - API: `POST /api/admin/users/:id/reset-password` - Admin-only endpoint
+    - No UI yet - use API directly or add to admin user management page
+  - **Database**: Added `password_reset_tokens` table with userId, token, expiresAt fields
+  - **Security Audit**: Removed all plaintext password/hash logging from authentication flow
+
 - **Production Deployment Setup**: Successfully deployed to production
   - Production and development databases are SEPARATE
   - Production database initially empty - requires manual admin user creation
