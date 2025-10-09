@@ -50,7 +50,7 @@ export function setupAuth(app: Express) {
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
-      console.log("🔐 Login attempt for username:", username);
+      console.log("🔐 Login attempt for username:", JSON.stringify(username));
       const user = await storage.getUserByUsername(username);
       console.log("👤 User found:", user ? `Yes (${user.username})` : "No");
       
@@ -58,6 +58,11 @@ export function setupAuth(app: Express) {
         console.log("❌ Login failed: User not found");
         return done(null, false);
       }
+      
+      console.log("🔍 DB username:", JSON.stringify(user.username));
+      console.log("🔍 DB password first 30 chars:", user.password.substring(0, 30));
+      console.log("🔍 DB password length:", user.password.length);
+      console.log("🔍 Supplied password:", password);
       
       const passwordMatch = await comparePasswords(password, user.password);
       console.log("🔑 Password match:", passwordMatch);
