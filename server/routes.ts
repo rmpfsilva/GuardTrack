@@ -2,7 +2,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth } from "./auth";
+import { setupAuth, hashPassword } from "./auth";
 import { insertSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
@@ -60,6 +60,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting user:", error);
       res.status(400).json({ message: error.message || "Failed to delete user" });
+    }
+  });
+
+  // Admin password reset for users
+  app.post('/api/admin/users/:id/reset-password', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { newPassword } = req.body;
+
+      if (!newPassword) {
+        return res.status(400).json({ message: "New password is required" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      // Update user's password
+      await storage.updateUser(id, {
+        password: await hashPassword(newPassword),
+      });
+
+      res.status(200).json({ message: "Password reset successfully" });
+    } catch (error: any) {
+      console.error("Error resetting password:", error);
+      res.status(400).json({ message: error.message || "Failed to reset password" });
     }
   });
 

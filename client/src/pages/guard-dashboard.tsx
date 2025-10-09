@@ -5,7 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { Clock, MapPin, LogOut, LogIn, Calendar } from "lucide-react";
+import { Clock, MapPin, LogOut, LogIn, Calendar, Settings } from "lucide-react";
+import { Link } from "wouter";
 import proForceLogo from "@assets/download_1760019684165.png";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -214,6 +215,16 @@ export default function GuardDashboard() {
               </Avatar>
               <span className="text-sm font-medium hidden sm:inline">{user.firstName || user.email}</span>
             </div>
+            <Link href="/settings">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                data-testid="button-settings"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline ml-2">Settings</span>
+              </Button>
+            </Link>
             <Button 
               variant="ghost" 
               size="sm"

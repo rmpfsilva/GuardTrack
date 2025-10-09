@@ -11,6 +11,9 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import GuardDashboard from "@/pages/guard-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
+import SettingsPage from "@/pages/settings-page";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 
 function Router() {
   const { user } = useAuth();
@@ -18,6 +21,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
+      <ProtectedRoute path="/settings" component={SettingsPage} />
       {user && user.role === 'admin' ? (
         <ProtectedRoute path="/" component={AdminDashboard} />
       ) : (

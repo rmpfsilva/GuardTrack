@@ -1,7 +1,7 @@
 // Referenced from blueprint:javascript_auth_all_persistance
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -116,6 +116,20 @@ export default function AuthPage() {
               >
                 {isLogin ? "Sign In" : "Create Account"}
               </Button>
+
+              {isLogin && (
+                <div className="text-center text-sm">
+                  <Link href="/forgot-password">
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      data-testid="link-forgot-password"
+                    >
+                      Forgot password?
+                    </button>
+                  </Link>
+                </div>
+              )}
 
               <div className="text-center text-sm">
                 <button

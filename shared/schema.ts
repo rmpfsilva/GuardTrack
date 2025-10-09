@@ -99,6 +99,16 @@ export const invitations = pgTable("invitations", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Password reset tokens table - for password recovery
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: varchar("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkIns: many(checkIns),
@@ -202,6 +212,12 @@ export const updateInvitationSchema = createInsertSchema(invitations).omit({
   updatedAt: true,
 }).partial();
 
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({
+  id: true,
+  createdAt: true,
+  used: true,
+});
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -222,6 +238,9 @@ export type UpdateScheduledShift = z.infer<typeof updateScheduledShiftSchema>;
 export type Invitation = typeof invitations.$inferSelect;
 export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
 export type UpdateInvitation = z.infer<typeof updateInvitationSchema>;
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
 
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
