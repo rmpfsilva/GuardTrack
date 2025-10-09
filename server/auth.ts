@@ -10,7 +10,7 @@ import { User as SelectUser } from "@shared/schema";
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface User extends Omit<SelectUser, 'password'> {}
   }
 }
 
@@ -115,8 +115,8 @@ export function setupAuth(app: Express) {
     console.log("📥 POST /api/login received");
     console.log("📦 Request body:", req.body);
     
-    passport.authenticate("local", (err: any, user: any, info: any) => {
-      console.log("🔍 Passport authenticate callback - err:", err, "user:", user ? user.username : null, "info:", info);
+    passport.authenticate("local", (err: any, user: SelectUser | false, info: any) => {
+      console.log("🔍 Passport authenticate callback - err:", err, "user:", user ? (user as SelectUser).username : null, "info:", info);
       
       if (err) {
         console.log("❌ Authentication error:", err);
