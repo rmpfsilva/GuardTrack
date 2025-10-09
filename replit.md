@@ -1,7 +1,10 @@
 # GuardTrack - Security Guard Shift Management System
 
 ## Project Overview
-GuardTrack is a comprehensive web-based security guard shift scheduling and check-in system designed for security companies like ProForce. It provides real-time monitoring, attendance tracking, automated reporting capabilities, and shift scheduling.
+GuardTrack is a comprehensive web-based security guard shift scheduling and check-in system designed for security companies like ProForce Security & Events Ltd. It provides real-time monitoring, attendance tracking, automated reporting capabilities, and shift scheduling.
+
+**Current Deployment:** Single-company setup for ProForce Security & Events Ltd
+**Future Roadmap:** Multi-tenant SaaS platform supporting multiple security companies with subscription billing
 
 ## Purpose
 Streamline security guard operations by:
@@ -131,6 +134,88 @@ Streamline security guard operations by:
 2. Google Sheets connection is set up and ready
 3. Run `npm run dev` to start the application
 4. First admin user should be created manually in the database with role='admin'
+
+## Multi-Tenant Architecture (Future Enhancement)
+
+### Overview
+The current system is designed for a single company (ProForce Security & Events Ltd). To support multiple security companies with subscription-based access, the following changes will be needed:
+
+### Database Schema Changes
+When implementing multi-tenancy, add:
+
+1. **companies table**
+   - `id` (primary key)
+   - `name` (company name)
+   - `logo_url` (company logo)
+   - `subscription_tier` (basic/premium/enterprise)
+   - `subscription_status` (active/cancelled/suspended)
+   - `billing_email`
+   - `created_at`, `updated_at`
+
+2. **Add `company_id` to existing tables:**
+   - `users.company_id` - Associate users with their company
+   - `sites.company_id` - Sites belong to a company
+   - `check_ins.company_id` - Check-ins scoped to company (denormalized for query performance)
+   - `scheduled_shifts.company_id` - Shifts scoped to company
+
+3. **company_subscriptions table** (if using Stripe or similar)
+   - `id`, `company_id`, `stripe_subscription_id`, `plan_name`, `status`, etc.
+
+### Implementation Strategy
+
+**Phase 1: Data Isolation**
+- Add `company_id` foreign keys to all relevant tables
+- Implement row-level security: all queries must filter by `company_id`
+- Create middleware to inject company context from authenticated user
+- Update all storage methods to include company_id filtering
+
+**Phase 2: UI/UX Changes**
+- Company registration flow (signup page)
+- Company settings page (logo, branding, billing)
+- Super-admin dashboard to manage all companies
+- Dynamic branding (use company logo instead of hardcoded ProForce logo)
+
+**Phase 3: Billing Integration**
+- Integrate Stripe or similar for subscription management
+- Implement usage-based pricing (per guard, per site, etc.)
+- Add subscription status checks and feature gating
+- Payment portal for plan upgrades/downgrades
+
+**Phase 4: Data Migration**
+- Migrate existing ProForce data to new schema
+- Create ProForce company record with `id: 'proforce-001'`
+- Backfill all existing records with `company_id: 'proforce-001'`
+- Add NOT NULL constraint to `company_id` after migration
+
+### Key Considerations
+
+**Security**
+- Never leak data across companies (strict company_id filtering)
+- Implement proper authentication and authorization
+- Admin users can only manage their own company (except super-admins)
+
+**Performance**
+- Index all `company_id` foreign keys
+- Consider partitioning large tables by company_id if needed
+- Implement caching with company context
+
+**Compliance**
+- Data residency requirements (GDPR, etc.)
+- Support for data export/deletion per company
+- Audit logging per company
+
+### Current Architecture Compatibility
+✅ The current single-company design is compatible with future multi-tenancy:
+- Clean separation of concerns
+- All data access through storage layer (easy to add company filtering)
+- No hardcoded company assumptions in business logic
+- Logo and branding can be made dynamic
+
+⚠️ When implementing multi-tenancy, test thoroughly:
+- Company data isolation
+- Role-based access control across companies
+- Billing and subscription workflows
+- Performance with multiple companies
 
 ## User Roles
 - **Guard**: Can check in/out with geolocation, view own shift history and schedule

@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, endOfWeek } from "date-fns";
-import { Shield, Users, MapPin, Clock, Activity, Calendar } from "lucide-react";
+import { Users, MapPin, Clock, Activity, Calendar } from "lucide-react";
+import proForceLogo from "@assets/download_1760019684165.png";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -81,7 +82,7 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <Shield className="h-12 w-12 text-primary mx-auto mb-4 animate-pulse" />
+          <img src={proForceLogo} alt="ProForce Security" className="h-16 mx-auto mb-4 animate-pulse" />
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
@@ -101,11 +102,8 @@ export default function AdminDashboard() {
       <header className="border-b border-border sticky top-0 bg-background/95 backdrop-blur z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Shield className="h-6 w-6 text-primary" />
-            <div>
-              <span className="text-lg font-bold">GuardTrack</span>
-              <Badge variant="secondary" className="ml-2 text-xs">Admin</Badge>
-            </div>
+            <img src={proForceLogo} alt="ProForce Security" className="h-8" data-testid="img-company-logo" />
+            <Badge variant="secondary" className="text-xs">Admin</Badge>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />

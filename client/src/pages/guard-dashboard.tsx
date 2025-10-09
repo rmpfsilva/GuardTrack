@@ -5,7 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { Clock, MapPin, LogOut, LogIn, Shield, Calendar } from "lucide-react";
+import { Clock, MapPin, LogOut, LogIn, Calendar } from "lucide-react";
+import proForceLogo from "@assets/download_1760019684165.png";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -179,7 +180,7 @@ export default function GuardDashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <Shield className="h-12 w-12 text-primary mx-auto mb-4 animate-pulse" />
+          <img src={proForceLogo} alt="ProForce Security" className="h-16 mx-auto mb-4 animate-pulse" />
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
@@ -199,8 +200,7 @@ export default function GuardDashboard() {
       <header className="border-b border-border sticky top-0 bg-background/95 backdrop-blur z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Shield className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold">GuardTrack</span>
+            <img src={proForceLogo} alt="ProForce Security" className="h-8" data-testid="img-company-logo" />
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
