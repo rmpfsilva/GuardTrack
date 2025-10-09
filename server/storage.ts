@@ -44,6 +44,7 @@ export interface IStorage {
   getAllRecentActivity(limit: number): Promise<CheckInWithDetails[]>;
   getUserWeeklyHours(userId: string, weekStart: Date): Promise<number>;
   getAllUsersWeeklyHours(weekStart: Date): Promise<number>;
+  updateCheckInTimes(checkInId: string, times: { checkInTime: Date; checkOutTime: Date | null }): Promise<CheckIn>;
   
   // Scheduled shift operations
   getAllScheduledShifts(): Promise<ScheduledShiftWithDetails[]>;
@@ -188,6 +189,25 @@ export class DatabaseStorage implements IStorage {
         status: 'completed',
         updatedAt: new Date(),
       })
+      .where(eq(checkIns.id, checkInId))
+      .returning();
+    return checkIn;
+  }
+
+  async updateCheckInTimes(checkInId: string, times: { checkInTime: Date; checkOutTime: Date | null }): Promise<CheckIn> {
+    const updateData: any = {
+      checkInTime: times.checkInTime,
+      updatedAt: new Date(),
+    };
+
+    if (times.checkOutTime) {
+      updateData.checkOutTime = times.checkOutTime;
+      updateData.status = 'completed';
+    }
+
+    const [checkIn] = await db
+      .update(checkIns)
+      .set(updateData)
       .where(eq(checkIns.id, checkInId))
       .returning();
     return checkIn;

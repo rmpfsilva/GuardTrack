@@ -17,6 +17,8 @@ import GuardDirectory from "@/components/guard-directory";
 import ScheduleManagement from "@/components/schedule-management";
 import UserManagement from "@/components/user-management";
 import BillingReports from "@/components/billing-reports";
+import AdminCheckInControl from "@/components/admin-check-in-control";
+import EditCheckInDialog from "@/components/edit-check-in-dialog";
 
 interface DashboardStats {
   activeGuards: number;
@@ -29,6 +31,8 @@ export default function AdminDashboard() {
   const { user, isLoading: authLoading, isAdmin } = useAuth();
   const { toast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [editingCheckIn, setEditingCheckIn] = useState<CheckInWithDetails | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -200,6 +204,7 @@ export default function AdminDashboard() {
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
             <TabsTrigger value="guards" data-testid="tab-guards">Guards</TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
+            <TabsTrigger value="manual" data-testid="tab-manual">Manual</TabsTrigger>
             <TabsTrigger value="sites" data-testid="tab-sites">Sites</TabsTrigger>
             <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
           </TabsList>
@@ -316,6 +321,10 @@ export default function AdminDashboard() {
             <UserManagement />
           </TabsContent>
 
+          <TabsContent value="manual">
+            <AdminCheckInControl />
+          </TabsContent>
+
           <TabsContent value="sites">
             <SiteManagement />
           </TabsContent>
@@ -354,14 +363,27 @@ export default function AdminDashboard() {
                             </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-mono">
-                            {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
-                            {checkIn.checkOutTime && ` - ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
-                          </p>
-                          <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'} className="mt-1">
-                            {checkIn.status}
-                          </Badge>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-sm font-mono">
+                              {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
+                              {checkIn.checkOutTime && ` - ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
+                            </p>
+                            <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'} className="mt-1">
+                              {checkIn.status}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingCheckIn(checkIn);
+                              setIsEditDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-checkin-${checkIn.id}`}
+                          >
+                            Edit
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -372,6 +394,16 @@ export default function AdminDashboard() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Edit Check-In Dialog */}
+      <EditCheckInDialog
+        checkIn={editingCheckIn}
+        isOpen={isEditDialogOpen}
+        onClose={() => {
+          setIsEditDialogOpen(false);
+          setEditingCheckIn(null);
+        }}
+      />
     </div>
   );
 }

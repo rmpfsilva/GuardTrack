@@ -21,6 +21,7 @@ export default function GuardDashboard() {
   const { toast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
+  const [selectedRole, setSelectedRole] = useState<string>("guard");
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -62,7 +63,7 @@ export default function GuardDashboard() {
 
   // Check-in mutation
   const checkInMutation = useMutation({
-    mutationFn: async (data: { siteId: string; latitude?: string; longitude?: string }) => {
+    mutationFn: async (data: { siteId: string; latitude?: string; longitude?: string; workingRole?: string }) => {
       return await apiRequest("POST", "/api/check-ins", data);
     },
     onSuccess: () => {
@@ -73,6 +74,7 @@ export default function GuardDashboard() {
         description: "You have successfully checked in to your shift.",
       });
       setSelectedSiteId("");
+      setSelectedRole("guard");
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -146,6 +148,7 @@ export default function GuardDashboard() {
             siteId: selectedSiteId,
             latitude: position.coords.latitude.toString(),
             longitude: position.coords.longitude.toString(),
+            workingRole: selectedRole,
           });
         },
         (error) => {
@@ -155,7 +158,7 @@ export default function GuardDashboard() {
             description: "Checking in without location verification.",
             variant: "default",
           });
-          checkInMutation.mutate({ siteId: selectedSiteId });
+          checkInMutation.mutate({ siteId: selectedSiteId, workingRole: selectedRole });
         },
         { timeout: 5000 }
       );
@@ -166,7 +169,7 @@ export default function GuardDashboard() {
         description: "Your device doesn't support location services.",
         variant: "default",
       });
-      checkInMutation.mutate({ siteId: selectedSiteId });
+      checkInMutation.mutate({ siteId: selectedSiteId, workingRole: selectedRole });
     }
   };
 
@@ -293,6 +296,30 @@ export default function GuardDashboard() {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Working Role</label>
+                  <Select 
+                    value={selectedRole} 
+                    onValueChange={setSelectedRole}
+                  >
+                    <SelectTrigger className="h-12" data-testid="select-role">
+                      <SelectValue placeholder="Choose your role..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="guard" data-testid="select-option-guard">
+                        Guard
+                      </SelectItem>
+                      <SelectItem value="steward" data-testid="select-option-steward">
+                        Steward
+                      </SelectItem>
+                      <SelectItem value="supervisor" data-testid="select-option-supervisor">
+                        Supervisor
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
                 <Button 
                   onClick={handleCheckIn}
                   disabled={checkInMutation.isPending || !selectedSiteId}

@@ -136,12 +136,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "You already have an active check-in. Please check out first." });
       }
 
-      const { siteId, latitude, longitude } = req.body;
+      const { siteId, latitude, longitude, workingRole } = req.body;
       const validatedData = {
         userId,
         siteId,
         latitude: latitude || null,
         longitude: longitude || null,
+        workingRole: workingRole || 'guard',
         status: 'active',
       };
 
@@ -265,6 +266,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching guards:", error);
       res.status(500).json({ message: "Failed to fetch guards" });
+    }
+  });
+
+  // Admin manual check-in/out routes
+  app.post('/api/admin/manual-check-in', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { userId, siteId, workingRole } = req.body;
+      
+      if (!userId || !siteId || !workingRole) {
+        return res.status(400).json({ message: "userId, siteId, and workingRole are required" });
+      }
+
+      // Check if user already has an active check-in
+      const activeCheckIn = await storage.getActiveCheckInForUser(userId);
+      if (activeCheckIn) {
+        return res.status(400).json({ message: "User already has an active check-in. Please check out first." });
+      }
+
+      const validatedData = {
+        userId,
+        siteId,
+        latitude: null,
+        longitude: null,
+        workingRole,
+        status: 'active',
+      };
+
+      const checkIn = await storage.createCheckIn(validatedData);
+      
+      // Fetch full details for Google Sheets sync
+      const checkInWithDetails = await storage.getActiveCheckInForUser(userId);
+      if (checkInWithDetails) {
+        syncCheckInToSheets(checkInWithDetails).catch(err => {
+          console.error("Background sync to sheets failed:", err);
+        });
+      }
+
+      res.status(201).json(checkIn);
+    } catch (error: any) {
+      console.error("Error creating manual check-in:", error);
+      res.status(400).json({ message: error.message || "Failed to create check-in" });
+    }
+  });
+
+  app.post('/api/admin/manual-check-out', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { checkInId } = req.body;
+      
+      if (!checkInId) {
+        return res.status(400).json({ message: "checkInId is required" });
+      }
+
+      // Get the check-in to verify it exists and is active
+      const allActiveCheckIns = await storage.getAllActiveCheckIns();
+      const activeCheckIn = allActiveCheckIns.find(ci => ci.id === checkInId);
+      
+      if (!activeCheckIn) {
+        return res.status(404).json({ message: "Active check-in not found" });
+      }
+
+      const checkIn = await storage.checkOut(checkInId);
+      
+      // Update Google Sheets asynchronously
+      const checkInWithDetails = await storage.getUserRecentCheckIns(activeCheckIn.userId, 1);
+      if (checkInWithDetails.length > 0) {
+        updateCheckOutInSheets(checkInWithDetails[0]).catch(err => {
+          console.error("Background update to sheets failed:", err);
+        });
+      }
+
+      res.json(checkIn);
+    } catch (error: any) {
+      console.error("Error checking out:", error);
+      res.status(400).json({ message: error.message || "Failed to check out" });
+    }
+  });
+
+  // Admin override check-in times route
+  app.patch('/api/admin/override-check-in', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { checkInId, checkInTime, checkOutTime } = req.body;
+      
+      if (!checkInId || !checkInTime) {
+        return res.status(400).json({ message: "checkInId and checkInTime are required" });
+      }
+
+      // Parse and validate the times
+      const parsedCheckInTime = new Date(checkInTime);
+      const parsedCheckOutTime = checkOutTime ? new Date(checkOutTime) : null;
+      
+      if (isNaN(parsedCheckInTime.getTime())) {
+        return res.status(400).json({ message: "Invalid check-in time format" });
+      }
+      
+      if (parsedCheckOutTime && isNaN(parsedCheckOutTime.getTime())) {
+        return res.status(400).json({ message: "Invalid check-out time format" });
+      }
+      
+      if (parsedCheckOutTime && parsedCheckOutTime <= parsedCheckInTime) {
+        return res.status(400).json({ message: "Check-out time must be after check-in time" });
+      }
+
+      // Update the check-in times using storage
+      const updatedCheckIn = await storage.updateCheckInTimes(checkInId, {
+        checkInTime: parsedCheckInTime,
+        checkOutTime: parsedCheckOutTime,
+      });
+
+      res.json(updatedCheckIn);
+    } catch (error: any) {
+      console.error("Error overriding check-in times:", error);
+      res.status(400).json({ message: error.message || "Failed to override check-in times" });
     }
   });
 

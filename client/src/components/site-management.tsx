@@ -22,6 +22,9 @@ export default function SiteManagement() {
     name: "",
     address: "",
     isActive: true,
+    guardRate: "15.00",
+    stewardRate: "18.00",
+    supervisorRate: "22.00",
   });
 
   // Fetch sites
@@ -42,7 +45,7 @@ export default function SiteManagement() {
         description: "The site has been successfully created.",
       });
       setIsAddDialogOpen(false);
-      setFormData({ name: "", address: "", isActive: true });
+      setFormData({ name: "", address: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -140,6 +143,14 @@ export default function SiteManagement() {
       });
       return;
     }
+    if (!formData.guardRate || !formData.stewardRate || !formData.supervisorRate) {
+      toast({
+        title: "Missing Hourly Rates",
+        description: "Please fill in hourly rates for all roles.",
+        variant: "destructive",
+      });
+      return;
+    }
     createMutation.mutate(formData);
   };
 
@@ -149,6 +160,9 @@ export default function SiteManagement() {
       name: site.name,
       address: site.address,
       isActive: site.isActive,
+      guardRate: site.guardRate || "15.00",
+      stewardRate: site.stewardRate || "18.00",
+      supervisorRate: site.supervisorRate || "22.00",
     });
     setIsEditDialogOpen(true);
   };
@@ -158,6 +172,14 @@ export default function SiteManagement() {
       toast({
         title: "Missing Information",
         description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!formData.guardRate || !formData.stewardRate || !formData.supervisorRate) {
+      toast({
+        title: "Missing Hourly Rates",
+        description: "Please fill in hourly rates for all roles.",
         variant: "destructive",
       });
       return;
@@ -182,7 +204,12 @@ export default function SiteManagement() {
             </CardTitle>
             <CardDescription>Add and manage security sites</CardDescription>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            setIsAddDialogOpen(open);
+            if (open) {
+              setFormData({ name: "", address: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
+            }
+          }}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-site">
                 <Plus className="h-4 w-4 mr-2" />
@@ -216,13 +243,58 @@ export default function SiteManagement() {
                     data-testid="input-site-address"
                   />
                 </div>
+                
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold">Hourly Rates (£)</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="guard-rate" className="text-xs text-muted-foreground">Guard</Label>
+                      <Input
+                        id="guard-rate"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="15.00"
+                        value={formData.guardRate || ""}
+                        onChange={(e) => setFormData({ ...formData, guardRate: e.target.value })}
+                        data-testid="input-guard-rate"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="steward-rate" className="text-xs text-muted-foreground">Steward</Label>
+                      <Input
+                        id="steward-rate"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="18.00"
+                        value={formData.stewardRate || ""}
+                        onChange={(e) => setFormData({ ...formData, stewardRate: e.target.value })}
+                        data-testid="input-steward-rate"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="supervisor-rate" className="text-xs text-muted-foreground">Supervisor</Label>
+                      <Input
+                        id="supervisor-rate"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="22.00"
+                        value={formData.supervisorRate || ""}
+                        onChange={(e) => setFormData({ ...formData, supervisorRate: e.target.value })}
+                        data-testid="input-supervisor-rate"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button 
                   variant="outline" 
                   onClick={() => {
                     setIsAddDialogOpen(false);
-                    setFormData({ name: "", address: "", isActive: true });
+                    setFormData({ name: "", address: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
                   }}
                 >
                   Cancel
@@ -267,6 +339,17 @@ export default function SiteManagement() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <div className="flex gap-4 mb-3 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Guard:</span> <span className="font-medium">£{parseFloat(site.guardRate || "15.00").toFixed(2)}/hr</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Steward:</span> <span className="font-medium">£{parseFloat(site.stewardRate || "18.00").toFixed(2)}/hr</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Supervisor:</span> <span className="font-medium">£{parseFloat(site.supervisorRate || "22.00").toFixed(2)}/hr</span>
+                    </div>
+                  </div>
                   <div className="flex gap-2">
                     <Button 
                       variant="outline" 
@@ -321,6 +404,51 @@ export default function SiteManagement() {
                 rows={3}
                 data-testid="input-edit-site-address"
               />
+            </div>
+            
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Hourly Rates (£)</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-guard-rate" className="text-xs text-muted-foreground">Guard</Label>
+                  <Input
+                    id="edit-guard-rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="15.00"
+                    value={formData.guardRate || ""}
+                    onChange={(e) => setFormData({ ...formData, guardRate: e.target.value })}
+                    data-testid="input-edit-guard-rate"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-steward-rate" className="text-xs text-muted-foreground">Steward</Label>
+                  <Input
+                    id="edit-steward-rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="18.00"
+                    value={formData.stewardRate || ""}
+                    onChange={(e) => setFormData({ ...formData, stewardRate: e.target.value })}
+                    data-testid="input-edit-steward-rate"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-supervisor-rate" className="text-xs text-muted-foreground">Supervisor</Label>
+                  <Input
+                    id="edit-supervisor-rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="22.00"
+                    value={formData.supervisorRate || ""}
+                    onChange={(e) => setFormData({ ...formData, supervisorRate: e.target.value })}
+                    data-testid="input-edit-supervisor-rate"
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
