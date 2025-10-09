@@ -39,7 +39,24 @@ The architecture emphasizes a clean separation of concerns between frontend and 
 ## Recent Changes (October 9, 2025)
 - **Authentication Migration**: Migrated from Replit Auth to username/password authentication
   - Users now register and login with username/password (no Replit accounts needed)
-  - Passwords hashed with scrypt, sanitized before sending to client
+  - Passwords hashed with scrypt in format: `hash.salt` (161 characters total)
+  - Sanitized before sending to client
   - In-memory session storage (sessions reset on server restart)
   - All new users default to 'guard' role for security
   - Admin access requires manual database update
+
+- **Production Deployment Setup**: Successfully deployed to production
+  - Production and development databases are SEPARATE
+  - Production database initially empty - requires manual admin user creation
+  - Build command: `npm run build` (compiles to `dist/index.js`)
+  - After rebuilding, must click "Republish" in Publishing → Overview tab
+  - **Creating First Admin User in Production Database**:
+    1. Go to Database tool → Production tab → users table
+    2. Add row with these values:
+       - username: `AdminRic`
+       - password: `e51ef9e0661f7b7c473113ea422c53792a4bacdc5d5cf1ca5e466949d24aef755477b598f7c2f41add9410b86c1251d111b1336e522dd4c4fc39f84e91a5df5f.c8d6986f3ad0bed3f6aff53430d774ab`
+       - firstName: `Admin`
+       - lastName: `Ric`
+       - role: `admin`
+    3. Login credentials: AdminRic / Admin2024!
+  - **CRITICAL**: Password field must contain HASHED password (hash.salt format), NOT plain text
