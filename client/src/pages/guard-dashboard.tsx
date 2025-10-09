@@ -149,14 +149,14 @@ export default function GuardDashboard() {
         },
         (error) => {
           // Error or denied: check in without location
-          console.warn("Geolocation error:", error);
           toast({
             title: "Location Access Denied",
             description: "Checking in without location verification.",
             variant: "default",
           });
           checkInMutation.mutate({ siteId: selectedSiteId });
-        }
+        },
+        { timeout: 5000 }
       );
     } else {
       // Geolocation not supported: check in without location
@@ -286,11 +286,8 @@ export default function GuardDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                       {sites.map((site) => (
-                        <SelectItem key={site.id} value={site.id}>
-                          <div className="flex flex-col items-start">
-                            <span className="font-medium">{site.name}</span>
-                            <span className="text-xs text-muted-foreground">{site.address}</span>
-                          </div>
+                        <SelectItem key={site.id} value={site.id} data-testid={`select-option-${site.id}`}>
+                          {site.name} - {site.address}
                         </SelectItem>
                       ))}
                     </SelectContent>
