@@ -199,17 +199,17 @@ export default function AdminDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <div className="w-full overflow-x-auto px-4">
-            <TabsList className="inline-flex w-full md:w-auto gap-1 md:gap-2">
-              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-              <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
-              <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
-              <TabsTrigger value="guards" data-testid="tab-guards">Guards</TabsTrigger>
-              <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
-              <TabsTrigger value="invitations" data-testid="tab-invitations">Invites</TabsTrigger>
-              <TabsTrigger value="manual" data-testid="tab-manual">Manual</TabsTrigger>
-              <TabsTrigger value="sites" data-testid="tab-sites">Sites</TabsTrigger>
-              <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
+          <div className="w-full overflow-x-auto pb-2">
+            <TabsList className="inline-flex min-w-min">
+              <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>
+              <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
+              <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>
+              <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Guards</TabsTrigger>
+              <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
+              <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>
+              <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>
+              <TabsTrigger value="sites" data-testid="tab-sites" className="text-xs sm:text-sm whitespace-nowrap">Sites</TabsTrigger>
+              <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>
             </TabsList>
           </div>
 
