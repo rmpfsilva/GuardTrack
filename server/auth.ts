@@ -50,29 +50,18 @@ export function setupAuth(app: Express) {
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
-      console.log("🔐 Login attempt for username:", JSON.stringify(username));
       const user = await storage.getUserByUsername(username);
-      console.log("👤 User found:", user ? `Yes (${user.username})` : "No");
       
       if (!user) {
-        console.log("❌ Login failed: User not found");
         return done(null, false);
       }
-      
-      console.log("🔍 DB username:", JSON.stringify(user.username));
-      console.log("🔍 DB password first 30 chars:", user.password.substring(0, 30));
-      console.log("🔍 DB password length:", user.password.length);
-      console.log("🔍 Supplied password:", password);
       
       const passwordMatch = await comparePasswords(password, user.password);
-      console.log("🔑 Password match:", passwordMatch);
       
       if (!passwordMatch) {
-        console.log("❌ Login failed: Invalid password");
         return done(null, false);
       }
       
-      console.log("✅ Login successful for:", username);
       return done(null, user);
     }),
   );
@@ -117,28 +106,19 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
-    console.log("📥 POST /api/login received");
-    console.log("📦 Request body:", req.body);
-    
     passport.authenticate("local", (err: any, user: SelectUser | false, info: any) => {
-      console.log("🔍 Passport authenticate callback - err:", err, "user:", user ? (user as SelectUser).username : null, "info:", info);
-      
       if (err) {
-        console.log("❌ Authentication error:", err);
         return next(err);
       }
       
       if (!user) {
-        console.log("❌ No user returned from passport");
         return res.status(401).send("Invalid credentials");
       }
       
       req.login(user, (loginErr) => {
         if (loginErr) {
-          console.log("❌ Login error:", loginErr);
           return next(loginErr);
         }
-        console.log("✅ Login successful, sending response");
         return res.status(200).json(sanitizeUser(user as SelectUser));
       });
     })(req, res, next);
@@ -289,5 +269,3 @@ export function setupAuth(app: Express) {
     }
   });
 }
-
-export { hashPassword, comparePasswords };
