@@ -77,11 +77,11 @@ export default function GuardDirectory() {
                           <div className="flex gap-4 mt-2 text-sm">
                             <span className="flex items-center gap-1 text-muted-foreground">
                               <Clock className="h-3 w-3" />
-                              {guard.weeklyHours.toFixed(1)}h this week
+                              {(Number(guard.weeklyHours) || 0).toFixed(1)}h this week
                             </span>
                             <span className="flex items-center gap-1 text-muted-foreground">
                               <Calendar className="h-3 w-3" />
-                              {guard.totalShifts} shifts
+                              {guard.totalShifts || 0} shifts
                             </span>
                           </div>
                         </div>
