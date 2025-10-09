@@ -351,6 +351,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Billing reports routes (admin only)
+  app.get('/api/admin/billing/weekly', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { weekStart } = req.query;
+      const startDate = weekStart ? new Date(weekStart as string) : startOfWeek(new Date(), { weekStartsOn: 1 });
+      const report = await storage.getWeeklyBillingReport(startDate);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching weekly billing report:", error);
+      res.status(500).json({ message: "Failed to fetch billing report" });
+    }
+  });
+
+  app.get('/api/admin/billing/daily/:siteId', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { siteId } = req.params;
+      const { date } = req.query;
+      const targetDate = date ? new Date(date as string) : new Date();
+      const activity = await storage.getDailyActivityBySite(siteId, targetDate);
+      res.json(activity);
+    } catch (error) {
+      console.error("Error fetching daily activity:", error);
+      res.status(500).json({ message: "Failed to fetch daily activity" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -11,6 +11,7 @@ import {
   varchar,
   text,
   boolean,
+  numeric,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -33,7 +34,7 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  role: varchar("role").notNull().default('guard'), // 'guard' | 'admin'
+  role: varchar("role").notNull().default('guard'), // 'guard' | 'steward' | 'supervisor' | 'admin'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -45,6 +46,9 @@ export const sites = pgTable("sites", {
   address: text("address").notNull(),
   latitude: text("latitude"),
   longitude: text("longitude"),
+  guardRate: numeric("guard_rate", { precision: 10, scale: 2 }).default('15.00'), // Hourly rate for guards
+  stewardRate: numeric("steward_rate", { precision: 10, scale: 2 }).default('18.00'), // Hourly rate for stewards
+  supervisorRate: numeric("supervisor_rate", { precision: 10, scale: 2 }).default('22.00'), // Hourly rate for supervisors
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -59,6 +63,7 @@ export const checkIns = pgTable("check_ins", {
   checkOutTime: timestamp("check_out_time"),
   latitude: text("latitude"),
   longitude: text("longitude"),
+  workingRole: varchar("working_role").notNull().default('guard'), // Role they were working as: 'guard' | 'steward' | 'supervisor'
   status: varchar("status").notNull().default('active'), // 'active' | 'completed'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

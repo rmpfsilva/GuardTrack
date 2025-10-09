@@ -53,6 +53,10 @@ export interface IStorage {
   updateScheduledShift(id: string, shift: Partial<InsertScheduledShift>): Promise<ScheduledShift>;
   deleteScheduledShift(id: string): Promise<void>;
   getScheduledShiftsInRange(startDate: Date, endDate: Date): Promise<ScheduledShiftWithDetails[]>;
+
+  // Billing operations
+  getWeeklyBillingReport(weekStart: Date): Promise<any>;
+  getDailyActivityBySite(siteId: string, date: Date): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -360,6 +364,169 @@ export class DatabaseStorage implements IStorage {
         user: r.users!,
         site: r.sites!,
       }));
+  }
+
+  // Billing operations
+  async getWeeklyBillingReport(weekStart: Date): Promise<any> {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    // Get all completed check-ins for the week
+    const results = await db
+      .select()
+      .from(checkIns)
+      .leftJoin(users, eq(checkIns.userId, users.id))
+      .leftJoin(sites, eq(checkIns.siteId, sites.id))
+      .where(
+        and(
+          eq(checkIns.status, 'completed'),
+          gte(checkIns.checkInTime, weekStart),
+          lte(checkIns.checkInTime, weekEnd)
+        )
+      )
+      .orderBy(checkIns.checkInTime);
+
+    // Group by site and calculate totals
+    const siteBilling = new Map();
+
+    for (const row of results) {
+      if (!row.check_ins || !row.users || !row.sites) continue;
+
+      const siteId = row.sites.id;
+      const checkIn = row.check_ins;
+      const user = row.users;
+      const site = row.sites;
+
+      if (!checkIn.checkOutTime) continue;
+
+      // Calculate hours worked (with 1 hour break deduction for shifts > 4 hours)
+      const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
+      let hoursWorked = msWorked / (1000 * 60 * 60);
+      
+      // Deduct 1 hour break for shifts longer than 4 hours
+      if (hoursWorked > 4) {
+        hoursWorked -= 1;
+      }
+
+      // Get the hourly rate based on working role
+      const role = checkIn.workingRole || 'guard';
+      let hourlyRate = 15; // default
+      if (role === 'guard') hourlyRate = Number(site.guardRate) || 15;
+      else if (role === 'steward') hourlyRate = Number(site.stewardRate) || 18;
+      else if (role === 'supervisor') hourlyRate = Number(site.supervisorRate) || 22;
+
+      const amount = hoursWorked * hourlyRate;
+
+      if (!siteBilling.has(siteId)) {
+        siteBilling.set(siteId, {
+          siteId: siteId,
+          siteName: site.name,
+          siteAddress: site.address,
+          totalHours: 0,
+          totalAmount: 0,
+          guardHours: 0,
+          stewardHours: 0,
+          supervisorHours: 0,
+          shifts: [],
+        });
+      }
+
+      const billing = siteBilling.get(siteId);
+      billing.totalHours += hoursWorked;
+      billing.totalAmount += amount;
+      
+      if (role === 'guard') billing.guardHours += hoursWorked;
+      else if (role === 'steward') billing.stewardHours += hoursWorked;
+      else if (role === 'supervisor') billing.supervisorHours += hoursWorked;
+
+      billing.shifts.push({
+        id: checkIn.id,
+        workerName: `${user.firstName} ${user.lastName}`,
+        role: role,
+        checkInTime: checkIn.checkInTime,
+        checkOutTime: checkIn.checkOutTime,
+        hoursWorked,
+        hourlyRate,
+        amount,
+      });
+    }
+
+    return {
+      weekStart,
+      weekEnd,
+      sites: Array.from(siteBilling.values()),
+      grandTotal: Array.from(siteBilling.values()).reduce((sum, s) => sum + s.totalAmount, 0),
+    };
+  }
+
+  async getDailyActivityBySite(siteId: string, date: Date): Promise<any> {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    // Get all check-ins for this site on this day
+    const results = await db
+      .select()
+      .from(checkIns)
+      .leftJoin(users, eq(checkIns.userId, users.id))
+      .leftJoin(sites, eq(checkIns.siteId, sites.id))
+      .where(
+        and(
+          eq(checkIns.siteId, siteId),
+          gte(checkIns.checkInTime, dayStart),
+          lte(checkIns.checkInTime, dayEnd)
+        )
+      )
+      .orderBy(checkIns.checkInTime);
+
+    const activity = results
+      .filter((r) => r.check_ins && r.users && r.sites)
+      .map((r) => {
+        const checkIn = r.check_ins!;
+        const user = r.users!;
+        const site = r.sites!;
+
+        let hoursWorked = 0;
+        if (checkIn.checkOutTime) {
+          const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
+          hoursWorked = msWorked / (1000 * 60 * 60);
+          
+          // Deduct 1 hour break for shifts longer than 4 hours
+          if (hoursWorked > 4) {
+            hoursWorked -= 1;
+          }
+        }
+
+        const role = checkIn.workingRole || 'guard';
+        let hourlyRate = 15;
+        if (role === 'guard') hourlyRate = Number(site.guardRate) || 15;
+        else if (role === 'steward') hourlyRate = Number(site.stewardRate) || 18;
+        else if (role === 'supervisor') hourlyRate = Number(site.supervisorRate) || 22;
+
+        return {
+          id: checkIn.id,
+          workerName: `${user.firstName} ${user.lastName}`,
+          role: role,
+          checkInTime: checkIn.checkInTime,
+          checkOutTime: checkIn.checkOutTime,
+          hoursWorked,
+          hourlyRate,
+          amount: hoursWorked * hourlyRate,
+          status: checkIn.status,
+        };
+      });
+
+    const site = await this.getSite(siteId);
+
+    return {
+      date: dayStart,
+      site: site,
+      activity,
+      totalHours: activity.reduce((sum, a) => sum + a.hoursWorked, 0),
+      totalAmount: activity.reduce((sum, a) => sum + a.amount, 0),
+    };
   }
 }
 
