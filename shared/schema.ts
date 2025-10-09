@@ -170,12 +170,18 @@ export const insertScheduledShiftSchema = createInsertSchema(scheduledShifts).om
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  startTime: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid date'),
+  endTime: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid date'),
 });
 
 export const updateScheduledShiftSchema = createInsertSchema(scheduledShifts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  startTime: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid date'),
+  endTime: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid date'),
 }).partial();
 
 export const insertInvitationSchema = createInsertSchema(invitations).omit({
