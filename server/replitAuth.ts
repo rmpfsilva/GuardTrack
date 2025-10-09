@@ -58,13 +58,48 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
+  const userId = claims["sub"];
+  const email = claims["email"];
+  
+  // Check if user already exists
+  const existingUser = await storage.getUser(userId);
+  
+  if (existingUser) {
+    // User exists - allow login and update their info
+    await storage.upsertUser({
+      id: userId,
+      email: email,
+      firstName: claims["first_name"],
+      lastName: claims["last_name"],
+      profileImageUrl: claims["profile_image_url"],
+    });
+    return;
+  }
+  
+  // New user - check if they have a valid invitation
+  const invitation = await storage.getInvitationByEmail(email);
+  
+  if (!invitation || invitation.status !== 'pending') {
+    throw new Error("NO_INVITATION");
+  }
+  
+  // Check if invitation is expired
+  if (invitation.expiresAt && new Date() > new Date(invitation.expiresAt)) {
+    throw new Error("INVITATION_EXPIRED");
+  }
+  
+  // Valid invitation - create user with invitation role
   await storage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
+    id: userId,
+    email: email,
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
+    role: invitation.role,
   });
+  
+  // Mark invitation as accepted
+  await storage.acceptInvitation(invitation.token);
 }
 
 export async function setupAuth(app: Express) {
@@ -81,8 +116,19 @@ export async function setupAuth(app: Express) {
   ) => {
     const user = {};
     updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
-    verified(null, user);
+    
+    try {
+      await upsertUser(tokens.claims());
+      verified(null, user);
+    } catch (error: any) {
+      if (error.message === "NO_INVITATION") {
+        verified(new Error("You need an invitation to access GuardTrack. Please contact your administrator."));
+      } else if (error.message === "INVITATION_EXPIRED") {
+        verified(new Error("Your invitation has expired. Please contact your administrator for a new invitation."));
+      } else {
+        verified(error);
+      }
+    }
   };
 
   for (const domain of process.env
@@ -110,9 +156,23 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/callback", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+    passport.authenticate(`replitauth:${req.hostname}`, (err, user) => {
+      if (err) {
+        // Handle invitation validation errors
+        const errorMessage = encodeURIComponent(err.message || "Authentication failed");
+        return res.redirect(`/access-denied?error=${errorMessage}`);
+      }
+      
+      if (!user) {
+        return res.redirect("/api/login");
+      }
+      
+      req.logIn(user, (err) => {
+        if (err) {
+          return res.redirect("/api/login");
+        }
+        return res.redirect("/");
+      });
     })(req, res, next);
   });
 

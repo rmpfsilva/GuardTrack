@@ -10,12 +10,14 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import GuardDashboard from "@/pages/guard-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
+import AccessDenied from "@/pages/access-denied";
 
 function Router() {
   const { isAuthenticated, isLoading, isAdmin } = useAuth();
 
   return (
     <Switch>
+      <Route path="/access-denied" component={AccessDenied} />
       {isLoading || !isAuthenticated ? (
         <Route path="/" component={Landing} />
       ) : (
