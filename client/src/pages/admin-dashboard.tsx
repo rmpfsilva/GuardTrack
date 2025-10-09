@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Site, CheckInWithDetails, User } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
+import ScheduleManagement from "@/components/schedule-management";
 
 interface DashboardStats {
   activeGuards: number;
@@ -184,7 +185,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold" data-testid="stat-weekly-hours">
-                {stats?.weeklyHours?.toFixed(1) || 0}
+                {stats?.weeklyHours ? Number(stats.weeklyHours).toFixed(1) : "0.0"}
               </div>
               <p className="text-xs text-muted-foreground mt-1">This week's total</p>
             </CardContent>
@@ -193,8 +194,9 @@ export default function AdminDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
             <TabsTrigger value="guards" data-testid="tab-guards">Guards</TabsTrigger>
             <TabsTrigger value="sites" data-testid="tab-sites">Sites</TabsTrigger>
             <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
@@ -294,6 +296,10 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="schedule">
+            <ScheduleManagement />
           </TabsContent>
 
           <TabsContent value="guards">

@@ -3,6 +3,7 @@ import {
   users,
   sites,
   checkIns,
+  scheduledShifts,
   type User,
   type UpsertUser,
   type Site,
@@ -10,9 +11,12 @@ import {
   type CheckIn,
   type InsertCheckIn,
   type CheckInWithDetails,
+  type ScheduledShift,
+  type InsertScheduledShift,
+  type ScheduledShiftWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, gte } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, between } from "drizzle-orm";
 
 // Interface for storage operations
 export interface IStorage {
@@ -38,6 +42,15 @@ export interface IStorage {
   getAllRecentActivity(limit: number): Promise<CheckInWithDetails[]>;
   getUserWeeklyHours(userId: string, weekStart: Date): Promise<number>;
   getAllUsersWeeklyHours(weekStart: Date): Promise<number>;
+  
+  // Scheduled shift operations
+  getAllScheduledShifts(): Promise<ScheduledShiftWithDetails[]>;
+  getUserScheduledShifts(userId: string, startDate?: Date, endDate?: Date): Promise<ScheduledShiftWithDetails[]>;
+  getScheduledShift(id: string): Promise<ScheduledShift | undefined>;
+  createScheduledShift(shift: InsertScheduledShift): Promise<ScheduledShift>;
+  updateScheduledShift(id: string, shift: Partial<InsertScheduledShift>): Promise<ScheduledShift>;
+  deleteScheduledShift(id: string): Promise<void>;
+  getScheduledShiftsInRange(startDate: Date, endDate: Date): Promise<ScheduledShiftWithDetails[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -234,6 +247,104 @@ export class DatabaseStorage implements IStorage {
       .where(gte(checkIns.checkInTime, weekStart));
 
     return result[0]?.totalHours || 0;
+  }
+
+  // Scheduled shift operations
+  async getAllScheduledShifts(): Promise<ScheduledShiftWithDetails[]> {
+    const results = await db
+      .select()
+      .from(scheduledShifts)
+      .leftJoin(users, eq(scheduledShifts.userId, users.id))
+      .leftJoin(sites, eq(scheduledShifts.siteId, sites.id))
+      .where(eq(scheduledShifts.isActive, true))
+      .orderBy(scheduledShifts.startTime);
+
+    return results
+      .filter((r) => r.users && r.sites)
+      .map((r) => ({
+        ...r.scheduled_shifts,
+        user: r.users!,
+        site: r.sites!,
+      }));
+  }
+
+  async getUserScheduledShifts(userId: string, startDate?: Date, endDate?: Date): Promise<ScheduledShiftWithDetails[]> {
+    let whereConditions = and(
+      eq(scheduledShifts.userId, userId),
+      eq(scheduledShifts.isActive, true)
+    );
+
+    if (startDate && endDate) {
+      whereConditions = and(
+        eq(scheduledShifts.userId, userId),
+        eq(scheduledShifts.isActive, true),
+        gte(scheduledShifts.startTime, startDate),
+        lte(scheduledShifts.endTime, endDate)
+      );
+    }
+
+    const results = await db
+      .select()
+      .from(scheduledShifts)
+      .leftJoin(users, eq(scheduledShifts.userId, users.id))
+      .leftJoin(sites, eq(scheduledShifts.siteId, sites.id))
+      .where(whereConditions)
+      .orderBy(scheduledShifts.startTime);
+
+    return results
+      .filter((r) => r.users && r.sites)
+      .map((r) => ({
+        ...r.scheduled_shifts,
+        user: r.users!,
+        site: r.sites!,
+      }));
+  }
+
+  async getScheduledShift(id: string): Promise<ScheduledShift | undefined> {
+    const [shift] = await db.select().from(scheduledShifts).where(eq(scheduledShifts.id, id));
+    return shift;
+  }
+
+  async createScheduledShift(shiftData: InsertScheduledShift): Promise<ScheduledShift> {
+    const [shift] = await db.insert(scheduledShifts).values(shiftData).returning();
+    return shift;
+  }
+
+  async updateScheduledShift(id: string, shiftData: Partial<InsertScheduledShift>): Promise<ScheduledShift> {
+    const [shift] = await db
+      .update(scheduledShifts)
+      .set({ ...shiftData, updatedAt: new Date() })
+      .where(eq(scheduledShifts.id, id))
+      .returning();
+    return shift;
+  }
+
+  async deleteScheduledShift(id: string): Promise<void> {
+    await db.delete(scheduledShifts).where(eq(scheduledShifts.id, id));
+  }
+
+  async getScheduledShiftsInRange(startDate: Date, endDate: Date): Promise<ScheduledShiftWithDetails[]> {
+    const results = await db
+      .select()
+      .from(scheduledShifts)
+      .leftJoin(users, eq(scheduledShifts.userId, users.id))
+      .leftJoin(sites, eq(scheduledShifts.siteId, sites.id))
+      .where(
+        and(
+          eq(scheduledShifts.isActive, true),
+          gte(scheduledShifts.startTime, startDate),
+          lte(scheduledShifts.endTime, endDate)
+        )
+      )
+      .orderBy(scheduledShifts.startTime);
+
+    return results
+      .filter((r) => r.users && r.sites)
+      .map((r) => ({
+        ...r.scheduled_shifts,
+        user: r.users!,
+        site: r.sites!,
+      }));
   }
 }
 

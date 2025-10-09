@@ -3,7 +3,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
-import { insertSiteSchema, insertCheckInSchema } from "@shared/schema";
+import { insertSiteSchema, insertCheckInSchema, insertScheduledShiftSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 
@@ -226,6 +226,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching guards:", error);
       res.status(500).json({ message: "Failed to fetch guards" });
+    }
+  });
+
+  // Scheduled shifts routes
+  app.get('/api/scheduled-shifts', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const isAdminUser = user.claims.role === 'admin';
+      
+      if (isAdminUser) {
+        // Admin can see all shifts
+        const shifts = await storage.getAllScheduledShifts();
+        res.json(shifts);
+      } else {
+        // Guards see only their own shifts
+        const userId = user.claims.sub;
+        const shifts = await storage.getUserScheduledShifts(userId);
+        res.json(shifts);
+      }
+    } catch (error) {
+      console.error("Error fetching scheduled shifts:", error);
+      res.status(500).json({ message: "Failed to fetch scheduled shifts" });
+    }
+  });
+
+  app.get('/api/scheduled-shifts/user/:userId', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const shifts = await storage.getUserScheduledShifts(userId);
+      res.json(shifts);
+    } catch (error) {
+      console.error("Error fetching user shifts:", error);
+      res.status(500).json({ message: "Failed to fetch user shifts" });
+    }
+  });
+
+  app.get('/api/scheduled-shifts/range', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "startDate and endDate are required" });
+      }
+      const shifts = await storage.getScheduledShiftsInRange(
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+      res.json(shifts);
+    } catch (error) {
+      console.error("Error fetching shifts in range:", error);
+      res.status(500).json({ message: "Failed to fetch shifts" });
+    }
+  });
+
+  app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const validatedData = insertScheduledShiftSchema.parse(req.body);
+      const shift = await storage.createScheduledShift(validatedData);
+      res.status(201).json(shift);
+    } catch (error: any) {
+      console.error("Error creating scheduled shift:", error);
+      res.status(400).json({ message: error.message || "Failed to create shift" });
+    }
+  });
+
+  app.patch('/api/scheduled-shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const shift = await storage.updateScheduledShift(id, req.body);
+      res.json(shift);
+    } catch (error: any) {
+      console.error("Error updating scheduled shift:", error);
+      res.status(400).json({ message: error.message || "Failed to update shift" });
+    }
+  });
+
+  app.delete('/api/scheduled-shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteScheduledShift(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting scheduled shift:", error);
+      res.status(400).json({ message: error.message || "Failed to delete shift" });
     }
   });
 

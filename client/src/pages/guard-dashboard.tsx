@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import MySchedule from "@/components/my-schedule";
 import type { Site, CheckIn, CheckInWithDetails } from "@shared/schema";
 
 export default function GuardDashboard() {
@@ -274,6 +275,13 @@ export default function GuardDashboard() {
                 </Button>
               </>
             )}
+          </CardContent>
+        </Card>
+
+        {/* My Schedule */}
+        <Card>
+          <CardContent className="p-6">
+            <MySchedule />
           </CardContent>
         </Card>
 

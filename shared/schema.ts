@@ -60,13 +60,29 @@ export const checkIns = pgTable("check_ins", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Scheduled shifts table - pre-assigned shifts for guards
+export const scheduledShifts = pgTable("scheduled_shifts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: 'cascade' }),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time").notNull(),
+  recurrence: varchar("recurrence").notNull().default('none'), // 'none' | 'daily' | 'weekly' | 'monthly'
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkIns: many(checkIns),
+  scheduledShifts: many(scheduledShifts),
 }));
 
 export const sitesRelations = relations(sites, ({ many }) => ({
   checkIns: many(checkIns),
+  scheduledShifts: many(scheduledShifts),
 }));
 
 export const checkInsRelations = relations(checkIns, ({ one }) => ({
@@ -76,6 +92,17 @@ export const checkInsRelations = relations(checkIns, ({ one }) => ({
   }),
   site: one(sites, {
     fields: [checkIns.siteId],
+    references: [sites.id],
+  }),
+}));
+
+export const scheduledShiftsRelations = relations(scheduledShifts, ({ one }) => ({
+  user: one(users, {
+    fields: [scheduledShifts.userId],
+    references: [users.id],
+  }),
+  site: one(sites, {
+    fields: [scheduledShifts.siteId],
     references: [sites.id],
   }),
 }));
@@ -116,6 +143,18 @@ export const updateCheckInSchema = createInsertSchema(checkIns).omit({
   updatedAt: true,
 }).partial();
 
+export const insertScheduledShiftSchema = createInsertSchema(scheduledShifts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateScheduledShiftSchema = createInsertSchema(scheduledShifts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -129,6 +168,10 @@ export type CheckIn = typeof checkIns.$inferSelect;
 export type InsertCheckIn = z.infer<typeof insertCheckInSchema>;
 export type UpdateCheckIn = z.infer<typeof updateCheckInSchema>;
 
+export type ScheduledShift = typeof scheduledShifts.$inferSelect;
+export type InsertScheduledShift = z.infer<typeof insertScheduledShiftSchema>;
+export type UpdateScheduledShift = z.infer<typeof updateScheduledShiftSchema>;
+
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
   user: User;
@@ -137,4 +180,9 @@ export type CheckInWithDetails = CheckIn & {
 
 export type UserWithCheckIns = User & {
   checkIns: CheckIn[];
+};
+
+export type ScheduledShiftWithDetails = ScheduledShift & {
+  user: User;
+  site: Site;
 };
