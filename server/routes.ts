@@ -3,7 +3,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
-import { insertSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema } from "@shared/schema";
+import { insertSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 
@@ -487,6 +487,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching daily activity:", error);
       res.status(500).json({ message: "Failed to fetch daily activity" });
+    }
+  });
+
+  // Invitation routes (admin only)
+  app.get('/api/admin/invitations', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const invitations = await storage.getAllInvitations();
+      res.json(invitations);
+    } catch (error) {
+      console.error("Error fetching invitations:", error);
+      res.status(500).json({ message: "Failed to fetch invitations" });
+    }
+  });
+
+  app.post('/api/admin/invitations', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const adminId = req.user.claims.sub;
+      
+      // Generate a unique token
+      const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+      
+      const validatedData = insertInvitationSchema.parse({
+        ...req.body,
+        token,
+        invitedBy: adminId,
+      });
+      
+      const invitation = await storage.createInvitation(validatedData);
+      res.status(201).json(invitation);
+    } catch (error: any) {
+      console.error("Error creating invitation:", error);
+      res.status(400).json({ message: error.message || "Failed to create invitation" });
+    }
+  });
+
+  app.patch('/api/admin/invitations/:id/revoke', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const invitation = await storage.revokeInvitation(id);
+      res.json(invitation);
+    } catch (error: any) {
+      console.error("Error revoking invitation:", error);
+      res.status(400).json({ message: error.message || "Failed to revoke invitation" });
+    }
+  });
+
+  app.delete('/api/admin/invitations/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteInvitation(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting invitation:", error);
+      res.status(400).json({ message: error.message || "Failed to delete invitation" });
     }
   });
 
