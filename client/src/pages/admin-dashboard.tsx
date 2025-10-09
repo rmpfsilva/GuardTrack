@@ -15,6 +15,7 @@ import type { Site, CheckInWithDetails, User } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
 import ScheduleManagement from "@/components/schedule-management";
+import UserManagement from "@/components/user-management";
 
 interface DashboardStats {
   activeGuards: number;
@@ -192,10 +193,11 @@ export default function AdminDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
             <TabsTrigger value="guards" data-testid="tab-guards">Guards</TabsTrigger>
+            <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
             <TabsTrigger value="sites" data-testid="tab-sites">Sites</TabsTrigger>
             <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
           </TabsList>
@@ -302,6 +304,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="guards">
             <GuardDirectory />
+          </TabsContent>
+
+          <TabsContent value="users">
+            <UserManagement />
           </TabsContent>
 
           <TabsContent value="sites">
