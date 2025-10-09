@@ -32,7 +32,7 @@ export default function GuardDashboard() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        window.location.href = "/auth";
       }, 500);
     }
   }, [user, authLoading, toast]);

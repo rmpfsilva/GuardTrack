@@ -13,7 +13,7 @@ export default function Landing() {
             <span className="text-xl font-bold">GuardTrack</span>
           </div>
           <Button 
-            onClick={() => window.location.href = '/api/login'}
+            onClick={() => window.location.href = '/auth'}
             data-testid="button-login"
           >
             Sign In
@@ -34,7 +34,7 @@ export default function Landing() {
             </p>
             <Button 
               size="lg"
-              onClick={() => window.location.href = '/api/login'}
+              onClick={() => window.location.href = '/auth'}
               className="h-12 px-8 text-lg"
               data-testid="button-get-started"
             >
@@ -99,7 +99,7 @@ export default function Landing() {
             <Button 
               size="lg"
               variant="secondary"
-              onClick={() => window.location.href = '/api/login'}
+              onClick={() => window.location.href = '/auth'}
               className="h-12 px-8 text-lg"
               data-testid="button-cta-login"
             >

@@ -19,12 +19,9 @@ import {
   type Invitation,
   type InsertInvitation,
 } from "@shared/schema";
-import { db, pool } from "./db";
+import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, between } from "drizzle-orm";
 import session from "express-session";
-import connectPg from "connect-pg-simple";
-
-const PostgresSessionStore = connectPg(session);
 
 // Interface for storage operations
 export interface IStorage {
@@ -88,10 +85,9 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({
-      pool: pool as any,
-      createTableIfMissing: true,
-    });
+    // Using in-memory session store (sessions won't persist across server restarts)
+    // This allows username/password authentication without Replit accounts
+    this.sessionStore = new session.MemoryStore();
   }
 
   // User operations

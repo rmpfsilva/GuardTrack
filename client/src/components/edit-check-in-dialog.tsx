@@ -65,7 +65,7 @@ export default function EditCheckInDialog({ checkIn, isOpen, onClose }: EditChec
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "/auth";
         }, 500);
         return;
       }

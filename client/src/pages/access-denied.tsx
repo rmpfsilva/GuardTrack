@@ -34,7 +34,7 @@ export default function AccessDenied() {
           </div>
           <Button
             variant="outline"
-            onClick={() => window.location.href = "/api/login"}
+            onClick={() => window.location.href = "/auth"}
             className="w-full"
             data-testid="button-try-again"
           >
