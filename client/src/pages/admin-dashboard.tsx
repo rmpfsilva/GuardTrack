@@ -199,7 +199,7 @@ export default function AdminDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-9 lg:w-auto gap-1">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>

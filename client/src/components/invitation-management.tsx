@@ -26,7 +26,6 @@ type InvitationFormData = z.infer<typeof invitationFormSchema>;
 
 export default function InvitationManagement() {
   const { toast } = useToast();
-  const [selectedInvitation, setSelectedInvitation] = useState<Invitation | null>(null);
 
   const form = useForm<InvitationFormData>({
     resolver: zodResolver(invitationFormSchema),
