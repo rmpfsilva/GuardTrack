@@ -199,17 +199,19 @@ export default function AdminDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-9 lg:w-auto gap-1">
-            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
-            <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
-            <TabsTrigger value="guards" data-testid="tab-guards">Guards</TabsTrigger>
-            <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
-            <TabsTrigger value="invitations" data-testid="tab-invitations">Invitations</TabsTrigger>
-            <TabsTrigger value="manual" data-testid="tab-manual">Manual</TabsTrigger>
-            <TabsTrigger value="sites" data-testid="tab-sites">Sites</TabsTrigger>
-            <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto px-4">
+            <TabsList className="inline-flex w-full md:w-auto gap-1 md:gap-2">
+              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+              <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
+              <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
+              <TabsTrigger value="guards" data-testid="tab-guards">Guards</TabsTrigger>
+              <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
+              <TabsTrigger value="invitations" data-testid="tab-invitations">Invites</TabsTrigger>
+              <TabsTrigger value="manual" data-testid="tab-manual">Manual</TabsTrigger>
+              <TabsTrigger value="sites" data-testid="tab-sites">Sites</TabsTrigger>
+              <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6">
