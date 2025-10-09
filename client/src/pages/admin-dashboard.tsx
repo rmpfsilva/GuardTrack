@@ -16,6 +16,7 @@ import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
 import ScheduleManagement from "@/components/schedule-management";
 import UserManagement from "@/components/user-management";
+import BillingReports from "@/components/billing-reports";
 
 interface DashboardStats {
   activeGuards: number;
@@ -193,8 +194,9 @@ export default function AdminDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
             <TabsTrigger value="guards" data-testid="tab-guards">Guards</TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
@@ -296,6 +298,10 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="billing">
+            <BillingReports />
           </TabsContent>
 
           <TabsContent value="schedule">
