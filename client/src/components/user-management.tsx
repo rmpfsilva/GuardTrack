@@ -12,7 +12,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -25,11 +24,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserPlus, Pencil, Trash2, Shield, User as UserIcon } from "lucide-react";
+import { Pencil, Trash2, Shield, User as UserIcon, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function UserManagement() {
   const { toast } = useToast();
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
@@ -42,31 +41,6 @@ export default function UserManagement() {
 
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ['/api/admin/users'],
-  });
-
-  const createUserMutation = useMutation({
-    mutationFn: async (userData: typeof formData) => {
-      const randomId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      return apiRequest("POST", "/api/admin/users", { ...userData, id: randomId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/guards'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/stats'] });
-      setIsCreateDialogOpen(false);
-      resetForm();
-      toast({
-        title: "User created",
-        description: "The user has been added successfully.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to create user",
-      });
-    },
   });
 
   const updateUserMutation = useMutation({
@@ -126,10 +100,6 @@ export default function UserManagement() {
     });
   };
 
-  const handleCreate = () => {
-    createUserMutation.mutate(formData);
-  };
-
   const handleEdit = (user: User) => {
     setSelectedUser(user);
     setFormData({
@@ -167,81 +137,20 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold">User Management</h2>
-          <p className="text-muted-foreground">Manage guard and admin accounts</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-user">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
-          </DialogTrigger>
-          <DialogContent data-testid="dialog-add-user">
-            <DialogHeader>
-              <DialogTitle>Add New User</DialogTitle>
-              <DialogDescription>
-                Create a new guard or admin account. They can log in using their email.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  data-testid="input-user-email"
-                  type="email"
-                  placeholder="guard@proforce.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  data-testid="input-user-firstname"
-                  placeholder="John"
-                  value={formData.firstName}
-                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  data-testid="input-user-lastname"
-                  placeholder="Doe"
-                  value={formData.lastName}
-                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-                  <SelectTrigger id="role" data-testid="select-user-role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="guard">Guard</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} data-testid="button-cancel-user">
-                Cancel
-              </Button>
-              <Button onClick={handleCreate} disabled={createUserMutation.isPending} data-testid="button-save-user">
-                {createUserMutation.isPending ? "Creating..." : "Create User"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      <div>
+        <h2 className="text-3xl font-bold">User Management</h2>
+        <p className="text-muted-foreground">Manage guard and admin accounts</p>
       </div>
+
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>How User Management Works</AlertTitle>
+        <AlertDescription>
+          Users are automatically created when they log in for the first time via Replit Auth (Google, GitHub, or Email).
+          New users are assigned the "Guard" role by default. You can then change their role to Admin, update their information,
+          or remove them from the system.
+        </AlertDescription>
+      </Alert>
 
       <div className="grid gap-4">
         {users.map((user) => (
@@ -299,7 +208,7 @@ export default function UserManagement() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <UserIcon className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No users found. Add your first user to get started.</p>
+              <p className="text-muted-foreground">No users have logged in yet. Share the app URL with your guards so they can sign up.</p>
             </CardContent>
           </Card>
         )}

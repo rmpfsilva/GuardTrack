@@ -34,16 +34,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/users', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const validatedData = insertUserSchema.parse(req.body);
-      const user = await storage.upsertUser({ ...validatedData, id: req.body.id });
-      res.status(201).json(user);
-    } catch (error: any) {
-      console.error("Error creating user:", error);
-      res.status(400).json({ message: error.message || "Failed to create user" });
-    }
-  });
+  // Note: Users are auto-created on first login via Replit Auth
+  // This endpoint is not needed for user creation - removed to prevent ID mismatch issues
 
   app.patch('/api/admin/users/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {

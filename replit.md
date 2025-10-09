@@ -217,9 +217,94 @@ When implementing multi-tenancy, add:
 - Billing and subscription workflows
 - Performance with multiple companies
 
+## Authentication & User Management
+
+### How Login Works
+GuardTrack uses **Replit Auth** for secure authentication:
+
+1. **First-Time Users**: When someone clicks "Login", they authenticate using:
+   - Google Account
+   - GitHub Account
+   - Email verification
+   
+2. **Account Creation**: Upon first successful login, a user account is automatically created in the database with:
+   - User ID (from auth provider)
+   - Email address
+   - First and last name
+   - Profile image
+   - **Default role: "guard"**
+
+3. **Role-Based Access**:
+   - **Guards** → Redirected to check-in dashboard (can check in/out, view their schedule)
+   - **Admins** → Access to full admin dashboard with management capabilities
+
+### Admin User Management
+
+**Admins can manage all users through the "Users" tab:**
+
+✅ **Edit Existing Users**
+- Change user role (guard ↔ admin)
+- Update user information (name, email)
+- Modify access permissions
+
+✅ **Delete Users**
+- Remove users from the system
+- All associated check-ins and shifts are deleted (cascade delete)
+
+❌ **Cannot Pre-Create Users**
+- Users must log in first to be created in the system
+- Admins can only manage users who have already logged in
+
+### Setting Up Your First Admin
+
+**Important**: The first admin must be created manually in the database:
+
+1. Have someone log in first (they'll be created as a guard)
+2. Use the database panel or SQL tool to update their role:
+   ```sql
+   UPDATE users SET role = 'admin' WHERE email = 'admin@proforce.com';
+   ```
+3. They'll immediately have admin access on next page refresh
+
+### Adding 20 Guards to the System
+
+**Step-by-Step Process:**
+
+1. **Guards Must Log In First**
+   - Share the app URL with all 20 guards
+   - Each guard clicks "Login" and authenticates with Replit Auth (Google/GitHub/Email)
+   - Their account is auto-created with "guard" role
+
+2. **Admin Manages Guards**
+   - Go to Admin Dashboard → Users tab
+   - You'll see all guards who have logged in
+   - Edit any user to change their role or information
+   - Delete guards who should no longer have access
+
+**Why guards must log in first:**
+- Replit Auth provides a unique ID when users authenticate
+- This ID cannot be predicted or created manually
+- Pre-creating users would cause authentication mismatches
+
+### Admin-Only Features
+
+The following features are **restricted to admins only**:
+- 📅 **Shift Scheduling** - Create and manage scheduled shifts
+- 👥 **User Management** - Add, edit, delete guard and admin accounts
+- 🏢 **Site Management** - Create, edit, delete workplace sites
+- 📊 **Full Dashboard** - View all guards, check-ins, and stats
+- ⚙️ **System Settings** - Manage all system configurations
+
+Guards have **read-only or self-service access**:
+- ✅ Check in/out at assigned sites
+- ✅ View their own schedule
+- ✅ View their shift history
+- ✅ See their weekly hours
+- ❌ Cannot manage other users, sites, or schedules
+
 ## User Roles
 - **Guard**: Can check in/out with geolocation, view own shift history and schedule
-- **Admin**: Full access to all features including site management, guard directory, and shift scheduling
+- **Admin**: Full access to all features including site management, guard directory, shift scheduling, and user management
 
 ## Google Sheets Integration
 - Automatically creates "GuardTrack Check-In Logs" spreadsheet
