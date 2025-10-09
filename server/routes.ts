@@ -1,0 +1,234 @@
+// Referenced from blueprint:javascript_log_in_with_replit
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { insertSiteSchema, insertCheckInSchema } from "@shared/schema";
+import { startOfWeek } from "date-fns";
+import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth middleware
+  await setupAuth(app);
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Sites routes
+  app.get('/api/sites', isAuthenticated, async (req, res) => {
+    try {
+      const sites = await storage.getAllSites();
+      res.json(sites);
+    } catch (error) {
+      console.error("Error fetching sites:", error);
+      res.status(500).json({ message: "Failed to fetch sites" });
+    }
+  });
+
+  app.post('/api/sites', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const validatedData = insertSiteSchema.parse(req.body);
+      const site = await storage.createSite(validatedData);
+      res.status(201).json(site);
+    } catch (error: any) {
+      console.error("Error creating site:", error);
+      res.status(400).json({ message: error.message || "Failed to create site" });
+    }
+  });
+
+  app.patch('/api/sites/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const site = await storage.updateSite(id, req.body);
+      res.json(site);
+    } catch (error: any) {
+      console.error("Error updating site:", error);
+      res.status(400).json({ message: error.message || "Failed to update site" });
+    }
+  });
+
+  app.delete('/api/sites/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSite(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting site:", error);
+      res.status(400).json({ message: error.message || "Failed to delete site" });
+    }
+  });
+
+  // Check-in routes for guards
+  app.get('/api/check-ins/active', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const activeCheckIn = await storage.getActiveCheckInForUser(userId);
+      res.json(activeCheckIn);
+    } catch (error) {
+      console.error("Error fetching active check-in:", error);
+      res.status(500).json({ message: "Failed to fetch active check-in" });
+    }
+  });
+
+  app.get('/api/check-ins/my-recent', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const recentCheckIns = await storage.getUserRecentCheckIns(userId, 20);
+      res.json(recentCheckIns);
+    } catch (error) {
+      console.error("Error fetching recent check-ins:", error);
+      res.status(500).json({ message: "Failed to fetch recent check-ins" });
+    }
+  });
+
+  app.post('/api/check-ins', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Check if user already has an active check-in
+      const activeCheckIn = await storage.getActiveCheckInForUser(userId);
+      if (activeCheckIn) {
+        return res.status(400).json({ message: "You already have an active check-in. Please check out first." });
+      }
+
+      const validatedData = insertCheckInSchema.parse({
+        ...req.body,
+        userId,
+        status: 'active',
+      });
+
+      const checkIn = await storage.createCheckIn(validatedData);
+      
+      // Fetch full details for Google Sheets sync
+      const checkInWithDetails = await storage.getActiveCheckInForUser(userId);
+      if (checkInWithDetails) {
+        // Sync to Google Sheets asynchronously (don't wait for it)
+        syncCheckInToSheets(checkInWithDetails).catch(err => {
+          console.error("Background sync to sheets failed:", err);
+        });
+      }
+
+      res.status(201).json(checkIn);
+    } catch (error: any) {
+      console.error("Error creating check-in:", error);
+      res.status(400).json({ message: error.message || "Failed to create check-in" });
+    }
+  });
+
+  app.patch('/api/check-ins/:id/checkout', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+
+      // Verify this check-in belongs to the user
+      const activeCheckIn = await storage.getActiveCheckInForUser(userId);
+      if (!activeCheckIn || activeCheckIn.id !== id) {
+        return res.status(403).json({ message: "You can only check out your own active check-in" });
+      }
+
+      const checkIn = await storage.checkOut(id);
+      
+      // Update Google Sheets asynchronously
+      const checkInWithDetails = await storage.getUserRecentCheckIns(userId, 1);
+      if (checkInWithDetails.length > 0) {
+        updateCheckOutInSheets(checkInWithDetails[0]).catch(err => {
+          console.error("Background update to sheets failed:", err);
+        });
+      }
+
+      res.json(checkIn);
+    } catch (error: any) {
+      console.error("Error checking out:", error);
+      res.status(400).json({ message: error.message || "Failed to check out" });
+    }
+  });
+
+  // Admin routes
+  app.get('/api/admin/stats', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const activeCheckIns = await storage.getAllActiveCheckIns();
+      const allSites = await storage.getAllSites();
+      const allGuards = await storage.getUsersByRole('guard');
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
+      const weeklyHours = await storage.getAllUsersWeeklyHours(weekStart);
+
+      const stats = {
+        activeGuards: activeCheckIns.length,
+        totalSites: allSites.filter(s => s.isActive).length,
+        totalGuards: allGuards.length,
+        weeklyHours,
+      };
+
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  app.get('/api/admin/active-check-ins', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const activeCheckIns = await storage.getAllActiveCheckIns();
+      res.json(activeCheckIns);
+    } catch (error) {
+      console.error("Error fetching active check-ins:", error);
+      res.status(500).json({ message: "Failed to fetch active check-ins" });
+    }
+  });
+
+  app.get('/api/admin/recent-activity', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const recentActivity = await storage.getAllRecentActivity(50);
+      res.json(recentActivity);
+    } catch (error) {
+      console.error("Error fetching recent activity:", error);
+      res.status(500).json({ message: "Failed to fetch recent activity" });
+    }
+  });
+
+  app.get('/api/admin/guards', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const guards = await storage.getUsersByRole('guard');
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+
+      // Fetch stats for each guard
+      const guardsWithStats = await Promise.all(
+        guards.map(async (guard) => {
+          const weeklyHours = await storage.getUserWeeklyHours(guard.id, weekStart);
+          const recentCheckIns = await storage.getUserRecentCheckIns(guard.id, 10);
+          const activeCheckIn = await storage.getActiveCheckInForUser(guard.id);
+
+          return {
+            ...guard,
+            weeklyHours,
+            totalShifts: recentCheckIns.length,
+            recentCheckIns: recentCheckIns.map(ci => ({
+              id: ci.id,
+              checkInTime: ci.checkInTime,
+              checkOutTime: ci.checkOutTime,
+              status: ci.status,
+            })),
+            isCurrentlyActive: !!activeCheckIn,
+          };
+        })
+      );
+
+      res.json(guardsWithStats);
+    } catch (error) {
+      console.error("Error fetching guards:", error);
+      res.status(500).json({ message: "Failed to fetch guards" });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
