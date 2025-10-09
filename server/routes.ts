@@ -1,27 +1,31 @@
-// Referenced from blueprint:javascript_log_in_with_replit
-import type { Express } from "express";
+// Referenced from blueprint:javascript_log_in_with_replit and blueprint:javascript_auth_all_persistance
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { setupAuth } from "./auth";
 import { insertSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 
-export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  await setupAuth(app);
+// Middleware to check if user is authenticated
+function isAuthenticated(req: Request, res: Response, next: NextFunction) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ message: "Unauthorized" });
+}
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
+// Middleware to check if user is admin
+function isAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.user && (req.user as any).role === 'admin') {
+    return next();
+  }
+  res.status(403).json({ message: "Forbidden - Admin access required" });
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth middleware - sets up /api/register, /api/login, /api/logout, /api/user
+  setupAuth(app);
 
   // User management routes (admin only)
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (req, res) => {
@@ -106,7 +110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Check-in routes for guards
   app.get('/api/check-ins/active', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const activeCheckIn = await storage.getActiveCheckInForUser(userId);
       res.json(activeCheckIn);
     } catch (error) {
@@ -117,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/check-ins/my-recent', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const recentCheckIns = await storage.getUserRecentCheckIns(userId, 20);
       res.json(recentCheckIns);
     } catch (error) {
@@ -128,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/check-ins', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       
       // Check if user already has an active check-in
       const activeCheckIn = await storage.getActiveCheckInForUser(userId);
@@ -167,7 +171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/check-ins/:id/checkout', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
 
       // Verify this check-in belongs to the user
       const activeCheckIn = await storage.getActiveCheckInForUser(userId);
@@ -385,7 +389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/scheduled-shifts', isAuthenticated, async (req: any, res) => {
     try {
       const user = req.user;
-      const isAdminUser = user.claims.role === 'admin';
+      const isAdminUser = user.role === 'admin';
       
       if (isAdminUser) {
         // Admin can see all shifts
@@ -393,7 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(shifts);
       } else {
         // Guards see only their own shifts
-        const userId = user.claims.sub;
+        const userId = user.id;
         const shifts = await storage.getUserScheduledShifts(userId);
         res.json(shifts);
       }
@@ -503,7 +507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/admin/invitations', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const adminId = req.user.claims.sub;
+      const adminId = req.user.id;
       
       // Generate a unique token
       const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;

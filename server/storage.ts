@@ -1,4 +1,4 @@
-// Referenced from blueprint:javascript_log_in_with_replit and blueprint:javascript_database
+// Referenced from blueprint:javascript_log_in_with_replit, blueprint:javascript_database, and blueprint:javascript_auth_all_persistance
 import {
   users,
   sites,
@@ -7,6 +7,7 @@ import {
   invitations,
   type User,
   type UpsertUser,
+  type InsertUser,
   type Site,
   type InsertSite,
   type CheckIn,
@@ -18,13 +19,23 @@ import {
   type Invitation,
   type InsertInvitation,
 } from "@shared/schema";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, desc, sql, gte, lte, between } from "drizzle-orm";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
+
+const PostgresSessionStore = connectPg(session);
 
 // Interface for storage operations
 export interface IStorage {
-  // User operations (required for Replit Auth)
+  // Session store (required for authentication)
+  sessionStore: session.Store;
+
+  // User operations (required for authentication)
   getUser(id: string): Promise<User | undefined>;
+  getUserById(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
   getUsersByRole(role: string): Promise<User[]>;
@@ -73,9 +84,33 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Session store for authentication
+  sessionStore: session.Store;
+
+  constructor() {
+    this.sessionStore = new PostgresSessionStore({
+      pool: pool as any,
+      createTableIfMissing: true,
+    });
+  }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    return this.getUser(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createUser(userData: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(userData).returning();
     return user;
   }
 
