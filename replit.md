@@ -15,11 +15,11 @@ GuardTrack is a comprehensive web-based system for security guard shift scheduli
 The system features a professional security-themed design with a blue color scheme, adhering to Material Design principles for a clean and modern user interface. It is mobile-first for guard interactions, ensuring ease of use on various devices, while providing data-rich dashboards for administrators. Dark mode support is included for user comfort.
 
 ### Technical Implementations
-GuardTrack is built as a full-stack web application. The frontend uses React with TypeScript, Wouter for routing, TanStack Query for state management, and Shadcn UI with Tailwind CSS for UI components. Browser Geolocation API is integrated for location services. The backend is powered by Node.js with Express, utilizing PostgreSQL (via Neon) as the database and Drizzle ORM for database interactions. Replit Auth handles authentication with OpenID Connect, and Google Sheets API is integrated for data backup and reporting.
+GuardTrack is built as a full-stack web application. The frontend uses React with TypeScript, Wouter for routing, TanStack Query for state management, and Shadcn UI with Tailwind CSS for UI components. Browser Geolocation API is integrated for location services. The backend is powered by Node.js with Express, utilizing PostgreSQL (via Neon) as the database and Drizzle ORM for database interactions. Authentication uses username/password with Passport.js (local strategy) and in-memory session storage. Passwords are hashed with scrypt. Google Sheets API is integrated for data backup and reporting.
 
 ### Feature Specifications
 Key features include:
-- **Authentication & User Management**: Replit Auth with role-based access (Guard, Steward, Supervisor, Admin). An invite-only system controls user registration, and admins can manage user roles and information post-login. The first admin user requires manual database role assignment.
+- **Authentication & User Management**: Username/password authentication with role-based access (Guard, Steward, Supervisor, Admin). Users register with username/password (no Replit accounts required). All new registrations default to 'guard' role. The first admin user requires manual database role assignment: `UPDATE users SET role = 'admin' WHERE username = 'your_username';`
 - **Shift Management**: Admins can schedule shifts using a calendar view, while guards can view their assigned schedules.
 - **Check-in/Check-out**: Guards can check in/out from any device with geolocation verification, and can select their working role. Admins have manual check-in/out and time override capabilities.
 - **Site Management**: Configuration of security sites with associated hourly rates per role.
@@ -32,6 +32,14 @@ The architecture emphasizes a clean separation of concerns between frontend and 
 
 ## External Dependencies
 - **PostgreSQL**: Primary database, hosted via Neon.
-- **Replit Auth**: For user authentication and role management, leveraging OpenID Connect.
+- **Passport.js**: For username/password authentication with local strategy.
 - **Google Sheets API**: For automatic data backup and reporting of check-in logs.
 - **Browser Geolocation API**: Used for capturing guard location during check-ins.
+
+## Recent Changes (October 9, 2025)
+- **Authentication Migration**: Migrated from Replit Auth to username/password authentication
+  - Users now register and login with username/password (no Replit accounts needed)
+  - Passwords hashed with scrypt, sanitized before sending to client
+  - In-memory session storage (sessions reset on server restart)
+  - All new users default to 'guard' role for security
+  - Admin access requires manual database update

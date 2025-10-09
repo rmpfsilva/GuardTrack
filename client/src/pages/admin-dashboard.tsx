@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { Users, MapPin, Clock, Activity, Calendar } from "lucide-react";
