@@ -4,6 +4,7 @@ import {
   sites,
   checkIns,
   scheduledShifts,
+  invitations,
   type User,
   type UpsertUser,
   type Site,
@@ -14,6 +15,8 @@ import {
   type ScheduledShift,
   type InsertScheduledShift,
   type ScheduledShiftWithDetails,
+  type Invitation,
+  type InsertInvitation,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, between } from "drizzle-orm";
@@ -58,6 +61,15 @@ export interface IStorage {
   // Billing operations
   getWeeklyBillingReport(weekStart: Date): Promise<any>;
   getDailyActivityBySite(siteId: string, date: Date): Promise<any>;
+
+  // Invitation operations
+  createInvitation(invitation: InsertInvitation): Promise<Invitation>;
+  getInvitationByToken(token: string): Promise<Invitation | undefined>;
+  getInvitationByEmail(email: string): Promise<Invitation | undefined>;
+  getAllInvitations(): Promise<Invitation[]>;
+  acceptInvitation(token: string): Promise<Invitation>;
+  revokeInvitation(id: string): Promise<Invitation>;
+  deleteInvitation(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -547,6 +559,55 @@ export class DatabaseStorage implements IStorage {
       totalHours: activity.reduce((sum, a) => sum + a.hoursWorked, 0),
       totalAmount: activity.reduce((sum, a) => sum + a.amount, 0),
     };
+  }
+
+  // Invitation operations
+  async createInvitation(invitationData: InsertInvitation): Promise<Invitation> {
+    const [invitation] = await db.insert(invitations).values(invitationData).returning();
+    return invitation;
+  }
+
+  async getInvitationByToken(token: string): Promise<Invitation | undefined> {
+    const [invitation] = await db.select().from(invitations).where(eq(invitations.token, token));
+    return invitation;
+  }
+
+  async getInvitationByEmail(email: string): Promise<Invitation | undefined> {
+    const [invitation] = await db.select().from(invitations).where(eq(invitations.email, email));
+    return invitation;
+  }
+
+  async getAllInvitations(): Promise<Invitation[]> {
+    return await db.select().from(invitations).orderBy(desc(invitations.createdAt));
+  }
+
+  async acceptInvitation(token: string): Promise<Invitation> {
+    const [invitation] = await db
+      .update(invitations)
+      .set({
+        status: 'accepted',
+        acceptedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(invitations.token, token))
+      .returning();
+    return invitation;
+  }
+
+  async revokeInvitation(id: string): Promise<Invitation> {
+    const [invitation] = await db
+      .update(invitations)
+      .set({
+        status: 'revoked',
+        updatedAt: new Date(),
+      })
+      .where(eq(invitations.id, id))
+      .returning();
+    return invitation;
+  }
+
+  async deleteInvitation(id: string): Promise<void> {
+    await db.delete(invitations).where(eq(invitations.id, id));
   }
 }
 

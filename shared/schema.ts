@@ -83,6 +83,20 @@ export const scheduledShifts = pgTable("scheduled_shifts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Invitations table - email invites for new users
+export const invitations = pgTable("invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull().unique(),
+  token: varchar("token").notNull().unique(),
+  role: varchar("role").notNull().default('guard'), // Initial role: 'guard' | 'steward' | 'supervisor' | 'admin'
+  status: varchar("status").notNull().default('pending'), // 'pending' | 'accepted' | 'revoked'
+  invitedBy: varchar("invited_by").references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp("expires_at"),
+  acceptedAt: timestamp("accepted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkIns: many(checkIns),
@@ -164,6 +178,20 @@ export const updateScheduledShiftSchema = createInsertSchema(scheduledShifts).om
   updatedAt: true,
 }).partial();
 
+export const insertInvitationSchema = createInsertSchema(invitations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+  acceptedAt: true,
+});
+
+export const updateInvitationSchema = createInsertSchema(invitations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -180,6 +208,10 @@ export type UpdateCheckIn = z.infer<typeof updateCheckInSchema>;
 export type ScheduledShift = typeof scheduledShifts.$inferSelect;
 export type InsertScheduledShift = z.infer<typeof insertScheduledShiftSchema>;
 export type UpdateScheduledShift = z.infer<typeof updateScheduledShiftSchema>;
+
+export type Invitation = typeof invitations.$inferSelect;
+export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
+export type UpdateInvitation = z.infer<typeof updateInvitationSchema>;
 
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
