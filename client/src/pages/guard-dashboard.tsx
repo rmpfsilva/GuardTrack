@@ -61,8 +61,8 @@ export default function GuardDashboard() {
 
   // Check-in mutation
   const checkInMutation = useMutation({
-    mutationFn: async (siteId: string) => {
-      return await apiRequest("POST", "/api/check-ins", { siteId });
+    mutationFn: async (data: { siteId: string; latitude?: string; longitude?: string }) => {
+      return await apiRequest("POST", "/api/check-ins", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/check-ins/active"] });
@@ -135,7 +135,38 @@ export default function GuardDashboard() {
       });
       return;
     }
-    checkInMutation.mutate(selectedSiteId);
+
+    // Request geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          // Success: got location
+          checkInMutation.mutate({
+            siteId: selectedSiteId,
+            latitude: position.coords.latitude.toString(),
+            longitude: position.coords.longitude.toString(),
+          });
+        },
+        (error) => {
+          // Error or denied: check in without location
+          console.warn("Geolocation error:", error);
+          toast({
+            title: "Location Access Denied",
+            description: "Checking in without location verification.",
+            variant: "default",
+          });
+          checkInMutation.mutate({ siteId: selectedSiteId });
+        }
+      );
+    } else {
+      // Geolocation not supported: check in without location
+      toast({
+        title: "Location Not Supported",
+        description: "Your device doesn't support location services.",
+        variant: "default",
+      });
+      checkInMutation.mutate({ siteId: selectedSiteId });
+    }
   };
 
   const handleCheckOut = () => {

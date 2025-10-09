@@ -100,11 +100,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "You already have an active check-in. Please check out first." });
       }
 
-      const validatedData = insertCheckInSchema.parse({
-        ...req.body,
+      const { siteId, latitude, longitude } = req.body;
+      const validatedData = {
         userId,
+        siteId,
+        latitude: latitude || null,
+        longitude: longitude || null,
         status: 'active',
-      });
+      };
 
       const checkIn = await storage.createCheckIn(validatedData);
       

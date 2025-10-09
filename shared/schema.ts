@@ -43,6 +43,8 @@ export const sites = pgTable("sites", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
   address: text("address").notNull(),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -55,6 +57,8 @@ export const checkIns = pgTable("check_ins", {
   siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: 'cascade' }),
   checkInTime: timestamp("check_in_time").notNull().defaultNow(),
   checkOutTime: timestamp("check_out_time"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
   status: varchar("status").notNull().default('active'), // 'active' | 'completed'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
