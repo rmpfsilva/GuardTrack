@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { Users, MapPin, Clock, Activity, Calendar, Settings } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import proForceLogo from "@assets/download_1760019684165.png";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,8 +30,9 @@ interface DashboardStats {
 }
 
 export default function AdminDashboard() {
-  const { user, isLoading: authLoading, isAdmin } = useAuth();
+  const { user, isLoading: authLoading, isAdmin, logoutMutation } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [editingCheckIn, setEditingCheckIn] = useState<CheckInWithDetails | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -135,7 +136,13 @@ export default function AdminDashboard() {
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => window.location.href = '/api/logout'}
+              onClick={() => {
+                logoutMutation.mutate(undefined, {
+                  onSuccess: () => {
+                    setLocation('/auth');
+                  }
+                });
+              }}
               data-testid="button-logout"
             >
               Log Out

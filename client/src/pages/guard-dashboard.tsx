@@ -6,7 +6,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { Clock, MapPin, LogOut, LogIn, Calendar, Settings } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import proForceLogo from "@assets/download_1760019684165.png";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,8 +18,9 @@ import MySchedule from "@/components/my-schedule";
 import type { Site, CheckIn, CheckInWithDetails } from "@shared/schema";
 
 export default function GuardDashboard() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, logoutMutation } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("guard");
@@ -228,7 +229,13 @@ export default function GuardDashboard() {
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => window.location.href = '/api/logout'}
+              onClick={() => {
+                logoutMutation.mutate(undefined, {
+                  onSuccess: () => {
+                    setLocation('/auth');
+                  }
+                });
+              }}
               data-testid="button-logout"
             >
               Log Out
