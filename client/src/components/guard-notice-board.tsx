@@ -25,7 +25,7 @@ export default function GuardNoticeBoard() {
 
   // Fetch user's applications
   const { data: myApplications = [] } = useQuery<NoticeApplication[]>({
-    queryKey: ["/api/notice-applications/my-applications"],
+    queryKey: ["/api/notice-applications/my"],
   });
 
   // Apply mutation
@@ -34,7 +34,7 @@ export default function GuardNoticeBoard() {
       return await apiRequest("POST", "/api/notice-applications", { noticeId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notice-applications/my-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notice-applications/my"] });
       toast({
         title: "Success",
         description: "Your application has been submitted!",
@@ -55,7 +55,7 @@ export default function GuardNoticeBoard() {
       return await apiRequest("DELETE", `/api/notice-applications/${applicationId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notice-applications/my-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notice-applications/my"] });
       toast({
         title: "Success",
         description: "Application withdrawn successfully",
