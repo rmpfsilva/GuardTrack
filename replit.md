@@ -48,8 +48,10 @@ The architecture emphasizes a clean separation of concerns between frontend and 
     - `cancelled_by`: References user who cancelled (admin)
     - `cancelled_at`: Timestamp of cancellation
     - `cancellation_reason`: Required text explaining why leave was cancelled
-  - **Frontend UI**: Added cancel functionality to admin leave management
-    - Cancel button appears on approved leave requests in "Upcoming Leave" tab
+  - **Frontend UI**: Enhanced cancel functionality across all leave management views
+    - Cancel button in "Upcoming Leave" tab for approved requests
+    - Cancel button in "All Requests" tab for approved leave with cancellation reason display
+    - Calendar view: Click on days with leave to see all employees and cancel from there
     - Modal dialog requires admin to enter cancellation reason
     - Status badge shows orange "Cancelled" badge for cancelled leave
     - Real-time updates: cancellation immediately updates all leave views
@@ -57,6 +59,11 @@ The architecture emphasizes a clean separation of concerns between frontend and 
 - **Yearly Calendar View**: Added comprehensive calendar visualization for annual leave planning
   - **New Tab**: "Calendar View" tab in admin leave management shows all 12 months
   - **Visual Display**: Grid layout showing all approved leave bookings for current year
+  - **Interactive Features**: 
+    - Click on days with leave to see detailed employee information
+    - Hover tooltip shows employee names on leave days
+    - Badge displays count of employees on leave for each day
+    - Direct cancellation from calendar day dialog
   - **Color Coding**: Blue highlights indicate days with approved leave
   - **Responsive Design**: 3-column layout on large screens, 2 on medium, 1 on small
   - **Real-time Data**: Automatically reflects newly approved or cancelled leave
