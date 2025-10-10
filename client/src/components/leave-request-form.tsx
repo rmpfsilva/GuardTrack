@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Plus } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Info } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -126,171 +126,252 @@ export default function LeaveRequestForm() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Annual Leave</h2>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-request-leave">
-              <Plus className="h-4 w-4 mr-2" />
-              Request Leave
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Request Annual Leave</DialogTitle>
-              <DialogDescription>
-                Submit a request for time off. Admin will review and approve.
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="startDate"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Start Date</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-start text-left font-normal"
-                              data-testid="input-start-date"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "PPP") : "Pick a date"}
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            initialFocus
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Content - Leave Requests */}
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Annual Leave</h2>
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-request-leave">
+                <Plus className="h-4 w-4 mr-2" />
+                Request Leave
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Request Annual Leave</DialogTitle>
+                <DialogDescription>
+                  Submit a request for time off. Admin will review and approve.
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="startDate"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Start Date</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal"
+                                data-testid="input-start-date"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {field.value ? format(field.value, "PPP") : "Pick a date"}
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="endDate"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>End Date</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal"
+                                data-testid="input-end-date"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {field.value ? format(field.value, "PPP") : "Pick a date"}
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="reason"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Reason (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Enter the reason for your leave request..."
+                            {...field}
+                            data-testid="input-leave-reason"
                           />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="endDate"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>End Date</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-start text-left font-normal"
-                              data-testid="input-end-date"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "PPP") : "Pick a date"}
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="reason"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reason (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Enter the reason for your leave request..."
-                          {...field}
-                          data-testid="input-leave-reason"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    disabled={createLeaveRequestMutation.isPending}
-                    data-testid="button-submit-leave"
-                  >
-                    {createLeaveRequestMutation.isPending ? "Submitting..." : "Submit Request"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <Button
+                      type="submit"
+                      disabled={createLeaveRequestMutation.isPending}
+                      data-testid="button-submit-leave"
+                    >
+                      {createLeaveRequestMutation.isPending ? "Submitting..." : "Submit Request"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="space-y-3">
+          {myLeaveRequests.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground text-center">
+                  No leave requests yet. Click "Request Leave" to submit one.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            myLeaveRequests.map((request) => (
+              <Card key={request.id} data-testid={`leave-request-${request.id}`}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <CardTitle className="text-base">
+                        {format(new Date(request.startDate), "MMM d, yyyy")} -{" "}
+                        {format(new Date(request.endDate), "MMM d, yyyy")}
+                      </CardTitle>
+                      <CardDescription>
+                        {request.reason || "No reason provided"}
+                      </CardDescription>
+                    </div>
+                    {getStatusBadge(request.status)}
+                  </div>
+                </CardHeader>
+                {request.status === "pending" && (
+                  <CardContent>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => deleteLeaveRequestMutation.mutate(request.id)}
+                      disabled={deleteLeaveRequestMutation.isPending}
+                      data-testid={`button-delete-leave-${request.id}`}
+                    >
+                      Cancel Request
+                    </Button>
+                  </CardContent>
+                )}
+                {request.status === "rejected" && request.reviewNotes && (
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium">Reason for rejection: </span>
+                      {request.reviewNotes}
+                    </p>
+                  </CardContent>
+                )}
+              </Card>
+            ))
+          )}
+        </div>
       </div>
 
-      <div className="space-y-3">
-        {myLeaveRequests.length === 0 ? (
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground text-center">
-                No leave requests yet. Click "Request Leave" to submit one.
+      {/* Side Information - Guidelines */}
+      <div className="lg:col-span-1">
+        <Card className="sticky top-4">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Info className="h-5 w-5 text-primary" />
+              Holiday Guidelines
+            </CardTitle>
+            <CardDescription>
+              Important information about applying for time off
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="space-y-2">
+              <h4 className="font-semibold text-sm">Understanding Time Off</h4>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Holiday applications involve requesting time off, not just paid holidays. 
+                It is an employer's legal obligation that any accrued holiday is used as a break from working conditions.
               </p>
-            </CardContent>
-          </Card>
-        ) : (
-          myLeaveRequests.map((request) => (
-            <Card key={request.id} data-testid={`leave-request-${request.id}`}>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-base">
-                      {format(new Date(request.startDate), "MMM d, yyyy")} -{" "}
-                      {format(new Date(request.endDate), "MMM d, yyyy")}
-                    </CardTitle>
-                    <CardDescription>
-                      {request.reason || "No reason provided"}
-                    </CardDescription>
-                  </div>
-                  {getStatusBadge(request.status)}
-                </div>
-              </CardHeader>
-              {request.status === "pending" && (
-                <CardContent>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => deleteLeaveRequestMutation.mutate(request.id)}
-                    disabled={deleteLeaveRequestMutation.isPending}
-                    data-testid={`button-delete-leave-${request.id}`}
-                  >
-                    Cancel Request
-                  </Button>
-                </CardContent>
-              )}
-              {request.status === "rejected" && request.reviewNotes && (
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    <span className="font-medium">Reason for rejection: </span>
-                    {request.reviewNotes}
-                  </p>
-                </CardContent>
-              )}
-            </Card>
-          ))
-        )}
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-semibold text-sm">Types of Leave</h4>
+              <ul className="space-y-1.5 text-muted-foreground text-xs">
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span><strong>Annual Leave:</strong> Pre-planned vacation days</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span><strong>Sick Leave:</strong> Time off due to illness with medical documentation</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span><strong>Personal Days:</strong> Days for personal matters</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span><strong>Unpaid Leave:</strong> Time off without pay for extended periods</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-semibold text-sm">Application Process</h4>
+              <ol className="space-y-1.5 text-muted-foreground text-xs list-decimal list-inside">
+                <li>Plan ahead to avoid workflow disruptions</li>
+                <li>Submit request with all relevant details</li>
+                <li>Manager reviews considering schedules and deadlines</li>
+                <li>Receive confirmation once approved</li>
+              </ol>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t">
+              <h4 className="font-semibold text-sm">Key Reminders</h4>
+              <ul className="space-y-1.5 text-muted-foreground text-xs">
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>Submit requests as early as possible</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>Approval depends on business needs and team schedules</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>Ensure sufficient leave balance before applying</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>Discuss unpaid leave impact with management</span>
+                </li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
