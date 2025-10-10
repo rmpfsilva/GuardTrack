@@ -28,6 +28,8 @@ export default function AdminLeaveManagement() {
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected">("approved");
   const [reviewNotes, setReviewNotes] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [dateLeaveDialogOpen, setDateLeaveDialogOpen] = useState(false);
 
   const { data: pendingRequests = [], isLoading: pendingLoading } = useQuery<LeaveRequestWithDetails[]>({
     queryKey: ["/api/leave-requests/pending"],
@@ -222,6 +224,22 @@ export default function AdminLeaveManagement() {
     return allRequests.filter(leave => leave.status === 'approved');
   };
 
+  const getLeaveForSelectedDate = () => {
+    if (!selectedDate) return [];
+    return getLeaveForYear().filter(leave => {
+      const start = new Date(leave.startDate);
+      const end = new Date(leave.endDate);
+      return isWithinInterval(selectedDate, { start, end });
+    });
+  };
+
+  const openDateLeaveDialog = (date: Date, leaveRequests: LeaveRequestWithDetails[]) => {
+    if (leaveRequests.length > 0) {
+      setSelectedDate(date);
+      setDateLeaveDialogOpen(true);
+    }
+  };
+
   const renderYearlyCalendar = () => {
     const today = new Date();
     const yearStart = startOfYear(today);
@@ -261,18 +279,27 @@ export default function AdminLeaveManagement() {
                     });
                     const isCurrentMonth = day.getMonth() === monthStart.getMonth();
                     const isToday = isSameDay(day, today);
+                    const hasLeave = leaveOnDay.length > 0;
                     
                     return (
                       <div
                         key={idx}
+                        onClick={() => hasLeave && openDateLeaveDialog(day, leaveOnDay)}
                         className={`
-                          aspect-square flex items-center justify-center text-xs rounded
+                          aspect-square flex flex-col items-center justify-center text-xs rounded relative
                           ${!isCurrentMonth ? 'text-muted-foreground/40' : ''}
                           ${isToday ? 'bg-primary text-primary-foreground font-bold' : ''}
-                          ${leaveOnDay.length > 0 && !isToday ? 'bg-blue-500 text-white' : ''}
+                          ${hasLeave && !isToday ? 'bg-blue-500 text-white cursor-pointer hover:bg-blue-600' : ''}
                         `}
+                        data-testid={`yearly-calendar-day-${format(day, 'yyyy-MM-dd')}`}
+                        title={hasLeave ? leaveOnDay.map(l => `${l.user.firstName} ${l.user.lastName}`).join(', ') : ''}
                       >
-                        {format(day, 'd')}
+                        <span>{format(day, 'd')}</span>
+                        {hasLeave && (
+                          <span className="absolute bottom-0 text-[9px] font-semibold">
+                            {leaveOnDay.length}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -474,7 +501,7 @@ export default function AdminLeaveManagement() {
               <Card key={request.id} data-testid={`all-request-${request.id}`}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-1">
                       <CardTitle className="text-base">
                         {request.user.firstName} {request.user.lastName}
                       </CardTitle>
@@ -492,8 +519,28 @@ export default function AdminLeaveManagement() {
                           {request.reviewNotes}
                         </p>
                       )}
+                      {request.cancellationReason && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          <span className="font-medium">Cancellation reason: </span>
+                          {request.cancellationReason}
+                        </p>
+                      )}
                     </div>
-                    {getStatusBadge(request.status)}
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(request.status)}
+                      {request.status === 'approved' && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => openCancelDialog(request)}
+                          disabled={cancelMutation.isPending}
+                          data-testid={`button-cancel-all-${request.id}`}
+                        >
+                          <Ban className="h-4 w-4 mr-1" />
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
               </Card>
@@ -593,6 +640,63 @@ export default function AdminLeaveManagement() {
               data-testid="button-confirm-cancel"
             >
               {cancelMutation.isPending ? "Cancelling..." : "Cancel Leave"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dateLeaveDialogOpen} onOpenChange={setDateLeaveDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Leave on {selectedDate && format(selectedDate, "MMMM d, yyyy")}</DialogTitle>
+            <DialogDescription>
+              {getLeaveForSelectedDate().length} team member(s) on leave
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {getLeaveForSelectedDate().map((request) => (
+              <Card key={request.id} data-testid={`date-leave-${request.id}`}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1 flex-1">
+                      <CardTitle className="text-base">
+                        {request.user.firstName} {request.user.lastName}
+                      </CardTitle>
+                      <CardDescription>
+                        {format(new Date(request.startDate), "MMM d, yyyy")} -{" "}
+                        {format(new Date(request.endDate), "MMM d, yyyy")} (
+                        {calculateDays(request.startDate as any, request.endDate as any)} days)
+                      </CardDescription>
+                      {request.reason && (
+                        <p className="text-sm text-muted-foreground mt-2">{request.reason}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(request.status)}
+                      {request.status === 'approved' && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => {
+                            setDateLeaveDialogOpen(false);
+                            openCancelDialog(request);
+                          }}
+                          disabled={cancelMutation.isPending}
+                          data-testid={`button-cancel-date-${request.id}`}
+                        >
+                          <Ban className="h-4 w-4 mr-1" />
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDateLeaveDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
