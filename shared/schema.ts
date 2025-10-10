@@ -168,17 +168,66 @@ export const leaveRequests = pgTable("leave_requests", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Notices table - for admin posts about overtime opportunities and events
+export const notices = pgTable("notices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  type: varchar("type").notNull().default('overtime'), // 'overtime' | 'event' | 'announcement'
+  siteId: varchar("site_id").references(() => sites.id, { onDelete: 'set null' }),
+  startTime: timestamp("start_time"), // For overtime shifts or events
+  endTime: timestamp("end_time"),
+  workingRole: varchar("working_role"), // Required role: 'guard' | 'steward' | 'supervisor'
+  spotsAvailable: varchar("spots_available"), // Number of positions available
+  isActive: boolean("is_active").notNull().default(true),
+  postedBy: varchar("posted_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Notice applications table - guards applying for notice opportunities
+export const noticeApplications = pgTable("notice_applications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  noticeId: varchar("notice_id").notNull().references(() => notices.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: varchar("status").notNull().default('pending'), // 'pending' | 'accepted' | 'rejected'
+  message: text("message"), // Optional message from applicant
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Push subscriptions table - for web push notifications
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(), // Public key
+  auth: text("auth").notNull(), // Auth secret
+  userAgent: text("user_agent"), // Device info
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkIns: many(checkIns),
   breaks: many(breaks),
   scheduledShifts: many(scheduledShifts),
   leaveRequests: many(leaveRequests),
+  notices: many(notices),
+  noticeApplications: many(noticeApplications),
+  pushSubscriptions: many(pushSubscriptions),
 }));
 
 export const sitesRelations = relations(sites, ({ many }) => ({
   checkIns: many(checkIns),
   scheduledShifts: many(scheduledShifts),
+  notices: many(notices),
 }));
 
 export const checkInsRelations = relations(checkIns, ({ one, many }) => ({
@@ -242,6 +291,40 @@ export const leaveRequestsRelations = relations(leaveRequests, ({ one }) => ({
   }),
   reviewer: one(users, {
     fields: [leaveRequests.reviewedBy],
+    references: [users.id],
+  }),
+}));
+
+export const noticesRelations = relations(notices, ({ one, many }) => ({
+  poster: one(users, {
+    fields: [notices.postedBy],
+    references: [users.id],
+  }),
+  site: one(sites, {
+    fields: [notices.siteId],
+    references: [sites.id],
+  }),
+  applications: many(noticeApplications),
+}));
+
+export const noticeApplicationsRelations = relations(noticeApplications, ({ one }) => ({
+  notice: one(notices, {
+    fields: [noticeApplications.noticeId],
+    references: [notices.id],
+  }),
+  user: one(users, {
+    fields: [noticeApplications.userId],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [noticeApplications.reviewedBy],
+    references: [users.id],
+  }),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [pushSubscriptions.userId],
     references: [users.id],
   }),
 }));
@@ -389,6 +472,72 @@ export const updateUserProfileSchema = z.object({
   lastName: z.string().min(1, 'Last name is required').max(100).optional(),
 }).strict();
 
+export const insertNoticeSchema = createInsertSchema(notices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  postedBy: true,
+}).extend({
+  startTime: z.coerce.date().nullable().optional(),
+  endTime: z.coerce.date().nullable().optional(),
+  expiresAt: z.coerce.date().nullable().optional(),
+  siteId: z.string().nullable().optional(),
+  workingRole: z.string().nullable().optional(),
+  spotsAvailable: z.string().nullable().optional(),
+});
+
+export const updateNoticeSchema = createInsertSchema(notices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  startTime: z.coerce.date().nullable().optional(),
+  endTime: z.coerce.date().nullable().optional(),
+  expiresAt: z.coerce.date().nullable().optional(),
+  siteId: z.string().nullable().optional(),
+  workingRole: z.string().nullable().optional(),
+  spotsAvailable: z.string().nullable().optional(),
+}).partial();
+
+export const insertNoticeApplicationSchema = createInsertSchema(noticeApplications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewNotes: true,
+  status: true,
+}).extend({
+  message: z.string().nullable().optional(),
+});
+
+export const updateNoticeApplicationSchema = createInsertSchema(noticeApplications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  reviewedAt: z.coerce.date().nullable().optional(),
+  reviewNotes: z.string().nullable().optional(),
+  reviewedBy: z.string().nullable().optional(),
+  message: z.string().nullable().optional(),
+}).partial();
+
+export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  userAgent: z.string().nullable().optional(),
+});
+
+export const updatePushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  userAgent: z.string().nullable().optional(),
+}).partial();
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -428,6 +577,18 @@ export type UpdateLeaveRequest = z.infer<typeof updateLeaveRequestSchema>;
 export type UpdateUserCredentials = z.infer<typeof updateUserCredentialsSchema>;
 export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 
+export type Notice = typeof notices.$inferSelect;
+export type InsertNotice = z.infer<typeof insertNoticeSchema>;
+export type UpdateNotice = z.infer<typeof updateNoticeSchema>;
+
+export type NoticeApplication = typeof noticeApplications.$inferSelect;
+export type InsertNoticeApplication = z.infer<typeof insertNoticeApplicationSchema>;
+export type UpdateNoticeApplication = z.infer<typeof updateNoticeApplicationSchema>;
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+export type UpdatePushSubscription = z.infer<typeof updatePushSubscriptionSchema>;
+
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
   user: User;
@@ -444,6 +605,19 @@ export type ScheduledShiftWithDetails = ScheduledShift & {
 };
 
 export type LeaveRequestWithDetails = LeaveRequest & {
+  user: User;
+  reviewer?: User;
+};
+
+export type NoticeWithDetails = Notice & {
+  poster: User;
+  site?: Site;
+  applications?: NoticeApplication[];
+  applicationCount?: number;
+};
+
+export type NoticeApplicationWithDetails = NoticeApplication & {
+  notice: Notice;
   user: User;
   reviewer?: User;
 };
