@@ -219,7 +219,7 @@ export default function AdminDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <div className="w-full overflow-x-auto pb-2">
+          <div className="w-full overflow-x-auto pb-2 flex justify-center">
             <TabsList className="inline-flex min-w-min">
               <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>
               <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
