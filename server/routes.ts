@@ -1063,7 +1063,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Notice routes
   app.post('/api/notices', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      console.log('Received notice creation request:', JSON.stringify(req.body, null, 2));
       const validatedData = insertNoticeSchema.parse(req.body);
+      console.log('Validated data:', JSON.stringify(validatedData, null, 2));
       const notice = await storage.createNotice({
         ...validatedData,
         postedBy: req.user.id,
@@ -1088,7 +1090,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(notice);
     } catch (error: any) {
       console.error("Error creating notice:", error);
-      res.status(400).json({ message: error.message || "Failed to create notice" });
+      if (error.errors) {
+        console.error("Validation errors:", JSON.stringify(error.errors, null, 2));
+        res.status(400).json({ 
+          message: "Validation failed", 
+          errors: error.errors 
+        });
+      } else {
+        res.status(400).json({ message: error.message || "Failed to create notice" });
+      }
     }
   });
 
