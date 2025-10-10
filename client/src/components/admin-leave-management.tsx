@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isWithinInterval, startOfWeek, endOfWeek, startOfYear, endOfYear } from "date-fns";
-import { Calendar as CalendarIcon, Check, X, Clock, Ban } from "lucide-react";
+import { Calendar as CalendarIcon, Check, X, Clock, Ban, Info } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -313,13 +313,15 @@ export default function AdminLeaveManagement() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold mb-2">Annual Leave Management</h2>
-        <p className="text-muted-foreground">Review and approve leave requests from your team</p>
-      </div>
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Main Content - Leave Management */}
+      <div className="lg:col-span-3 space-y-6">
+        <div>
+          <h2 className="text-2xl font-semibold mb-2">Annual Leave Management</h2>
+          <p className="text-muted-foreground">Review and approve leave requests from your team</p>
+        </div>
 
-      <Tabs defaultValue="pending" className="w-full">
+        <Tabs defaultValue="pending" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="pending" data-testid="tab-pending">
             Pending ({pendingRequests.length})
@@ -548,6 +550,85 @@ export default function AdminLeaveManagement() {
           )}
         </TabsContent>
       </Tabs>
+      </div>
+
+      {/* Side Information - Holiday Guidelines */}
+      <div className="lg:col-span-1">
+        <Card className="sticky top-4">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Info className="h-5 w-5 text-primary" />
+              Holiday Guidelines
+            </CardTitle>
+            <CardDescription>
+              Important information for time off requests
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="space-y-2">
+              <h4 className="font-semibold text-sm">Understanding Time Off</h4>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Holiday applications involve requesting time off, not just paid holidays. 
+                It is an employer's legal obligation that any accrued holiday is used as a break from working conditions.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-semibold text-sm">Types of Leave</h4>
+              <ul className="space-y-1.5 text-muted-foreground text-xs">
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span><strong>Annual Leave:</strong> Pre-planned vacation days</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span><strong>Sick Leave:</strong> Time off due to illness with medical documentation</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span><strong>Personal Days:</strong> Days for personal matters</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span><strong>Unpaid Leave:</strong> Time off without pay for extended periods</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-semibold text-sm">Application Process</h4>
+              <ol className="space-y-1.5 text-muted-foreground text-xs list-decimal list-inside">
+                <li>Plan ahead to avoid workflow disruptions</li>
+                <li>Submit request with all relevant details</li>
+                <li>Manager reviews considering schedules and deadlines</li>
+                <li>Receive confirmation once approved</li>
+              </ol>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t">
+              <h4 className="font-semibold text-sm">Key Reminders</h4>
+              <ul className="space-y-1.5 text-muted-foreground text-xs">
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>Submit requests as early as possible</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>Approval depends on business needs and team schedules</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>Ensure sufficient leave balance before applying</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">✓</span>
+                  <span>Discuss unpaid leave impact with management</span>
+                </li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
         <DialogContent>
