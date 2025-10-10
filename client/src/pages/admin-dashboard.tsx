@@ -22,6 +22,7 @@ import AdminCheckInControl from "@/components/admin-check-in-control";
 import EditCheckInDialog from "@/components/edit-check-in-dialog";
 import InvitationManagement from "@/components/invitation-management";
 import AdminLeaveManagement from "@/components/admin-leave-management";
+import AdvancedReports from "@/components/advanced-reports";
 
 interface DashboardStats {
   activeGuards: number;
@@ -222,6 +223,7 @@ export default function AdminDashboard() {
             <TabsList className="inline-flex min-w-min">
               <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>
               <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
+              <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>
               <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>
               <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Guards</TabsTrigger>
               <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
@@ -331,6 +333,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="billing">
             <BillingReports />
+          </TabsContent>
+
+          <TabsContent value="reports">
+            <AdvancedReports />
           </TabsContent>
 
           <TabsContent value="schedule">
