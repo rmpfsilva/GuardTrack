@@ -32,9 +32,11 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Mobile Responsiveness**: Fully responsive design across all devices, including Progressive Web App (PWA) functionality for mobile installation. Install prompts available on login page and in authenticated dashboards for easy mobile app installation.
 - **Email Invitation System**: Allows admins to invite new users via email using Gmail integration.
 - **Password Management**: Features for users to change their own password and a secure token-based password recovery flow. Admins can also reset user passwords.
+- **Notice Board**: Admins can post overtime opportunities and events for guards/stewards to apply to. Includes automatic push notifications to all subscribed users when new notices are posted.
+- **Push Notifications**: Web push notification system for real-time alerts about new opportunities. Guards can subscribe/unsubscribe via browser notifications. Uses service worker for offline notification delivery.
 
 ### System Design Choices
-The architecture ensures a clear separation of concerns between frontend and backend. The database schema includes tables for `users`, `sites`, `check_ins`, `scheduled_shifts`, `invitations`, `sessions`, `breaks` (with approval fields: reason, approvalStatus, reviewedBy, reviewedAt), `overtime_requests` (tracks overtime >30 min requiring approval), `leave_requests`, and `password_reset_tokens`. 
+The architecture ensures a clear separation of concerns between frontend and backend. The database schema includes tables for `users`, `sites`, `check_ins`, `scheduled_shifts`, `invitations`, `sessions`, `breaks` (with approval fields: reason, approvalStatus, reviewedBy, reviewedAt), `overtime_requests` (tracks overtime >30 min requiring approval), `leave_requests`, `password_reset_tokens`, `notices` (overtime opportunities and events posted by admins), `notice_applications` (guards' applications to notices with status tracking), and `push_subscriptions` (web push notification endpoints for users). 
 
 **Hours Calculation Logic**: All shifts receive mandatory 1-hour baseline break deduction. Extended breaks (>1 hour) require approval - if approved, full break duration is deducted; if rejected/pending, only baseline deduction applies. Overtime (>30 min past scheduled shift) requires approval - if approved, overtime hours beyond 30 min buffer are added to paid hours; if rejected/pending, payable hours are capped at scheduled end + 30 min.
 
@@ -46,3 +48,34 @@ Future plans include a multi-tenant architecture with `companies` and `company_s
 -   **Google Sheets API**: For automatic data backup and reporting.
 -   **Browser Geolocation API**: Used for capturing guard location.
 -   **Gmail**: Integrated for sending transactional emails, specifically for user invitations.
+-   **Web Push**: For sending push notifications to subscribed users. Requires VAPID keys configuration (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT environment variables).
+
+## Setup Requirements
+
+### Push Notifications Setup
+To enable push notifications, you need to configure VAPID keys:
+
+1. Generate VAPID keys using web-push library:
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+
+2. Add the generated keys to your environment:
+   - **Backend (.env or Secrets):**
+     - `VAPID_PUBLIC_KEY` - The public key
+     - `VAPID_PRIVATE_KEY` - The private key
+     - `VAPID_SUBJECT` - Your contact email (e.g., mailto:admin@guardtrack.com)
+   
+   - **Frontend (Replit Secrets as VITE_* variables):**
+     - `VITE_VAPID_PUBLIC_KEY` - Same as VAPID_PUBLIC_KEY (required for browser subscription)
+
+3. **Important**: Push notifications only work on HTTPS (production) or localhost. The service worker will only register in production environments.
+
+4. **Browser Support**: Push notifications are supported in Chrome, Firefox, Edge, and Safari (iOS 16.4+).
+
+### Notice Board Workflow
+1. Admin posts a notice (overtime opportunity or event) via the "Notices" tab in admin dashboard
+2. System automatically sends push notifications to all subscribed users
+3. Guards receive notification and can view details in their notice board
+4. Guards can apply to notices with one click
+5. Admin can see applicant counts and manage applications
