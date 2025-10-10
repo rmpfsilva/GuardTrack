@@ -6,6 +6,7 @@ import { setupAuth, hashPassword } from "./auth";
 import { insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
+import { sendInvitationEmail } from './emailService';
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -634,6 +635,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const adminId = req.user.id;
       
+      // Get admin user details for sending email
+      const adminUser = await storage.getUserById(adminId);
+      if (!adminUser) {
+        return res.status(400).json({ message: "Admin user not found" });
+      }
+      
       // Generate a unique token
       const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
       
@@ -644,6 +651,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const invitation = await storage.createInvitation(validatedData);
+      
+      // Send invitation email
+      try {
+        if (!adminUser.email) {
+          console.warn("Admin user has no email set - skipping email notification");
+        } else {
+          const adminName = adminUser.firstName && adminUser.lastName 
+            ? `${adminUser.firstName} ${adminUser.lastName}`
+            : adminUser.username;
+          
+          await sendInvitationEmail({
+            toEmail: invitation.email,
+            fromEmail: adminUser.email,
+            fromName: adminName,
+            inviteToken: invitation.token,
+            role: invitation.role,
+            expiresAt: invitation.expiresAt || undefined,
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send invitation email:", emailError);
+      }
+      
       res.status(201).json(invitation);
     } catch (error: any) {
       console.error("Error creating invitation:", error);
