@@ -67,7 +67,6 @@ export default function NoticeBoardManagement() {
   // Fetch notices
   const { data: notices = [], isLoading } = useQuery<Notice[]>({
     queryKey: ["/api/notices"],
-    refetchInterval: 10000,
   });
 
   // Fetch applications for notices

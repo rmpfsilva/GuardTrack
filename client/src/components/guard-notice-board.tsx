@@ -16,7 +16,6 @@ export default function GuardNoticeBoard() {
   // Fetch notices
   const { data: notices = [], isLoading } = useQuery<Notice[]>({
     queryKey: ["/api/notices"],
-    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Fetch user's applications
