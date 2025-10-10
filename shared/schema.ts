@@ -77,6 +77,20 @@ export const checkIns = pgTable("check_ins", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Breaks table - tracks unpaid break periods during shifts
+export const breaks = pgTable("breaks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  checkInId: varchar("check_in_id").notNull().references(() => checkIns.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  breakStartTime: timestamp("break_start_time").notNull().defaultNow(),
+  breakEndTime: timestamp("break_end_time"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
+  status: varchar("status").notNull().default('active'), // 'active' | 'completed'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Scheduled shifts table - pre-assigned shifts for guards
 export const scheduledShifts = pgTable("scheduled_shifts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -136,6 +150,7 @@ export const leaveRequests = pgTable("leave_requests", {
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkIns: many(checkIns),
+  breaks: many(breaks),
   scheduledShifts: many(scheduledShifts),
   leaveRequests: many(leaveRequests),
 }));
@@ -145,7 +160,7 @@ export const sitesRelations = relations(sites, ({ many }) => ({
   scheduledShifts: many(scheduledShifts),
 }));
 
-export const checkInsRelations = relations(checkIns, ({ one }) => ({
+export const checkInsRelations = relations(checkIns, ({ one, many }) => ({
   user: one(users, {
     fields: [checkIns.userId],
     references: [users.id],
@@ -153,6 +168,18 @@ export const checkInsRelations = relations(checkIns, ({ one }) => ({
   site: one(sites, {
     fields: [checkIns.siteId],
     references: [sites.id],
+  }),
+  breaks: many(breaks),
+}));
+
+export const breaksRelations = relations(breaks, ({ one }) => ({
+  checkIn: one(checkIns, {
+    fields: [breaks.checkInId],
+    references: [checkIns.id],
+  }),
+  user: one(users, {
+    fields: [breaks.userId],
+    references: [users.id],
   }),
 }));
 
@@ -211,6 +238,19 @@ export const insertCheckInSchema = createInsertSchema(checkIns).omit({
 });
 
 export const updateCheckInSchema = createInsertSchema(checkIns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export const insertBreakSchema = createInsertSchema(breaks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  breakStartTime: true,
+});
+
+export const updateBreakSchema = createInsertSchema(breaks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -303,6 +343,10 @@ export type UpdateSite = z.infer<typeof updateSiteSchema>;
 export type CheckIn = typeof checkIns.$inferSelect;
 export type InsertCheckIn = z.infer<typeof insertCheckInSchema>;
 export type UpdateCheckIn = z.infer<typeof updateCheckInSchema>;
+
+export type Break = typeof breaks.$inferSelect;
+export type InsertBreak = z.infer<typeof insertBreakSchema>;
+export type UpdateBreak = z.infer<typeof updateBreakSchema>;
 
 export type ScheduledShift = typeof scheduledShifts.$inferSelect;
 export type InsertScheduledShift = z.infer<typeof insertScheduledShiftSchema>;
