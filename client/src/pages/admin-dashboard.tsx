@@ -76,21 +76,18 @@ export default function AdminDashboard() {
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/admin/stats"],
     enabled: !!user && isAdmin,
-    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Fetch recent activity
   const { data: recentActivity = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/admin/recent-activity"],
     enabled: !!user && isAdmin,
-    refetchInterval: 10000, // Refresh every 10 seconds
   });
 
   // Fetch active check-ins
   const { data: activeCheckIns = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/admin/active-check-ins"],
     enabled: !!user && isAdmin,
-    refetchInterval: 10000,
   });
 
   if (authLoading || !user || !isAdmin) {

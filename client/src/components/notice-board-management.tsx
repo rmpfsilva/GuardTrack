@@ -77,10 +77,7 @@ export default function NoticeBoardManagement() {
   // Create notice mutation
   const createNoticeMutation = useMutation({
     mutationFn: async (data: FormValues) => {
-      return await apiRequest("/api/notices", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      return await apiRequest("POST", "/api/notices", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notices"] });
@@ -103,9 +100,7 @@ export default function NoticeBoardManagement() {
   // Delete notice mutation
   const deleteNoticeMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/notices/${id}`, {
-        method: "DELETE",
-      });
+      return await apiRequest("DELETE", `/api/notices/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notices"] });
