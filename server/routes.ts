@@ -3,7 +3,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, hashPassword } from "./auth";
-import { insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema } from "@shared/schema";
+import { insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 import { sendInvitationEmail } from './emailService';
@@ -1056,6 +1056,200 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting invitation:", error);
       res.status(400).json({ message: error.message || "Failed to delete invitation" });
+    }
+  });
+
+  // Notice routes
+  app.post('/api/notices', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const validatedData = insertNoticeSchema.parse(req.body);
+      const notice = await storage.createNotice({
+        ...validatedData,
+        postedBy: req.user.id,
+      });
+      res.status(201).json(notice);
+    } catch (error: any) {
+      console.error("Error creating notice:", error);
+      res.status(400).json({ message: error.message || "Failed to create notice" });
+    }
+  });
+
+  app.get('/api/notices', isAuthenticated, async (req, res) => {
+    try {
+      const notices = await storage.getActiveNotices();
+      res.json(notices);
+    } catch (error) {
+      console.error("Error fetching notices:", error);
+      res.status(500).json({ message: "Failed to fetch notices" });
+    }
+  });
+
+  app.get('/api/notices/all', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const notices = await storage.getAllNotices();
+      res.json(notices);
+    } catch (error) {
+      console.error("Error fetching all notices:", error);
+      res.status(500).json({ message: "Failed to fetch notices" });
+    }
+  });
+
+  app.get('/api/notices/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const notice = await storage.getNotice(id);
+      if (!notice) {
+        return res.status(404).json({ message: "Notice not found" });
+      }
+      res.json(notice);
+    } catch (error) {
+      console.error("Error fetching notice:", error);
+      res.status(500).json({ message: "Failed to fetch notice" });
+    }
+  });
+
+  app.patch('/api/notices/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = updateNoticeSchema.parse(req.body);
+      const notice = await storage.updateNotice(id, validatedData);
+      res.json(notice);
+    } catch (error: any) {
+      console.error("Error updating notice:", error);
+      res.status(400).json({ message: error.message || "Failed to update notice" });
+    }
+  });
+
+  app.delete('/api/notices/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteNotice(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting notice:", error);
+      res.status(400).json({ message: error.message || "Failed to delete notice" });
+    }
+  });
+
+  // Notice application routes
+  app.post('/api/notice-applications', isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertNoticeApplicationSchema.parse({
+        ...req.body,
+        userId: req.user.id,
+      });
+      const application = await storage.createNoticeApplication(validatedData);
+      res.status(201).json(application);
+    } catch (error: any) {
+      console.error("Error creating notice application:", error);
+      res.status(400).json({ message: error.message || "Failed to create application" });
+    }
+  });
+
+  app.get('/api/notice-applications/my', isAuthenticated, async (req: any, res) => {
+    try {
+      const applications = await storage.getUserNoticeApplications(req.user.id);
+      res.json(applications);
+    } catch (error) {
+      console.error("Error fetching user applications:", error);
+      res.status(500).json({ message: "Failed to fetch applications" });
+    }
+  });
+
+  app.get('/api/notice-applications/notice/:noticeId', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { noticeId } = req.params;
+      const applications = await storage.getNoticeApplicationsForNotice(noticeId);
+      res.json(applications);
+    } catch (error) {
+      console.error("Error fetching notice applications:", error);
+      res.status(500).json({ message: "Failed to fetch applications" });
+    }
+  });
+
+  app.patch('/api/notice-applications/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = updateNoticeApplicationSchema.parse({
+        ...req.body,
+        reviewedBy: req.user.id,
+        reviewedAt: new Date(),
+      });
+      const application = await storage.updateNoticeApplication(id, validatedData);
+      res.json(application);
+    } catch (error: any) {
+      console.error("Error updating notice application:", error);
+      res.status(400).json({ message: error.message || "Failed to update application" });
+    }
+  });
+
+  app.delete('/api/notice-applications/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if user owns the application or is admin
+      const application = await storage.getNoticeApplication(id);
+      if (!application) {
+        return res.status(404).json({ message: "Application not found" });
+      }
+      
+      const isOwner = application.user.id === req.user.id;
+      const isUserAdmin = req.user.role === 'admin';
+      
+      if (!isOwner && !isUserAdmin) {
+        return res.status(403).json({ message: "Forbidden - You can only delete your own applications" });
+      }
+      
+      await storage.deleteNoticeApplication(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting notice application:", error);
+      res.status(400).json({ message: error.message || "Failed to delete application" });
+    }
+  });
+
+  // Push subscription routes
+  app.post('/api/push-subscriptions', isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertPushSubscriptionSchema.parse({
+        ...req.body,
+        userId: req.user.id,
+      });
+      const subscription = await storage.createPushSubscription(validatedData);
+      res.status(201).json(subscription);
+    } catch (error: any) {
+      console.error("Error creating push subscription:", error);
+      res.status(400).json({ message: error.message || "Failed to create subscription" });
+    }
+  });
+
+  app.get('/api/push-subscriptions/my', isAuthenticated, async (req: any, res) => {
+    try {
+      const subscriptions = await storage.getUserPushSubscriptions(req.user.id);
+      res.json(subscriptions);
+    } catch (error) {
+      console.error("Error fetching user subscriptions:", error);
+      res.status(500).json({ message: "Failed to fetch subscriptions" });
+    }
+  });
+
+  app.delete('/api/push-subscriptions/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if user owns the subscription or is admin
+      const subscriptions = await storage.getUserPushSubscriptions(req.user.id);
+      const subscription = subscriptions.find(sub => sub.id === id);
+      
+      if (!subscription && req.user.role !== 'admin') {
+        return res.status(403).json({ message: "Forbidden - You can only delete your own subscriptions" });
+      }
+      
+      await storage.deletePushSubscription(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting push subscription:", error);
+      res.status(400).json({ message: error.message || "Failed to delete subscription" });
     }
   });
 
