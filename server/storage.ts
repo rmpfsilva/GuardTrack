@@ -77,6 +77,11 @@ export interface IStorage {
   // Billing operations
   getWeeklyBillingReport(weekStart: Date): Promise<any>;
   getDailyActivityBySite(siteId: string, date: Date): Promise<any>;
+  
+  // Overtime and anomaly detection
+  getOvertimeReport(weekStart: Date): Promise<any>;
+  getAnomalyReport(startDate: Date, endDate: Date): Promise<any>;
+  getDetailedShiftReport(startDate: Date, endDate: Date): Promise<any>;
 
   // Invitation operations
   createInvitation(invitation: InsertInvitation): Promise<Invitation>;
@@ -613,6 +618,317 @@ export class DatabaseStorage implements IStorage {
       activity,
       totalHours: activity.reduce((sum, a) => sum + a.hoursWorked, 0),
       totalAmount: activity.reduce((sum, a) => sum + a.amount, 0),
+    };
+  }
+
+  // Overtime and Anomaly Detection
+  async getOvertimeReport(weekStart: Date): Promise<any> {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    // Get all completed check-ins for the week
+    const results = await db
+      .select()
+      .from(checkIns)
+      .leftJoin(users, eq(checkIns.userId, users.id))
+      .leftJoin(sites, eq(checkIns.siteId, sites.id))
+      .where(
+        and(
+          eq(checkIns.status, 'completed'),
+          gte(checkIns.checkInTime, weekStart),
+          lte(checkIns.checkInTime, weekEnd)
+        )
+      )
+      .orderBy(checkIns.checkInTime);
+
+    // Calculate overtime by employee
+    const employeeHours = new Map();
+
+    for (const row of results) {
+      if (!row.check_ins || !row.users || !row.sites) continue;
+
+      const checkIn = row.check_ins;
+      const user = row.users;
+      if (!checkIn.checkOutTime) continue;
+
+      const userId = user.id;
+      const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
+      let hoursWorked = msWorked / (1000 * 60 * 60);
+      
+      // Deduct 1 hour break for shifts longer than 4 hours
+      if (hoursWorked > 4) {
+        hoursWorked -= 1;
+      }
+
+      if (!employeeHours.has(userId)) {
+        employeeHours.set(userId, {
+          userId: userId,
+          userName: `${user.firstName} ${user.lastName}`,
+          totalHours: 0,
+          standardHours: 0,
+          overtimeHours: 0,
+          shifts: [],
+        });
+      }
+
+      const emp = employeeHours.get(userId);
+      emp.totalHours += hoursWorked;
+      emp.shifts.push({
+        checkInId: checkIn.id,
+        siteName: row.sites!.name,
+        checkInTime: checkIn.checkInTime,
+        checkOutTime: checkIn.checkOutTime,
+        hoursWorked,
+      });
+    }
+
+    // Calculate overtime (hours over 40 per week)
+    const STANDARD_WEEK_HOURS = 40;
+    const employees = Array.from(employeeHours.values()).map(emp => {
+      emp.standardHours = Math.min(emp.totalHours, STANDARD_WEEK_HOURS);
+      emp.overtimeHours = Math.max(0, emp.totalHours - STANDARD_WEEK_HOURS);
+      return emp;
+    });
+
+    // Sort by overtime hours descending
+    employees.sort((a, b) => b.overtimeHours - a.overtimeHours);
+
+    return {
+      weekStart,
+      weekEnd,
+      employees,
+      totalOvertimeHours: employees.reduce((sum, e) => sum + e.overtimeHours, 0),
+    };
+  }
+
+  async getAnomalyReport(startDate: Date, endDate: Date): Promise<any> {
+    const anomalies = [];
+
+    // Get all check-ins in the period
+    const checkInResults = await db
+      .select()
+      .from(checkIns)
+      .leftJoin(users, eq(checkIns.userId, users.id))
+      .leftJoin(sites, eq(checkIns.siteId, sites.id))
+      .where(
+        and(
+          gte(checkIns.checkInTime, startDate),
+          lte(checkIns.checkInTime, endDate)
+        )
+      )
+      .orderBy(checkIns.checkInTime);
+
+    // Get scheduled shifts in the period
+    const shiftResults = await db
+      .select()
+      .from(scheduledShifts)
+      .leftJoin(users, eq(scheduledShifts.userId, users.id))
+      .leftJoin(sites, eq(scheduledShifts.siteId, sites.id))
+      .where(
+        and(
+          eq(scheduledShifts.isActive, true),
+          gte(scheduledShifts.startTime, startDate),
+          lte(scheduledShifts.endTime, endDate)
+        )
+      );
+
+    // 1. Detect missing check-outs (shifts active for > 14 hours)
+    for (const row of checkInResults) {
+      if (!row.check_ins || !row.users || !row.sites) continue;
+
+      const checkIn = row.check_ins;
+      const user = row.users;
+      const site = row.sites;
+
+      if (checkIn.status === 'active') {
+        const hoursSinceCheckIn = (new Date().getTime() - new Date(checkIn.checkInTime).getTime()) / (1000 * 60 * 60);
+        if (hoursSinceCheckIn > 14) {
+          anomalies.push({
+            type: 'missing_checkout',
+            severity: 'high',
+            checkInId: checkIn.id,
+            userName: `${user.firstName} ${user.lastName}`,
+            siteName: site.name,
+            checkInTime: checkIn.checkInTime,
+            description: `Check-in active for ${hoursSinceCheckIn.toFixed(1)} hours without check-out`,
+          });
+        }
+      }
+
+      // 2. Detect unusually long shifts (> 12 hours after break deduction)
+      if (checkIn.checkOutTime) {
+        const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
+        let hoursWorked = msWorked / (1000 * 60 * 60);
+        
+        if (hoursWorked > 4) {
+          hoursWorked -= 1;
+        }
+
+        if (hoursWorked > 12) {
+          anomalies.push({
+            type: 'unusually_long_shift',
+            severity: 'medium',
+            checkInId: checkIn.id,
+            userName: `${user.firstName} ${user.lastName}`,
+            siteName: site.name,
+            checkInTime: checkIn.checkInTime,
+            checkOutTime: checkIn.checkOutTime,
+            hoursWorked: hoursWorked.toFixed(1),
+            description: `Shift duration of ${hoursWorked.toFixed(1)} hours exceeds normal maximum`,
+          });
+        }
+      }
+    }
+
+    // 3. Detect late check-ins (> 15 minutes after scheduled start)
+    for (const shiftRow of shiftResults) {
+      if (!shiftRow.scheduled_shifts || !shiftRow.users || !shiftRow.sites) continue;
+
+      const shift = shiftRow.scheduled_shifts;
+      const user = shiftRow.users;
+      const site = shiftRow.sites;
+
+      // Find actual check-in for this shift
+      const actualCheckIn = checkInResults.find(r => 
+        r.check_ins?.userId === shift.userId && 
+        r.check_ins?.siteId === shift.siteId &&
+        r.check_ins?.checkInTime &&
+        new Date(r.check_ins.checkInTime).getTime() >= new Date(shift.startTime).getTime() - (30 * 60 * 1000) && // 30 min before
+        new Date(r.check_ins.checkInTime).getTime() <= new Date(shift.startTime).getTime() + (60 * 60 * 1000) // 1 hour after
+      );
+
+      if (actualCheckIn?.check_ins) {
+        const minutesLate = (new Date(actualCheckIn.check_ins.checkInTime).getTime() - new Date(shift.startTime).getTime()) / (1000 * 60);
+        
+        if (minutesLate > 15) {
+          anomalies.push({
+            type: 'late_checkin',
+            severity: 'low',
+            checkInId: actualCheckIn.check_ins.id,
+            userName: `${user.firstName} ${user.lastName}`,
+            siteName: site.name,
+            scheduledTime: shift.startTime,
+            actualCheckInTime: actualCheckIn.check_ins.checkInTime,
+            minutesLate: Math.round(minutesLate),
+            description: `Checked in ${Math.round(minutesLate)} minutes late`,
+          });
+        }
+      } else {
+        // No check-in found for scheduled shift
+        if (new Date(shift.endTime) < new Date()) {
+          anomalies.push({
+            type: 'missed_shift',
+            severity: 'high',
+            userName: `${user.firstName} ${user.lastName}`,
+            siteName: site.name,
+            scheduledTime: shift.startTime,
+            description: `No check-in found for scheduled shift`,
+          });
+        }
+      }
+    }
+
+    return {
+      startDate,
+      endDate,
+      anomalies,
+      summary: {
+        total: anomalies.length,
+        high: anomalies.filter(a => a.severity === 'high').length,
+        medium: anomalies.filter(a => a.severity === 'medium').length,
+        low: anomalies.filter(a => a.severity === 'low').length,
+      },
+    };
+  }
+
+  async getDetailedShiftReport(startDate: Date, endDate: Date): Promise<any> {
+    const results = await db
+      .select()
+      .from(checkIns)
+      .leftJoin(users, eq(checkIns.userId, users.id))
+      .leftJoin(sites, eq(checkIns.siteId, sites.id))
+      .where(
+        and(
+          gte(checkIns.checkInTime, startDate),
+          lte(checkIns.checkInTime, endDate)
+        )
+      )
+      .orderBy(desc(checkIns.checkInTime));
+
+    const shifts = results
+      .filter(r => r.check_ins && r.users && r.sites)
+      .map(r => {
+        const checkIn = r.check_ins!;
+        const user = r.users!;
+        const site = r.sites!;
+
+        let hoursWorked = 0;
+        let breakDeducted = false;
+        if (checkIn.checkOutTime) {
+          const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
+          hoursWorked = msWorked / (1000 * 60 * 60);
+          
+          if (hoursWorked > 4) {
+            hoursWorked -= 1;
+            breakDeducted = true;
+          }
+        }
+
+        const role = checkIn.workingRole || 'guard';
+        let hourlyRate = 15;
+        if (role === 'guard') hourlyRate = Number(site.guardRate) || 15;
+        else if (role === 'steward') hourlyRate = Number(site.stewardRate) || 18;
+        else if (role === 'supervisor') hourlyRate = Number(site.supervisorRate) || 22;
+
+        return {
+          id: checkIn.id,
+          userName: `${user.firstName} ${user.lastName}`,
+          userId: user.id,
+          siteName: site.name,
+          siteId: site.id,
+          role: role,
+          checkInTime: checkIn.checkInTime,
+          checkOutTime: checkIn.checkOutTime,
+          hoursWorked,
+          breakDeducted,
+          hourlyRate,
+          amount: hoursWorked * hourlyRate,
+          status: checkIn.status,
+          location: checkIn.latitude && checkIn.longitude ? 
+            { lat: checkIn.latitude, lng: checkIn.longitude } : null,
+        };
+      });
+
+    // Group by employee
+    const byEmployee = new Map();
+    for (const shift of shifts) {
+      if (!byEmployee.has(shift.userId)) {
+        byEmployee.set(shift.userId, {
+          userId: shift.userId,
+          userName: shift.userName,
+          shifts: [],
+          totalHours: 0,
+          totalAmount: 0,
+        });
+      }
+      const emp = byEmployee.get(shift.userId);
+      emp.shifts.push(shift);
+      emp.totalHours += shift.hoursWorked;
+      emp.totalAmount += shift.amount;
+    }
+
+    return {
+      startDate,
+      endDate,
+      shifts,
+      byEmployee: Array.from(byEmployee.values()),
+      summary: {
+        totalShifts: shifts.length,
+        completedShifts: shifts.filter(s => s.status === 'completed').length,
+        activeShifts: shifts.filter(s => s.status === 'active').length,
+        totalHours: shifts.reduce((sum, s) => sum + s.hoursWorked, 0),
+        totalAmount: shifts.reduce((sum, s) => sum + s.amount, 0),
+      },
     };
   }
 
