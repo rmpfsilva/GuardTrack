@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { InstallPWAButton } from "@/components/install-pwa-button";
+import { NotificationSettingsButton } from "@/components/notification-settings-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Site, CheckInWithDetails, User } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
@@ -121,6 +122,7 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <InstallPWAButton variant="ghost" size="sm" className="hidden sm:flex" />
+            <NotificationSettingsButton variant="ghost" size="icon" />
             <ThemeToggle />
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">

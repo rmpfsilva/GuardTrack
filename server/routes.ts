@@ -1233,6 +1233,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete push subscription by endpoint (used when unsubscribing from client)
+  app.delete('/api/push-subscriptions', isAuthenticated, async (req: any, res) => {
+    try {
+      const { endpoint } = req.body;
+      
+      if (!endpoint) {
+        return res.status(400).json({ message: "Endpoint is required" });
+      }
+      
+      // Get user's subscriptions to find the one with matching endpoint
+      const subscriptions = await storage.getUserPushSubscriptions(req.user.id);
+      const subscription = subscriptions.find(sub => sub.endpoint === endpoint);
+      
+      if (!subscription) {
+        return res.status(404).json({ message: "Subscription not found" });
+      }
+      
+      await storage.deletePushSubscription(subscription.id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting push subscription by endpoint:", error);
+      res.status(400).json({ message: error.message || "Failed to delete subscription" });
+    }
+  });
+
+  // Delete push subscription by ID (admin endpoint)
   app.delete('/api/push-subscriptions/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
