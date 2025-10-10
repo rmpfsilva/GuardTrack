@@ -419,30 +419,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/guards', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const guards = await storage.getUsersByRole('guard');
+      console.log(`[DEBUG] Found ${guards.length} guards from database:`, guards.map(g => ({ id: g.id, name: `${g.firstName} ${g.lastName}` })));
       const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
 
       // Fetch stats for each guard
       const guardsWithStats = await Promise.all(
         guards.map(async (guard) => {
-          const weeklyHours = await storage.getUserWeeklyHours(guard.id, weekStart);
-          const recentCheckIns = await storage.getUserRecentCheckIns(guard.id, 10);
-          const activeCheckIn = await storage.getActiveCheckInForUser(guard.id);
+          try {
+            const weeklyHours = await storage.getUserWeeklyHours(guard.id, weekStart);
+            const recentCheckIns = await storage.getUserRecentCheckIns(guard.id, 10);
+            const activeCheckIn = await storage.getActiveCheckInForUser(guard.id);
 
-          return {
-            ...guard,
-            weeklyHours,
-            totalShifts: recentCheckIns.length,
-            recentCheckIns: recentCheckIns.map(ci => ({
-              id: ci.id,
-              checkInTime: ci.checkInTime,
-              checkOutTime: ci.checkOutTime,
-              status: ci.status,
-            })),
-            isCurrentlyActive: !!activeCheckIn,
-          };
+            return {
+              ...guard,
+              weeklyHours,
+              totalShifts: recentCheckIns.length,
+              recentCheckIns: recentCheckIns.map(ci => ({
+                id: ci.id,
+                checkInTime: ci.checkInTime,
+                checkOutTime: ci.checkOutTime,
+                status: ci.status,
+              })),
+              isCurrentlyActive: !!activeCheckIn,
+            };
+          } catch (error) {
+            console.error(`[DEBUG] Error processing guard ${guard.id} (${guard.firstName} ${guard.lastName}):`, error);
+            throw error;
+          }
         })
       );
 
+      console.log(`[DEBUG] Returning ${guardsWithStats.length} guards with stats`);
       res.json(guardsWithStats);
     } catch (error) {
       console.error("Error fetching guards:", error);
