@@ -7,8 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ShieldCheck, Smartphone } from "lucide-react";
-import { InstallPWAButton } from "@/components/install-pwa-button";
-import { useInstallPWA } from "@/hooks/use-install-pwa";
+import { InstallPWACard } from "@/components/install-pwa-card";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -18,7 +17,6 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const { isInstallable, isInstalled } = useInstallPWA();
 
   // Redirect if already logged in (using useEffect to avoid setState during render)
   useEffect(() => {
@@ -145,21 +143,13 @@ export default function AuthPage() {
                 </button>
               </div>
             </form>
-
-            {/* Install App Section */}
-            {(isInstallable || isInstalled) && (
-              <div className="border-t pt-4 mt-4">
-                <div className="text-center space-y-3">
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Smartphone className="h-4 w-4" />
-                    <span>Use GuardTrack on your phone</span>
-                  </div>
-                  <InstallPWAButton variant="secondary" className="w-full" />
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
+
+        {/* Install App Card */}
+        <div className="w-full max-w-md mt-4">
+          <InstallPWACard />
+        </div>
       </div>
 
       {/* Right side - Hero */}
