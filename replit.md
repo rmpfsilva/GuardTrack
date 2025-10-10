@@ -29,7 +29,7 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Advanced Reporting**: Admin-only reports for overtime tracking, anomaly detection (e.g., late check-ins, missing check-outs, long shifts, location discrepancies), and detailed shift breakdowns.
 - **Approval System**: Admin approval interface for reviewing extended breaks and overtime requests. Admins can approve or reject each request, which directly impacts payable hours calculations.
 - **Leave Management**: Includes a system for requesting, approving, and canceling leave, with a comprehensive yearly calendar view for planning.
-- **Mobile Responsiveness**: Fully responsive design across all devices, including Progressive Web App (PWA) functionality for mobile installation.
+- **Mobile Responsiveness**: Fully responsive design across all devices, including Progressive Web App (PWA) functionality for mobile installation. Install prompts available on login page and in authenticated dashboards for easy mobile app installation.
 - **Email Invitation System**: Allows admins to invite new users via email using Gmail integration.
 - **Password Management**: Features for users to change their own password and a secure token-based password recovery flow. Admins can also reset user passwords.
 

@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { InstallPWAButton } from "@/components/install-pwa-button";
 import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
 import type { Site, CheckIn, CheckInWithDetails, Break } from "@shared/schema";
@@ -301,6 +302,7 @@ export default function GuardDashboard() {
             <img src={proForceLogo} alt="ProForce Security" className="h-8" data-testid="img-company-logo" />
           </div>
           <div className="flex items-center gap-3">
+            <InstallPWAButton variant="ghost" size="sm" className="hidden sm:flex" />
             <ThemeToggle />
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
