@@ -87,6 +87,27 @@ export const breaks = pgTable("breaks", {
   latitude: text("latitude"),
   longitude: text("longitude"),
   status: varchar("status").notNull().default('active'), // 'active' | 'completed'
+  reason: text("reason"), // Required if break >1 hour
+  approvalStatus: varchar("approval_status").notNull().default('auto_approved'), // 'auto_approved' | 'pending' | 'approved' | 'rejected'
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Overtime requests table - tracks overtime worked beyond scheduled shift
+export const overtimeRequests = pgTable("overtime_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  checkInId: varchar("check_in_id").notNull().references(() => checkIns.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  scheduledEndTime: timestamp("scheduled_end_time").notNull(),
+  actualEndTime: timestamp("actual_end_time").notNull(),
+  overtimeMinutes: numeric("overtime_minutes", { precision: 10, scale: 2 }).notNull(),
+  reason: text("reason").notNull(),
+  status: varchar("status").notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -170,6 +191,7 @@ export const checkInsRelations = relations(checkIns, ({ one, many }) => ({
     references: [sites.id],
   }),
   breaks: many(breaks),
+  overtimeRequests: many(overtimeRequests),
 }));
 
 export const breaksRelations = relations(breaks, ({ one }) => ({
@@ -179,6 +201,25 @@ export const breaksRelations = relations(breaks, ({ one }) => ({
   }),
   user: one(users, {
     fields: [breaks.userId],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [breaks.reviewedBy],
+    references: [users.id],
+  }),
+}));
+
+export const overtimeRequestsRelations = relations(overtimeRequests, ({ one }) => ({
+  checkIn: one(checkIns, {
+    fields: [overtimeRequests.checkInId],
+    references: [checkIns.id],
+  }),
+  user: one(users, {
+    fields: [overtimeRequests.userId],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [overtimeRequests.reviewedBy],
     references: [users.id],
   }),
 }));
@@ -248,9 +289,26 @@ export const insertBreakSchema = createInsertSchema(breaks).omit({
   createdAt: true,
   updatedAt: true,
   breakStartTime: true,
+  reviewedBy: true,
+  reviewedAt: true,
 });
 
 export const updateBreakSchema = createInsertSchema(breaks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export const insertOvertimeRequestSchema = createInsertSchema(overtimeRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewNotes: true,
+});
+
+export const updateOvertimeRequestSchema = createInsertSchema(overtimeRequests).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -347,6 +405,10 @@ export type UpdateCheckIn = z.infer<typeof updateCheckInSchema>;
 export type Break = typeof breaks.$inferSelect;
 export type InsertBreak = z.infer<typeof insertBreakSchema>;
 export type UpdateBreak = z.infer<typeof updateBreakSchema>;
+
+export type OvertimeRequest = typeof overtimeRequests.$inferSelect;
+export type InsertOvertimeRequest = z.infer<typeof insertOvertimeRequestSchema>;
+export type UpdateOvertimeRequest = z.infer<typeof updateOvertimeRequestSchema>;
 
 export type ScheduledShift = typeof scheduledShifts.$inferSelect;
 export type InsertScheduledShift = z.infer<typeof insertScheduledShiftSchema>;
