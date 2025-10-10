@@ -1166,6 +1166,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId: req.user.id,
       });
+      
+      // Check if user has already applied to this notice
+      const hasApplied = await storage.hasUserAppliedToNotice(req.user.id, validatedData.noticeId);
+      if (hasApplied) {
+        return res.status(409).json({ message: "You have already applied to this notice" });
+      }
+      
       const application = await storage.createNoticeApplication(validatedData);
       res.status(201).json(application);
     } catch (error: any) {
@@ -1191,6 +1198,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user applications:", error);
       res.status(500).json({ message: "Failed to fetch applications" });
+    }
+  });
+
+  app.get('/api/notice-applications/check/:noticeId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { noticeId } = req.params;
+      const hasApplied = await storage.hasUserAppliedToNotice(req.user.id, noticeId);
+      res.json({ hasApplied });
+    } catch (error) {
+      console.error("Error checking application status:", error);
+      res.status(500).json({ message: "Failed to check application status" });
     }
   });
 

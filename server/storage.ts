@@ -155,6 +155,7 @@ export interface IStorage {
   getAllNoticeApplications(): Promise<NoticeApplicationWithDetails[]>;
   getUserNoticeApplications(userId: string): Promise<NoticeApplicationWithDetails[]>;
   getNoticeApplicationsForNotice(noticeId: string): Promise<NoticeApplicationWithDetails[]>;
+  hasUserAppliedToNotice(userId: string, noticeId: string): Promise<boolean>;
   updateNoticeApplication(id: string, updates: UpdateNoticeApplication): Promise<NoticeApplication>;
   deleteNoticeApplication(id: string): Promise<void>;
 
@@ -1690,6 +1691,20 @@ export class DatabaseStorage implements IStorage {
       user: { ...r.user!, password: '' },
       reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
     }));
+  }
+
+  async hasUserAppliedToNotice(userId: string, noticeId: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(noticeApplications)
+      .where(
+        and(
+          eq(noticeApplications.userId, userId),
+          eq(noticeApplications.noticeId, noticeId)
+        )
+      )
+      .limit(1);
+    return !!existing;
   }
 
   async updateNoticeApplication(id: string, updates: UpdateNoticeApplication): Promise<NoticeApplication> {
