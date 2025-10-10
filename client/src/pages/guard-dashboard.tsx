@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import MySchedule from "@/components/my-schedule";
+import LeaveRequestForm from "@/components/leave-request-form";
 import type { Site, CheckIn, CheckInWithDetails } from "@shared/schema";
 
 export default function GuardDashboard() {
@@ -355,6 +356,13 @@ export default function GuardDashboard() {
         <Card>
           <CardContent className="p-6">
             <MySchedule />
+          </CardContent>
+        </Card>
+
+        {/* Annual Leave */}
+        <Card>
+          <CardContent className="p-6">
+            <LeaveRequestForm />
           </CardContent>
         </Card>
 

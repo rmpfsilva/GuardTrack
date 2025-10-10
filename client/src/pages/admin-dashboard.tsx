@@ -21,6 +21,7 @@ import BillingReports from "@/components/billing-reports";
 import AdminCheckInControl from "@/components/admin-check-in-control";
 import EditCheckInDialog from "@/components/edit-check-in-dialog";
 import InvitationManagement from "@/components/invitation-management";
+import AdminLeaveManagement from "@/components/admin-leave-management";
 
 interface DashboardStats {
   activeGuards: number;
@@ -227,6 +228,7 @@ export default function AdminDashboard() {
               <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>
               <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>
               <TabsTrigger value="sites" data-testid="tab-sites" className="text-xs sm:text-sm whitespace-nowrap">Sites</TabsTrigger>
+              <TabsTrigger value="leave" data-testid="tab-leave" className="text-xs sm:text-sm whitespace-nowrap">Leave</TabsTrigger>
               <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>
             </TabsList>
           </div>
@@ -353,6 +355,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="sites">
             <SiteManagement />
+          </TabsContent>
+
+          <TabsContent value="leave">
+            <AdminLeaveManagement />
           </TabsContent>
 
           <TabsContent value="activity">
