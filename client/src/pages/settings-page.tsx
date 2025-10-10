@@ -26,6 +26,12 @@ const changePasswordSchema = z.object({
   path: ["confirmPassword"],
 });
 
+const profileSchema = z.object({
+  email: z.string().email("Invalid email address").optional(),
+  firstName: z.string().min(1, "First name is required").optional(),
+  lastName: z.string().min(1, "Last name is required").optional(),
+});
+
 const credentialsSchema = z.object({
   siaNumber: z.string().optional(),
   siaExpiryDate: z.coerce.date().optional().nullable(),
@@ -33,6 +39,7 @@ const credentialsSchema = z.object({
   stewardIdExpiryDate: z.coerce.date().optional().nullable(),
 });
 
+type ProfileForm = z.infer<typeof profileSchema>;
 type ChangePasswordForm = z.infer<typeof changePasswordSchema>;
 type CredentialsForm = z.infer<typeof credentialsSchema>;
 
@@ -40,6 +47,15 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
+  const profileForm = useForm<ProfileForm>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      email: "",
+      firstName: "",
+      lastName: "",
+    },
+  });
 
   const form = useForm<ChangePasswordForm>({
     resolver: zodResolver(changePasswordSchema),
@@ -60,6 +76,17 @@ export default function SettingsPage() {
     },
   });
 
+  // Reset profile form when user data loads
+  useEffect(() => {
+    if (user) {
+      profileForm.reset({
+        email: user.email || "",
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+      });
+    }
+  }, [user, profileForm]);
+
   // Reset credentials form when user data loads
   useEffect(() => {
     if (user) {
@@ -71,6 +98,26 @@ export default function SettingsPage() {
       });
     }
   }, [user, credentialsForm]);
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: ProfileForm) => {
+      return await apiRequest("PATCH", "/api/user/profile", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const changePasswordMutation = useMutation({
     mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
@@ -112,6 +159,10 @@ export default function SettingsPage() {
     },
   });
 
+  const onProfileSubmit = (data: ProfileForm) => {
+    updateProfileMutation.mutate(data);
+  };
+
   const onSubmit = (data: ChangePasswordForm) => {
     changePasswordMutation.mutate({
       currentPassword: data.currentPassword,
@@ -148,7 +199,92 @@ export default function SettingsPage() {
 
         {/* Main Content */}
         <main className="container mx-auto px-4 py-8">
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto space-y-6">
+            {/* Profile Update Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <IdCard className="h-5 w-5" />
+                  Profile Information
+                </CardTitle>
+                <CardDescription>
+                  Update your email address and personal information
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Form {...profileForm}>
+                  <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
+                    <FormField
+                      control={profileForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email Address</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="email"
+                              placeholder="your.email@example.com"
+                              {...field}
+                              data-testid="input-profile-email"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <FormField
+                        control={profileForm.control}
+                        name="firstName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>First Name</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="John"
+                                {...field}
+                                data-testid="input-profile-first-name"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={profileForm.control}
+                        name="lastName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Last Name</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Smith"
+                                {...field}
+                                data-testid="input-profile-last-name"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={updateProfileMutation.isPending}
+                      data-testid="button-update-profile"
+                    >
+                      {updateProfileMutation.isPending ? "Updating..." : "Update Profile"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+
+            {/* Change Password Section */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

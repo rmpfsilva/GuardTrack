@@ -284,6 +284,12 @@ export const updateUserCredentialsSchema = z.object({
   stewardIdExpiryDate: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid Steward ID expiry date').optional(),
 }).strict();
 
+export const updateUserProfileSchema = z.object({
+  email: z.string().email('Invalid email address').optional(),
+  firstName: z.string().min(1, 'First name is required').max(100).optional(),
+  lastName: z.string().min(1, 'Last name is required').max(100).optional(),
+}).strict();
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -313,6 +319,7 @@ export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
 export type UpdateLeaveRequest = z.infer<typeof updateLeaveRequestSchema>;
 
 export type UpdateUserCredentials = z.infer<typeof updateUserCredentialsSchema>;
+export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
