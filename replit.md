@@ -65,6 +65,27 @@ The architecture emphasizes a clean separation of concerns between frontend and 
   - Query invalidation now properly triggers refetch after leave approval/cancellation
   - All tabs (Pending, Upcoming, Calendar, All) now sync correctly after mutations
 
+- **Advanced Reporting System**: Implemented comprehensive reporting with overtime tracking and anomaly detection
+  - **Backend API**: Three new admin-only reporting endpoints
+    - `GET /api/admin/reports/overtime?weekStart=...` - Calculates overtime hours beyond 40-hour work week
+    - `GET /api/admin/reports/anomalies?startDate=...&endDate=...` - Detects scheduling and attendance anomalies
+    - `GET /api/admin/reports/detailed-shifts?startDate=...&endDate=...` - Provides comprehensive shift breakdown
+  - **Overtime Tracking**: Automatically identifies hours worked beyond standard 40-hour week
+    - Respects existing 1-hour break deduction for shifts >4 hours
+    - Shows total overtime hours and per-employee breakdown
+    - Expandable employee rows show individual shift details
+  - **Anomaly Detection**: Four severity-graded anomaly types
+    - Late check-ins compared to scheduled shifts (medium severity)
+    - Missing check-outs on shifts active >12 hours (high severity)
+    - Unusually long shifts >12 hours (medium severity)
+    - Location discrepancies from site coordinates (low severity)
+  - **Frontend UI**: New "Reports" tab in admin dashboard with three sub-tabs
+    - **Overtime Tab**: Summary cards, employee breakdown table, expandable shift details
+    - **Anomalies Tab**: Severity summary cards (high/medium/low), detailed anomaly alerts
+    - **Detailed Shifts Tab**: Comprehensive shift table with export to CSV functionality
+  - **Week Navigation**: Previous/Next week buttons for date range selection
+  - **Visual Indicators**: Color-coded severity badges, status badges, real-time data updates
+
 - **Email Invitation System**: Implemented email sending for user invitations via Gmail
   - **Gmail Integration**: Connected Gmail via Replit integration for sending transactional emails
   - **Email Service**: Created email service (`server/emailService.ts`) to send invitation emails
