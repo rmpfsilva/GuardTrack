@@ -37,6 +37,10 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: varchar("role").notNull().default('guard'), // 'guard' | 'steward' | 'supervisor' | 'admin'
+  siaNumber: varchar("sia_number"),
+  siaExpiryDate: timestamp("sia_expiry_date"),
+  stewardId: varchar("steward_id"),
+  stewardIdExpiryDate: timestamp("steward_id_expiry_date"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -48,6 +52,8 @@ export const sites = pgTable("sites", {
   address: text("address").notNull(),
   latitude: text("latitude"),
   longitude: text("longitude"),
+  contactName: varchar("contact_name"),
+  contactPhone: varchar("contact_phone"),
   guardRate: numeric("guard_rate", { precision: 10, scale: 2 }).default('15.00'), // Hourly rate for guards
   stewardRate: numeric("steward_rate", { precision: 10, scale: 2 }).default('18.00'), // Hourly rate for stewards
   supervisorRate: numeric("supervisor_rate", { precision: 10, scale: 2 }).default('22.00'), // Hourly rate for supervisors
