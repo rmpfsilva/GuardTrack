@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { Clock, MapPin, LogOut, LogIn, Calendar, Settings } from "lucide-react";
+import { Clock, MapPin, LogOut, LogIn, Calendar, Settings, Coffee } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import proForceLogo from "@assets/download_1760019684165.png";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
-import type { Site, CheckIn, CheckInWithDetails } from "@shared/schema";
+import type { Site, CheckIn, CheckInWithDetails, Break } from "@shared/schema";
 
 export default function GuardDashboard() {
   const { user, isLoading: authLoading, logoutMutation } = useAuth();
@@ -62,6 +62,12 @@ export default function GuardDashboard() {
   const { data: recentCheckIns = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/check-ins/my-recent"],
     enabled: !!user,
+  });
+
+  // Fetch active break
+  const { data: activeBreak } = useQuery<Break | null>({
+    queryKey: ["/api/breaks/active"],
+    enabled: !!user && !!activeCheckIn,
   });
 
   // Check-in mutation
@@ -132,6 +138,51 @@ export default function GuardDashboard() {
     },
   });
 
+  // Start break mutation
+  const startBreakMutation = useMutation({
+    mutationFn: async (data: { latitude?: string; longitude?: string }) => {
+      return await apiRequest("POST", "/api/breaks/start", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/breaks/active"] });
+      toast({
+        title: "Break Started",
+        description: "Your break has been recorded. Remember, breaks are unpaid.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Break Start Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // End break mutation
+  const endBreakMutation = useMutation({
+    mutationFn: async (data: { breakId: string; latitude?: string; longitude?: string }) => {
+      return await apiRequest("PATCH", `/api/breaks/${data.breakId}/end`, {
+        latitude: data.latitude,
+        longitude: data.longitude,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/breaks/active"] });
+      toast({
+        title: "Break Ended",
+        description: "Welcome back! Your break time has been recorded.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Break End Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCheckIn = () => {
     if (!selectedSiteId) {
       toast({
@@ -179,6 +230,47 @@ export default function GuardDashboard() {
   const handleCheckOut = () => {
     if (activeCheckIn) {
       checkOutMutation.mutate(activeCheckIn.id);
+    }
+  };
+
+  const handleStartBreak = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          startBreakMutation.mutate({
+            latitude: position.coords.latitude.toString(),
+            longitude: position.coords.longitude.toString(),
+          });
+        },
+        () => {
+          startBreakMutation.mutate({});
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      startBreakMutation.mutate({});
+    }
+  };
+
+  const handleEndBreak = () => {
+    if (!activeBreak) return;
+    
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          endBreakMutation.mutate({
+            breakId: activeBreak.id,
+            latitude: position.coords.latitude.toString(),
+            longitude: position.coords.longitude.toString(),
+          });
+        },
+        () => {
+          endBreakMutation.mutate({ breakId: activeBreak.id });
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      endBreakMutation.mutate({ breakId: activeBreak.id });
     }
   };
 
@@ -351,6 +443,66 @@ export default function GuardDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Break Tracking - Only show when checked in */}
+        {activeCheckIn && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Coffee className="h-5 w-5" />
+                Break Management
+              </CardTitle>
+              <CardDescription>
+                Unpaid breaks are tracked separately from your shift hours
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {activeBreak ? (
+                <>
+                  <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <Coffee className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-amber-900 dark:text-amber-100">On Break</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                        Started at {format(new Date(activeBreak.breakStartTime), "HH:mm")}
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                        Break time is not included in your paid hours
+                      </p>
+                    </div>
+                    <Badge className="bg-amber-500">Break</Badge>
+                  </div>
+                  <Button 
+                    onClick={handleEndBreak}
+                    disabled={endBreakMutation.isPending}
+                    className="w-full h-12"
+                    variant="default"
+                    data-testid="button-end-break"
+                  >
+                    {endBreakMutation.isPending ? "Ending Break..." : "End Break"}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="p-4 bg-muted rounded-lg">
+                    <p className="text-sm text-muted-foreground">
+                      You can take a break anytime during your shift. Break time will be automatically deducted from your total hours.
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={handleStartBreak}
+                    disabled={startBreakMutation.isPending}
+                    className="w-full h-12"
+                    variant="outline"
+                    data-testid="button-start-break"
+                  >
+                    {startBreakMutation.isPending ? "Starting Break..." : "Start Break"}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* My Schedule */}
         <Card>
