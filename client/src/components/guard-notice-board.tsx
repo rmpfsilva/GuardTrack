@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Notice, NoticeApplication } from "@shared/schema";
+import type { Notice, NoticeApplication, Site } from "@shared/schema";
 
 export default function GuardNoticeBoard() {
   const { toast } = useToast();
@@ -16,6 +16,11 @@ export default function GuardNoticeBoard() {
   // Fetch notices
   const { data: notices = [], isLoading } = useQuery<Notice[]>({
     queryKey: ["/api/notices"],
+  });
+
+  // Fetch sites for location display
+  const { data: sites = [] } = useQuery<Site[]>({
+    queryKey: ["/api/sites"],
   });
 
   // Fetch user's applications
@@ -73,6 +78,12 @@ export default function GuardNoticeBoard() {
     return myApplications.find(app => app.noticeId === noticeId);
   };
 
+  const getSiteName = (siteId: string | null) => {
+    if (!siteId) return null;
+    const site = sites.find(s => s.id === siteId);
+    return site?.name || null;
+  };
+
   const getNoticeTypeInfo = (type: string) => {
     switch (type) {
       case "overtime":
@@ -107,6 +118,9 @@ export default function GuardNoticeBoard() {
     );
   }
 
+  // Filter active notices
+  const activeNotices = notices.filter(n => n.isActive);
+
   return (
     <Card>
       <CardHeader>
@@ -117,7 +131,7 @@ export default function GuardNoticeBoard() {
         <CardDescription>Available overtime opportunities and events</CardDescription>
       </CardHeader>
       <CardContent>
-        {notices.length === 0 ? (
+        {activeNotices.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Megaphone className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground text-center">
@@ -126,10 +140,11 @@ export default function GuardNoticeBoard() {
           </div>
         ) : (
           <div className="space-y-4">
-            {notices.map((notice) => {
+            {activeNotices.map((notice) => {
               const typeInfo = getNoticeTypeInfo(notice.type);
               const application = getApplication(notice.id);
               const applied = hasApplied(notice.id);
+              const siteName = getSiteName(notice.siteId);
 
               return (
                 <div
@@ -148,27 +163,45 @@ export default function GuardNoticeBoard() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>{format(new Date(notice.date), "MMM dd, yyyy")}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span>{notice.startTime} - {notice.endTime}</span>
-                    </div>
-                    {notice.location && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4 text-sm">
+                    {notice.startTime && (
                       <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span>{notice.location}</span>
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>{format(new Date(notice.startTime), "MMM dd, yyyy")}</span>
                       </div>
                     )}
-                    {notice.hourlyRate && (
-                      <div className="flex items-center gap-2 font-medium">
-                        <span className="text-primary">{notice.hourlyRate}/hr</span>
+                    {notice.startTime && notice.endTime && (
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          {format(new Date(notice.startTime), "HH:mm")} - {format(new Date(notice.endTime), "HH:mm")}
+                        </span>
+                      </div>
+                    )}
+                    {siteName && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span>{siteName}</span>
                       </div>
                     )}
                   </div>
+
+                  {(notice.workingRole || notice.spotsAvailable) && (
+                    <div className="mb-4 flex gap-4 text-sm">
+                      {notice.workingRole && (
+                        <span>
+                          <span className="text-muted-foreground">Role:</span>{" "}
+                          <span className="font-medium capitalize">{notice.workingRole}</span>
+                        </span>
+                      )}
+                      {notice.spotsAvailable && (
+                        <span>
+                          <span className="text-muted-foreground">Spots:</span>{" "}
+                          <span className="font-medium">{notice.spotsAvailable}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-end gap-2">
                     {!applied ? (

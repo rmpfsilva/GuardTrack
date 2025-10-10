@@ -35,13 +35,21 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertNoticeSchema, type Notice, type NoticeApplication } from "@shared/schema";
+import { type Notice, type NoticeApplication, type Site } from "@shared/schema";
 import { z } from "zod";
 
-const formSchema = insertNoticeSchema.extend({
+// Form schema for the UI (converts date + time strings to timestamps for backend)
+const formSchema = z.object({
+  type: z.string().min(1, "Type is required"),
+  title: z.string().min(1, "Title is required"),
+  description: z.string().min(1, "Description is required"),
   date: z.string().min(1, "Date is required"),
   startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
+  siteId: z.string().nullable().optional(),
+  workingRole: z.string().nullable().optional(),
+  spotsAvailable: z.string().nullable().optional(),
+  expiresAt: z.string().nullable().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -59,14 +67,21 @@ export default function NoticeBoardManagement() {
       date: "",
       startTime: "",
       endTime: "",
-      location: "",
-      hourlyRate: "",
+      siteId: null,
+      workingRole: null,
+      spotsAvailable: null,
+      expiresAt: null,
     },
   });
 
   // Fetch notices
   const { data: notices = [], isLoading } = useQuery<Notice[]>({
     queryKey: ["/api/notices"],
+  });
+
+  // Fetch sites for the dropdown
+  const { data: sites = [] } = useQuery<Site[]>({
+    queryKey: ["/api/sites"],
   });
 
   // Fetch applications for notices
@@ -77,7 +92,25 @@ export default function NoticeBoardManagement() {
   // Create notice mutation
   const createNoticeMutation = useMutation({
     mutationFn: async (data: FormValues) => {
-      return await apiRequest("POST", "/api/notices", data);
+      // Convert form data to API format
+      const { date, startTime, endTime, expiresAt, ...rest } = data;
+      
+      // Combine date + time into timestamps
+      const startDateTime = new Date(`${date}T${startTime}`);
+      const endDateTime = new Date(`${date}T${endTime}`);
+      const expiresAtDate = expiresAt ? new Date(`${expiresAt}T23:59:59`) : null;
+
+      const payload = {
+        ...rest,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        expiresAt: expiresAtDate,
+        siteId: data.siteId || null,
+        workingRole: data.workingRole || null,
+        spotsAvailable: data.spotsAvailable || null,
+      };
+
+      return await apiRequest("POST", "/api/notices", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notices"] });
@@ -138,6 +171,12 @@ export default function NoticeBoardManagement() {
     }
   };
 
+  const getSiteName = (siteId: string | null) => {
+    if (!siteId) return null;
+    const site = sites.find(s => s.id === siteId);
+    return site?.name || null;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -187,6 +226,7 @@ export default function NoticeBoardManagement() {
                         <SelectContent>
                           <SelectItem value="overtime">Overtime Opportunity</SelectItem>
                           <SelectItem value="event">Event</SelectItem>
+                          <SelectItem value="announcement">Announcement</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -273,29 +313,97 @@ export default function NoticeBoardManagement() {
 
                 <FormField
                   control={form.control}
-                  name="location"
+                  name="siteId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g., Main Lobby, Downtown Site" data-testid="input-notice-location" />
-                      </FormControl>
+                      <FormLabel>Site (Optional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-notice-site">
+                            <SelectValue placeholder="Select site" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">No specific site</SelectItem>
+                          {sites.filter(site => site.isActive).map((site) => (
+                            <SelectItem key={site.id} value={site.id}>
+                              {site.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Select a site if this notice is location-specific
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="workingRole"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Required Role (Optional)</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || undefined}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-notice-role">
+                              <SelectValue placeholder="Any role" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Any role</SelectItem>
+                            <SelectItem value="guard">Guard</SelectItem>
+                            <SelectItem value="steward">Steward</SelectItem>
+                            <SelectItem value="supervisor">Supervisor</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="spotsAvailable"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Spots Available (Optional)</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value || ""}
+                            placeholder="e.g., 3"
+                            data-testid="input-notice-spots"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Number of positions available
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <FormField
                   control={form.control}
-                  name="hourlyRate"
+                  name="expiresAt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Hourly Rate (Optional)</FormLabel>
+                      <FormLabel>Expires On (Optional)</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="£15.00" data-testid="input-notice-hourly-rate" />
+                        <Input
+                          type="date"
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-notice-expires"
+                        />
                       </FormControl>
                       <FormDescription>
-                        Leave blank to use standard site rate
+                        Date when this notice should no longer be visible
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -339,6 +447,7 @@ export default function NoticeBoardManagement() {
           {notices.map((notice) => {
             const typeInfo = getNoticeTypeLabel(notice.type);
             const applicantCount = getApplicationCount(notice.id);
+            const siteName = getSiteName(notice.siteId);
 
             return (
               <Card key={notice.id} data-testid={`card-notice-${notice.id}`}>
@@ -348,6 +457,7 @@ export default function NoticeBoardManagement() {
                       <div className="flex items-center gap-2 mb-2">
                         <CardTitle className="text-lg">{notice.title}</CardTitle>
                         <Badge variant={typeInfo.variant}>{typeInfo.label}</Badge>
+                        {!notice.isActive && <Badge variant="outline">Inactive</Badge>}
                       </div>
                       <CardDescription className="whitespace-pre-wrap">{notice.description}</CardDescription>
                     </div>
@@ -363,19 +473,25 @@ export default function NoticeBoardManagement() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>{format(new Date(notice.date), "MMM dd, yyyy")}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span>{notice.startTime} - {notice.endTime}</span>
-                    </div>
-                    {notice.location && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    {notice.startTime && (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>{format(new Date(notice.startTime), "MMM dd, yyyy")}</span>
+                      </div>
+                    )}
+                    {notice.startTime && notice.endTime && (
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          {format(new Date(notice.startTime), "HH:mm")} - {format(new Date(notice.endTime), "HH:mm")}
+                        </span>
+                      </div>
+                    )}
+                    {siteName && (
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span>{notice.location}</span>
+                        <span>{siteName}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-2">
@@ -385,11 +501,18 @@ export default function NoticeBoardManagement() {
                       </span>
                     </div>
                   </div>
-                  {notice.hourlyRate && (
-                    <div className="mt-3 pt-3 border-t">
-                      <span className="text-sm font-medium">
-                        Hourly Rate: <span className="text-primary">{notice.hourlyRate}</span>
-                      </span>
+                  {(notice.workingRole || notice.spotsAvailable) && (
+                    <div className="mt-3 pt-3 border-t flex gap-4 text-sm">
+                      {notice.workingRole && (
+                        <span>
+                          <span className="text-muted-foreground">Role:</span> <span className="font-medium capitalize">{notice.workingRole}</span>
+                        </span>
+                      )}
+                      {notice.spotsAvailable && (
+                        <span>
+                          <span className="text-muted-foreground">Spots:</span> <span className="font-medium">{notice.spotsAvailable}</span>
+                        </span>
+                      )}
                     </div>
                   )}
                 </CardContent>

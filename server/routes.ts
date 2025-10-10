@@ -1072,12 +1072,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send push notifications to all subscribed users (non-blocking)
       (async () => {
         try {
-          const allSubscriptions = await storage.getAllPushSubscriptions();
+          const allSubscriptions = await storage.getAllActivePushSubscriptions();
           const result = await sendNoticeNotification(
             allSubscriptions,
             notice.type,
             notice.title,
-            notice.date
+            notice.startTime ? new Date(notice.startTime).toISOString() : ''
           );
           console.log(`Push notifications sent: ${result.sent} successful, ${result.failed} failed`);
         } catch (error) {
