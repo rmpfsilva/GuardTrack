@@ -21,7 +21,8 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Authentication & User Management**: Username/password authentication with role-based access (Guard, Steward, Supervisor, Admin). New registrations default to 'guard' role.
 - **Shift Management**: Admins schedule shifts via a calendar, while guards view assigned schedules.
 - **Check-in/Check-out**: Guards perform geolocation-verified check-ins/check-outs from any device, selecting their working role. Admins can manually override check-ins/check-outs.
-- **Break Tracking**: Comprehensive tracking of unpaid breaks with geolocation and timestamps, integrated into hours and billing calculations.
+- **Break Tracking**: Comprehensive tracking of unpaid breaks with geolocation and timestamps. All shifts have mandatory 1-hour baseline break deduction. Extended breaks (>1 hour) require guard to provide reason and admin approval to deduct additional time.
+- **Overtime Tracking**: Automatic detection of overtime (>30 min past scheduled shift end). Guards must provide reason for overtime, which requires admin approval to count toward paid hours. Rejected or pending overtime is capped at scheduled end time + 30 min buffer.
 - **Site Management**: Configuration of security sites with role-specific hourly rates.
 - **Attendance Tracking**: Records check-in/out times, geolocation, calculates weekly hours with automatic break deductions.
 - **Reporting & Billing**: Weekly billing reports based on site rates, with CSV export and automatic Google Sheets sync.
@@ -32,7 +33,11 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Password Management**: Features for users to change their own password and a secure token-based password recovery flow. Admins can also reset user passwords.
 
 ### System Design Choices
-The architecture ensures a clear separation of concerns between frontend and backend. The database schema includes tables for `users`, `sites`, `check_ins`, `scheduled_shifts`, `invitations`, `sessions`, `breaks`, `leave_requests`, and `password_reset_tokens`. Future plans include a multi-tenant architecture with `companies` and `company_subscriptions` tables.
+The architecture ensures a clear separation of concerns between frontend and backend. The database schema includes tables for `users`, `sites`, `check_ins`, `scheduled_shifts`, `invitations`, `sessions`, `breaks` (with approval fields: reason, approvalStatus, reviewedBy, reviewedAt), `overtime_requests` (tracks overtime >30 min requiring approval), `leave_requests`, and `password_reset_tokens`. 
+
+**Hours Calculation Logic**: All shifts receive mandatory 1-hour baseline break deduction. Extended breaks (>1 hour) require approval - if approved, full break duration is deducted; if rejected/pending, only baseline deduction applies. Overtime (>30 min past scheduled shift) requires approval - if approved, overtime hours beyond 30 min buffer are added to paid hours; if rejected/pending, payable hours are capped at scheduled end + 30 min.
+
+Future plans include a multi-tenant architecture with `companies` and `company_subscriptions` tables.
 
 ## External Dependencies
 -   **PostgreSQL**: Primary database, hosted via Neon.
