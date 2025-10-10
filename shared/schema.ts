@@ -198,7 +198,7 @@ export const insertSiteSchema = createInsertSchema(sites).omit({
 export const updateSiteSchema = createInsertSchema(sites).omit({
   createdAt: true,
   updatedAt: true,
-}).partial();
+}).partial().strip();
 
 export const insertCheckInSchema = createInsertSchema(checkIns).omit({
   id: true,
@@ -275,6 +275,13 @@ export const updateLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
   status: z.enum(['pending', 'approved', 'rejected']).optional(),
 });
 
+export const updateUserCredentialsSchema = z.object({
+  siaNumber: z.string().max(50).optional(),
+  siaExpiryDate: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid SIA expiry date').optional(),
+  stewardId: z.string().max(50).optional(),
+  stewardIdExpiryDate: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid Steward ID expiry date').optional(),
+}).strict();
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -302,6 +309,8 @@ export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSc
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
 export type UpdateLeaveRequest = z.infer<typeof updateLeaveRequestSchema>;
+
+export type UpdateUserCredentials = z.infer<typeof updateUserCredentialsSchema>;
 
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {

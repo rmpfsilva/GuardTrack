@@ -136,6 +136,35 @@ export function setupAuth(app: Express) {
     res.json(req.user); // Already sanitized in deserializeUser
   });
 
+  app.patch("/api/user/credentials", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).send("Unauthorized");
+      }
+
+      // Import and validate with Zod schema
+      const { updateUserCredentialsSchema } = await import("@shared/schema");
+      const validatedData = updateUserCredentialsSchema.parse(req.body);
+
+      // Update user credentials
+      await storage.updateUser(req.user.id, validatedData);
+
+      // Fetch updated user and sanitize
+      const updatedUser = await storage.getUserById(req.user.id);
+      if (!updatedUser) {
+        return res.status(404).send("User not found");
+      }
+
+      res.status(200).json(sanitizeUser(updatedUser));
+    } catch (error: any) {
+      console.error("Error updating user credentials:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid input" });
+      }
+      res.status(500).send(error.message || "Failed to update credentials");
+    }
+  });
+
   app.post("/api/user/change-password", async (req, res, next) => {
     try {
       if (!req.isAuthenticated()) {

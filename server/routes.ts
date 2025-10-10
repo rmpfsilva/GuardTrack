@@ -3,7 +3,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, hashPassword } from "./auth";
-import { insertSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema } from "@shared/schema";
+import { insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 
@@ -114,10 +114,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/sites/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const site = await storage.updateSite(id, req.body);
+      // Validate using partial update schema (strip unknown fields)
+      const validatedData = updateSiteSchema.parse(req.body);
+      const site = await storage.updateSite(id, validatedData);
       res.json(site);
     } catch (error: any) {
       console.error("Error updating site:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid input" });
+      }
       res.status(400).json({ message: error.message || "Failed to update site" });
     }
   });
