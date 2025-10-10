@@ -152,6 +152,7 @@ export interface IStorage {
   // Notice application operations
   createNoticeApplication(application: InsertNoticeApplication): Promise<NoticeApplication>;
   getNoticeApplication(id: string): Promise<NoticeApplicationWithDetails | undefined>;
+  getAllNoticeApplications(): Promise<NoticeApplicationWithDetails[]>;
   getUserNoticeApplications(userId: string): Promise<NoticeApplicationWithDetails[]>;
   getNoticeApplicationsForNotice(noticeId: string): Promise<NoticeApplicationWithDetails[]>;
   updateNoticeApplication(id: string, updates: UpdateNoticeApplication): Promise<NoticeApplication>;
@@ -1591,6 +1592,38 @@ export class DatabaseStorage implements IStorage {
       user: { ...r.user!, password: '' },
       reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
     };
+  }
+
+  async getAllNoticeApplications(): Promise<NoticeApplicationWithDetails[]> {
+    const results = await db
+      .select({
+        application: noticeApplications,
+        notice: notices,
+        user: users,
+        reviewer: {
+          id: sql`reviewer.id`,
+          username: sql`reviewer.username`,
+          email: sql`reviewer.email`,
+          firstName: sql`reviewer.first_name`,
+          lastName: sql`reviewer.last_name`,
+          profileImageUrl: sql`reviewer.profile_image_url`,
+          role: sql`reviewer.role`,
+          createdAt: sql`reviewer.created_at`,
+          updatedAt: sql`reviewer.updated_at`,
+        }
+      })
+      .from(noticeApplications)
+      .leftJoin(notices, eq(noticeApplications.noticeId, notices.id))
+      .leftJoin(users, eq(noticeApplications.userId, users.id))
+      .leftJoin(sql`users AS reviewer`, sql`notice_applications.reviewed_by = reviewer.id`)
+      .orderBy(desc(noticeApplications.createdAt));
+
+    return results.map(r => ({
+      ...r.application,
+      notice: r.notice || undefined,
+      user: r.user ? { ...r.user, password: '' } : undefined,
+      reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
+    }));
   }
 
   async getUserNoticeApplications(userId: string): Promise<NoticeApplicationWithDetails[]> {

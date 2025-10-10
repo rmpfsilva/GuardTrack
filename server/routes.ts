@@ -1174,6 +1174,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/notice-applications', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const applications = await storage.getAllNoticeApplications();
+      res.json(applications);
+    } catch (error) {
+      console.error("Error fetching all notice applications:", error);
+      res.status(500).json({ message: "Failed to fetch applications" });
+    }
+  });
+
   app.get('/api/notice-applications/my', isAuthenticated, async (req: any, res) => {
     try {
       const applications = await storage.getUserNoticeApplications(req.user.id);
