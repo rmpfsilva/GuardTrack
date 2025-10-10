@@ -572,6 +572,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/leave-requests/:id/cancel', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { cancellationReason } = req.body;
+      
+      if (!cancellationReason || cancellationReason.trim() === '') {
+        return res.status(400).json({ message: "Cancellation reason is required" });
+      }
+
+      const leaveRequest = await storage.getLeaveRequest(id);
+      
+      if (!leaveRequest) {
+        return res.status(404).json({ message: "Leave request not found" });
+      }
+
+      if (leaveRequest.status !== 'approved') {
+        return res.status(400).json({ message: "Only approved leave requests can be cancelled" });
+      }
+
+      const cancelled = await storage.updateLeaveRequest(id, {
+        status: 'cancelled',
+        cancelledBy: req.user.id,
+        cancelledAt: new Date(),
+        cancellationReason,
+      });
+
+      res.json(cancelled);
+    } catch (error: any) {
+      console.error("Error cancelling leave request:", error);
+      res.status(400).json({ message: error.message || "Failed to cancel leave request" });
+    }
+  });
+
   app.delete('/api/leave-requests/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;

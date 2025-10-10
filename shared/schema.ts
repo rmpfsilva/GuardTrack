@@ -122,10 +122,13 @@ export const leaveRequests = pgTable("leave_requests", {
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   reason: text("reason"),
-  status: varchar("status").notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
+  status: varchar("status").notNull().default('pending'), // 'pending' | 'approved' | 'rejected' | 'cancelled'
   reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
   reviewedAt: timestamp("reviewed_at"),
   reviewNotes: text("review_notes"),
+  cancelledBy: varchar("cancelled_by").references(() => users.id, { onDelete: 'set null' }),
+  cancelledAt: timestamp("cancelled_at"),
+  cancellationReason: text("cancellation_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -271,10 +274,8 @@ export const updateLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
   userId: true,
   createdAt: true,
   updatedAt: true,
-  reviewedBy: true,
-  reviewedAt: true,
 }).partial().extend({
-  status: z.enum(['pending', 'approved', 'rejected']).optional(),
+  status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
 });
 
 export const updateUserCredentialsSchema = z.object({

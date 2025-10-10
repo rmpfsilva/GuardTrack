@@ -39,6 +39,32 @@ The architecture emphasizes a clean separation of concerns between frontend and 
 ## Recent Changes
 
 ### October 10, 2025
+- **Leave Cancellation System**: Implemented admin-only leave cancellation with reason tracking
+  - **Backend API**: `POST /api/leave-requests/:id/cancel` - Admin-only endpoint to cancel approved leave
+    - Requires mandatory cancellation reason
+    - Only approved leave requests can be cancelled
+    - Updates status to 'cancelled' and records cancelledBy, cancelledAt, cancellationReason
+  - **Database Schema**: Extended leave_requests table with cancellation fields
+    - `cancelled_by`: References user who cancelled (admin)
+    - `cancelled_at`: Timestamp of cancellation
+    - `cancellation_reason`: Required text explaining why leave was cancelled
+  - **Frontend UI**: Added cancel functionality to admin leave management
+    - Cancel button appears on approved leave requests in "Upcoming Leave" tab
+    - Modal dialog requires admin to enter cancellation reason
+    - Status badge shows orange "Cancelled" badge for cancelled leave
+    - Real-time updates: cancellation immediately updates all leave views
+
+- **Yearly Calendar View**: Added comprehensive calendar visualization for annual leave planning
+  - **New Tab**: "Calendar View" tab in admin leave management shows all 12 months
+  - **Visual Display**: Grid layout showing all approved leave bookings for current year
+  - **Color Coding**: Blue highlights indicate days with approved leave
+  - **Responsive Design**: 3-column layout on large screens, 2 on medium, 1 on small
+  - **Real-time Data**: Automatically reflects newly approved or cancelled leave
+
+- **Fixed Upcoming Leave Display**: Resolved issue where upcoming leave wasn't updating properly
+  - Query invalidation now properly triggers refetch after leave approval/cancellation
+  - All tabs (Pending, Upcoming, Calendar, All) now sync correctly after mutations
+
 - **Email Invitation System**: Implemented email sending for user invitations via Gmail
   - **Gmail Integration**: Connected Gmail via Replit integration for sending transactional emails
   - **Email Service**: Created email service (`server/emailService.ts`) to send invitation emails
