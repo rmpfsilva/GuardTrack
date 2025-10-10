@@ -237,6 +237,8 @@ export const insertInvitationSchema = createInsertSchema(invitations).omit({
   updatedAt: true,
   status: true,
   acceptedAt: true,
+}).extend({
+  expiresAt: z.coerce.date().optional().nullable(),
 });
 
 export const updateInvitationSchema = createInsertSchema(invitations).omit({
