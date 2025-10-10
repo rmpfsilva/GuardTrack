@@ -3,6 +3,7 @@ import {
   users,
   sites,
   checkIns,
+  breaks,
   scheduledShifts,
   invitations,
   passwordResetTokens,
@@ -15,6 +16,9 @@ import {
   type CheckIn,
   type InsertCheckIn,
   type CheckInWithDetails,
+  type Break,
+  type InsertBreak,
+  type UpdateBreak,
   type ScheduledShift,
   type InsertScheduledShift,
   type ScheduledShiftWithDetails,
@@ -64,6 +68,12 @@ export interface IStorage {
   getUserWeeklyHours(userId: string, weekStart: Date): Promise<number>;
   getAllUsersWeeklyHours(weekStart: Date): Promise<number>;
   updateCheckInTimes(checkInId: string, times: { checkInTime: Date; checkOutTime: Date | null }): Promise<CheckIn>;
+  
+  // Break operations
+  getActiveBreakForUser(userId: string): Promise<Break | null>;
+  getBreaksForCheckIn(checkInId: string): Promise<Break[]>;
+  createBreak(breakData: InsertBreak): Promise<Break>;
+  endBreak(breakId: string, latitude?: string, longitude?: string): Promise<Break>;
   
   // Scheduled shift operations
   getAllScheduledShifts(): Promise<ScheduledShiftWithDetails[]>;
@@ -283,6 +293,53 @@ export class DatabaseStorage implements IStorage {
       .where(eq(checkIns.id, checkInId))
       .returning();
     return checkIn;
+  }
+
+  async getActiveBreakForUser(userId: string): Promise<Break | null> {
+    const [activeBreak] = await db
+      .select()
+      .from(breaks)
+      .where(
+        and(
+          eq(breaks.userId, userId),
+          eq(breaks.status, 'active')
+        )
+      )
+      .limit(1);
+    
+    return activeBreak || null;
+  }
+
+  async getBreaksForCheckIn(checkInId: string): Promise<Break[]> {
+    return await db
+      .select()
+      .from(breaks)
+      .where(eq(breaks.checkInId, checkInId))
+      .orderBy(desc(breaks.breakStartTime));
+  }
+
+  async createBreak(breakData: InsertBreak): Promise<Break> {
+    const [breakRecord] = await db.insert(breaks).values(breakData).returning();
+    return breakRecord;
+  }
+
+  async endBreak(breakId: string, latitude?: string, longitude?: string): Promise<Break> {
+    const updateData: any = {
+      breakEndTime: new Date(),
+      status: 'completed',
+      updatedAt: new Date(),
+    };
+
+    if (latitude) updateData.latitude = latitude;
+    if (longitude) updateData.longitude = longitude;
+
+    const [breakRecord] = await db
+      .update(breaks)
+      .set(updateData)
+      .where(eq(breaks.id, breakId))
+      .returning();
+    
+    return breakRecord;
   }
 
   async getAllActiveCheckIns(): Promise<CheckInWithDetails[]> {
