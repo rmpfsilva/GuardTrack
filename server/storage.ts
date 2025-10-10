@@ -32,7 +32,7 @@ import {
   type LeaveRequestWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, gte, lte, between } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, lt, between } from "drizzle-orm";
 import session from "express-session";
 
 // Interface for storage operations
