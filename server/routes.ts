@@ -653,6 +653,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Advanced reporting routes (admin only)
+  app.get('/api/admin/reports/overtime', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { weekStart } = req.query;
+      const startDate = weekStart ? new Date(weekStart as string) : startOfWeek(new Date(), { weekStartsOn: 1 });
+      const report = await storage.getOvertimeReport(startDate);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching overtime report:", error);
+      res.status(500).json({ message: "Failed to fetch overtime report" });
+    }
+  });
+
+  app.get('/api/admin/reports/anomalies', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : startOfWeek(new Date(), { weekStartsOn: 1 });
+      const end = endDate ? new Date(endDate as string) : new Date();
+      const report = await storage.getAnomalyReport(start, end);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching anomaly report:", error);
+      res.status(500).json({ message: "Failed to fetch anomaly report" });
+    }
+  });
+
+  app.get('/api/admin/reports/detailed-shifts', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : startOfWeek(new Date(), { weekStartsOn: 1 });
+      const end = endDate ? new Date(endDate as string) : new Date();
+      const report = await storage.getDetailedShiftReport(start, end);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching detailed shift report:", error);
+      res.status(500).json({ message: "Failed to fetch detailed shift report" });
+    }
+  });
+
   // Invitation routes (admin only)
   app.get('/api/admin/invitations', isAuthenticated, isAdmin, async (req, res) => {
     try {
