@@ -3,10 +3,11 @@
   "short_name": "GuardTrack",
   "description": "Security Guard Shift Scheduling & Check-in System",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -21,9 +22,5 @@
       "purpose": "any maskable"
     }
   ],
-  "permissions": [
-    "geolocation"
-  ],
-  "categories": ["business", "productivity"],
-  "screenshots": []
+  "categories": ["business", "productivity"]
 }
