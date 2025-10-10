@@ -36,16 +36,18 @@ function sanitizeUser(user: SelectUser): Omit<SelectUser, 'password'> {
 }
 
 export function setupAuth(app: Express) {
+  // For Replit production deployment, always use secure cookies with sameSite 'none' for PWA
+  // In development, this will work over HTTPS but may need adjustment for local HTTP testing
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days - users stay logged in
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true, // Required for sameSite 'none' - works on Replit's HTTPS
+      sameSite: 'none', // Required for PWA standalone mode
     },
   };
 

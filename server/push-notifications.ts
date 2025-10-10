@@ -4,7 +4,12 @@ import type { PushSubscription } from '@shared/schema';
 // VAPID keys - should be set as environment variables
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@guardtrack.com';
+let VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@guardtrack.com';
+
+// Ensure VAPID_SUBJECT has mailto: prefix
+if (VAPID_SUBJECT && !VAPID_SUBJECT.startsWith('mailto:') && !VAPID_SUBJECT.startsWith('http')) {
+  VAPID_SUBJECT = `mailto:${VAPID_SUBJECT}`;
+}
 
 // Configure web-push with VAPID keys
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
