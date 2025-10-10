@@ -6,6 +6,7 @@ import {
   scheduledShifts,
   invitations,
   passwordResetTokens,
+  leaveRequests,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -21,6 +22,10 @@ import {
   type InsertInvitation,
   type PasswordResetToken,
   type InsertPasswordResetToken,
+  type LeaveRequest,
+  type InsertLeaveRequest,
+  type UpdateLeaveRequest,
+  type LeaveRequestWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, between } from "drizzle-orm";
@@ -87,6 +92,16 @@ export interface IStorage {
   getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
   markPasswordResetTokenAsUsed(token: string): Promise<void>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
+
+  // Leave request operations
+  createLeaveRequest(leaveRequest: InsertLeaveRequest): Promise<LeaveRequest>;
+  getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
+  getUserLeaveRequests(userId: string): Promise<LeaveRequestWithDetails[]>;
+  getAllLeaveRequests(): Promise<LeaveRequestWithDetails[]>;
+  getPendingLeaveRequests(): Promise<LeaveRequestWithDetails[]>;
+  getUpcomingLeaveRequests(daysAhead: number): Promise<LeaveRequestWithDetails[]>;
+  updateLeaveRequest(id: string, updates: UpdateLeaveRequest): Promise<LeaveRequest>;
+  deleteLeaveRequest(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -679,6 +694,159 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(passwordResetTokens)
       .where(lte(passwordResetTokens.expiresAt, new Date()));
+  }
+
+  // Leave request operations
+  async createLeaveRequest(leaveRequestData: InsertLeaveRequest): Promise<LeaveRequest> {
+    const [leaveRequest] = await db.insert(leaveRequests).values(leaveRequestData).returning();
+    return leaveRequest;
+  }
+
+  async getLeaveRequest(id: string): Promise<LeaveRequest | undefined> {
+    const [leaveRequest] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));
+    return leaveRequest;
+  }
+
+  async getUserLeaveRequests(userId: string): Promise<LeaveRequestWithDetails[]> {
+    const requests = await db
+      .select({
+        leaveRequest: leaveRequests,
+        user: users,
+        reviewer: {
+          id: sql`reviewer.id`,
+          username: sql`reviewer.username`,
+          email: sql`reviewer.email`,
+          firstName: sql`reviewer.first_name`,
+          lastName: sql`reviewer.last_name`,
+          profileImageUrl: sql`reviewer.profile_image_url`,
+          role: sql`reviewer.role`,
+          createdAt: sql`reviewer.created_at`,
+          updatedAt: sql`reviewer.updated_at`,
+        }
+      })
+      .from(leaveRequests)
+      .leftJoin(users, eq(leaveRequests.userId, users.id))
+      .leftJoin(sql`users AS reviewer`, sql`leave_requests.reviewed_by = reviewer.id`)
+      .where(eq(leaveRequests.userId, userId))
+      .orderBy(desc(leaveRequests.createdAt));
+
+    return requests.map(r => ({
+      ...r.leaveRequest,
+      user: { ...r.user!, password: '' },
+      reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
+    }));
+  }
+
+  async getAllLeaveRequests(): Promise<LeaveRequestWithDetails[]> {
+    const requests = await db
+      .select({
+        leaveRequest: leaveRequests,
+        user: users,
+        reviewer: {
+          id: sql`reviewer.id`,
+          username: sql`reviewer.username`,
+          email: sql`reviewer.email`,
+          firstName: sql`reviewer.first_name`,
+          lastName: sql`reviewer.last_name`,
+          profileImageUrl: sql`reviewer.profile_image_url`,
+          role: sql`reviewer.role`,
+          createdAt: sql`reviewer.created_at`,
+          updatedAt: sql`reviewer.updated_at`,
+        }
+      })
+      .from(leaveRequests)
+      .leftJoin(users, eq(leaveRequests.userId, users.id))
+      .leftJoin(sql`users AS reviewer`, sql`leave_requests.reviewed_by = reviewer.id`)
+      .orderBy(desc(leaveRequests.createdAt));
+
+    return requests.map(r => ({
+      ...r.leaveRequest,
+      user: { ...r.user!, password: '' },
+      reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
+    }));
+  }
+
+  async getPendingLeaveRequests(): Promise<LeaveRequestWithDetails[]> {
+    const requests = await db
+      .select({
+        leaveRequest: leaveRequests,
+        user: users,
+        reviewer: {
+          id: sql`reviewer.id`,
+          username: sql`reviewer.username`,
+          email: sql`reviewer.email`,
+          firstName: sql`reviewer.first_name`,
+          lastName: sql`reviewer.last_name`,
+          profileImageUrl: sql`reviewer.profile_image_url`,
+          role: sql`reviewer.role`,
+          createdAt: sql`reviewer.created_at`,
+          updatedAt: sql`reviewer.updated_at`,
+        }
+      })
+      .from(leaveRequests)
+      .leftJoin(users, eq(leaveRequests.userId, users.id))
+      .leftJoin(sql`users AS reviewer`, sql`leave_requests.reviewed_by = reviewer.id`)
+      .where(eq(leaveRequests.status, 'pending'))
+      .orderBy(desc(leaveRequests.createdAt));
+
+    return requests.map(r => ({
+      ...r.leaveRequest,
+      user: { ...r.user!, password: '' },
+      reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
+    }));
+  }
+
+  async getUpcomingLeaveRequests(daysAhead: number): Promise<LeaveRequestWithDetails[]> {
+    const today = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(today.getDate() + daysAhead);
+
+    const requests = await db
+      .select({
+        leaveRequest: leaveRequests,
+        user: users,
+        reviewer: {
+          id: sql`reviewer.id`,
+          username: sql`reviewer.username`,
+          email: sql`reviewer.email`,
+          firstName: sql`reviewer.first_name`,
+          lastName: sql`reviewer.last_name`,
+          profileImageUrl: sql`reviewer.profile_image_url`,
+          role: sql`reviewer.role`,
+          createdAt: sql`reviewer.created_at`,
+          updatedAt: sql`reviewer.updated_at`,
+        }
+      })
+      .from(leaveRequests)
+      .leftJoin(users, eq(leaveRequests.userId, users.id))
+      .leftJoin(sql`users AS reviewer`, sql`leave_requests.reviewed_by = reviewer.id`)
+      .where(
+        and(
+          eq(leaveRequests.status, 'approved'),
+          gte(leaveRequests.startDate, today),
+          lte(leaveRequests.startDate, futureDate)
+        )
+      )
+      .orderBy(leaveRequests.startDate);
+
+    return requests.map(r => ({
+      ...r.leaveRequest,
+      user: { ...r.user!, password: '' },
+      reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
+    }));
+  }
+
+  async updateLeaveRequest(id: string, updates: UpdateLeaveRequest): Promise<LeaveRequest> {
+    const [leaveRequest] = await db
+      .update(leaveRequests)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(leaveRequests.id, id))
+      .returning();
+    return leaveRequest;
+  }
+
+  async deleteLeaveRequest(id: string): Promise<void> {
+    await db.delete(leaveRequests).where(eq(leaveRequests.id, id));
   }
 }
 

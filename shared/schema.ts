@@ -263,7 +263,11 @@ export const updateLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
   userId: true,
   createdAt: true,
   updatedAt: true,
-}).partial();
+  reviewedBy: true,
+  reviewedAt: true,
+}).partial().extend({
+  status: z.enum(['pending', 'approved', 'rejected']).optional(),
+});
 
 // TypeScript types
 export type User = typeof users.$inferSelect;

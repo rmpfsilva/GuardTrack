@@ -3,7 +3,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, hashPassword } from "./auth";
-import { insertSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema } from "@shared/schema";
+import { insertSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 
@@ -491,6 +491,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting scheduled shift:", error);
       res.status(400).json({ message: error.message || "Failed to delete shift" });
+    }
+  });
+
+  // Leave request routes
+  app.post('/api/leave-requests', isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertLeaveRequestSchema.parse({
+        ...req.body,
+        userId: req.user.id,
+      });
+      const leaveRequest = await storage.createLeaveRequest(validatedData);
+      res.status(201).json(leaveRequest);
+    } catch (error: any) {
+      console.error("Error creating leave request:", error);
+      res.status(400).json({ message: error.message || "Failed to create leave request" });
+    }
+  });
+
+  app.get('/api/leave-requests/my', isAuthenticated, async (req: any, res) => {
+    try {
+      const requests = await storage.getUserLeaveRequests(req.user.id);
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching user leave requests:", error);
+      res.status(500).json({ message: "Failed to fetch leave requests" });
+    }
+  });
+
+  app.get('/api/leave-requests', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const requests = await storage.getAllLeaveRequests();
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching all leave requests:", error);
+      res.status(500).json({ message: "Failed to fetch leave requests" });
+    }
+  });
+
+  app.get('/api/leave-requests/pending', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const requests = await storage.getPendingLeaveRequests();
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching pending leave requests:", error);
+      res.status(500).json({ message: "Failed to fetch pending requests" });
+    }
+  });
+
+  app.get('/api/leave-requests/upcoming', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const daysAhead = parseInt(req.query.days as string) || 30;
+      const requests = await storage.getUpcomingLeaveRequests(daysAhead);
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching upcoming leave requests:", error);
+      res.status(500).json({ message: "Failed to fetch upcoming requests" });
+    }
+  });
+
+  app.patch('/api/leave-requests/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = updateLeaveRequestSchema.parse({
+        ...req.body,
+        reviewedBy: req.user.id,
+        reviewedAt: new Date(),
+      });
+      const leaveRequest = await storage.updateLeaveRequest(id, validatedData);
+      res.json(leaveRequest);
+    } catch (error: any) {
+      console.error("Error updating leave request:", error);
+      res.status(400).json({ message: error.message || "Failed to update leave request" });
+    }
+  });
+
+  app.delete('/api/leave-requests/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const leaveRequest = await storage.getLeaveRequest(id);
+      
+      if (!leaveRequest) {
+        return res.status(404).json({ message: "Leave request not found" });
+      }
+
+      // Only allow users to delete their own requests or admins to delete any
+      if (leaveRequest.userId !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      await storage.deleteLeaveRequest(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting leave request:", error);
+      res.status(400).json({ message: error.message || "Failed to delete leave request" });
     }
   });
 
