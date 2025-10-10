@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Download, Check, Share, MoreVertical, Plus } from "lucide-react";
+import { Download, RefreshCw, CheckCircle } from "lucide-react";
 import { useInstallPWA } from "@/hooks/use-install-pwa";
+import { detectBrowser, getInstallInstructions } from "@/lib/browser-detect";
 import { cn } from "@/lib/utils";
 
 interface InstallPWAButtonProps {
@@ -20,14 +21,14 @@ export function InstallPWAButton({
 }: InstallPWAButtonProps) {
   const { isInstallable, isInstalled, installApp } = useInstallPWA();
   const [open, setOpen] = useState(false);
-
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const isAndroid = /Android/.test(navigator.userAgent);
+  const browser = detectBrowser();
+  const instructions = getInstallInstructions(browser);
 
   if (isInstalled) {
     return null; // Don't show button if already installed
   }
 
+  // If browser supports native install prompt, use it
   if (isInstallable) {
     return (
       <Button 
@@ -43,7 +44,7 @@ export function InstallPWAButton({
     );
   }
 
-  // Show instructions dialog for browsers that don't support the install prompt
+  // Show browser-specific instructions dialog
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -57,46 +58,52 @@ export function InstallPWAButton({
           Install App
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Install GuardTrack App</DialogTitle>
           <DialogDescription>
-            Follow these steps to install GuardTrack on your device
+            Install GuardTrack for quick access and a better experience
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          {isIOS && (
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">For iPhone/iPad:</h4>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Tap the <Share className="inline h-4 w-4 mx-1" /> (Share) button at the bottom</li>
-                <li>Scroll down and tap "Add to Home Screen"</li>
-                <li>Tap "Add" to confirm</li>
-                <li>Find GuardTrack on your home screen</li>
-              </ol>
+        
+        <div className="space-y-6 py-4">
+          {/* Installation Instructions */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-sm">{instructions.title}</h4>
+            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+              {instructions.steps.map((step, index) => (
+                <li key={index} className="leading-relaxed">{step}</li>
+              ))}
+            </ol>
+            {instructions.note && (
+              <p className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
+                💡 {instructions.note}
+              </p>
+            )}
+          </div>
+
+          {/* App Updates Information */}
+          <div className="border-t pt-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <RefreshCw className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+              <div className="space-y-1">
+                <h4 className="font-semibold text-sm">Automatic Updates</h4>
+                <p className="text-xs text-muted-foreground">
+                  Once installed, GuardTrack automatically updates in the background. You'll always have the latest features without needing to reinstall.
+                </p>
+              </div>
             </div>
-          )}
-          {isAndroid && (
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">For Android:</h4>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Tap the <MoreVertical className="inline h-4 w-4 mx-1" /> (Menu) button</li>
-                <li>Select "Add to Home screen" or "Install app"</li>
-                <li>Tap "Install" to confirm</li>
-                <li>Find GuardTrack on your home screen</li>
-              </ol>
+            
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+              <div className="space-y-1">
+                <h4 className="font-semibold text-sm">Works Offline</h4>
+                <p className="text-xs text-muted-foreground">
+                  The installed app works even without internet connection, syncing data when you're back online.
+                </p>
+              </div>
             </div>
-          )}
-          {!isIOS && !isAndroid && (
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">For Desktop (Chrome/Edge):</h4>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Click the <Plus className="inline h-4 w-4 mx-1" /> icon in the address bar</li>
-                <li>Or use Menu → "Install GuardTrack"</li>
-                <li>Click "Install" to add to your desktop</li>
-              </ol>
-            </div>
-          )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
