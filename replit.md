@@ -15,7 +15,7 @@ GuardTrack is a comprehensive web-based system for security guard shift scheduli
 The system employs a professional security-themed design with a blue color scheme, adhering to Material Design principles for a clean and modern user interface. It is mobile-first for guard interactions and provides data-rich dashboards for administrators, including dark mode support.
 
 ### Technical Implementations
-GuardTrack is a full-stack web application. The frontend uses React with TypeScript, Wouter for routing, TanStack Query for state management, and Shadcn UI with Tailwind CSS for UI components. It integrates the Browser Geolocation API. The backend is built with Node.js and Express, utilizing PostgreSQL (via Neon) with Drizzle ORM. Authentication uses Passport.js (local strategy) with in-memory session storage and scrypt for password hashing. Google Sheets API is integrated for data backup.
+GuardTrack is a full-stack web application. The frontend uses React with TypeScript, Wouter for routing, TanStack Query for state management, and Shadcn UI with Tailwind CSS for UI components. It integrates the Browser Geolocation API. The backend is built with Node.js and Express, utilizing PostgreSQL (via Neon) with Drizzle ORM. Authentication uses Passport.js (local strategy) with persistent session cookies (30-day maxAge, secure + sameSite='none' for PWA compatibility) and scrypt for password hashing. Google Sheets API is integrated for data backup.
 
 ### Feature Specifications
 - **Authentication & User Management**: Username/password authentication with role-based access (Guard, Steward, Supervisor, Admin). New registrations default to 'guard' role.
@@ -77,5 +77,11 @@ To enable push notifications, you need to configure VAPID keys:
 1. Admin posts a notice (overtime opportunity or event) via the "Notices" tab in admin dashboard
 2. System automatically sends push notifications to all subscribed users
 3. Guards receive notification and can view details in their notice board
-4. Guards can apply to notices with one click
+4. Guards can apply to notices with one click - duplicate applications are prevented (backend returns 409 error)
 5. Admin can see applicant counts and manage applications
+
+## Recent Updates (October 2025)
+- **Session Persistence**: Configured persistent sessions with 30-day maxAge, secure cookies with sameSite='none' for PWA compatibility - users now stay logged in when closing/reopening the mobile app
+- **Push Notifications**: VAPID keys configured and working. System auto-prepends "mailto:" to VAPID_SUBJECT if plain email is entered
+- **Duplicate Prevention**: Notice applications now prevent duplicate submissions - backend validates and returns 409 status code, frontend shows "Already Applied" status
+- **Error Handling**: Improved error message parsing in frontend to show proper JSON error messages from backend
