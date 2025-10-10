@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { InstallPWAButton } from "@/components/install-pwa-button";
 import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
+import GuardNoticeBoard from "@/components/guard-notice-board";
 import type { Site, CheckIn, CheckInWithDetails, Break } from "@shared/schema";
 
 export default function GuardDashboard() {
@@ -519,6 +520,9 @@ export default function GuardDashboard() {
             <LeaveRequestForm />
           </CardContent>
         </Card>
+
+        {/* Notice Board */}
+        <GuardNoticeBoard />
 
         {/* Recent Shifts */}
         <Card>
