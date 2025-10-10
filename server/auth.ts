@@ -76,10 +76,29 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       // Validate input
-      const { username, password, firstName, lastName } = req.body;
+      const { username, password, firstName, lastName, invitationToken } = req.body;
       
       if (!username || !password) {
         return res.status(400).send("Username and password are required");
+      }
+
+      if (!invitationToken) {
+        return res.status(400).send("Invitation token is required");
+      }
+
+      // Validate invitation token
+      const invitation = await storage.getInvitationByToken(invitationToken);
+      
+      if (!invitation) {
+        return res.status(400).send("Invalid invitation token");
+      }
+
+      if (invitation.status !== 'pending') {
+        return res.status(400).send("This invitation has already been used");
+      }
+
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        return res.status(400).send("This invitation has expired");
       }
 
       const existingUser = await storage.getUserByUsername(username);
@@ -87,14 +106,18 @@ export function setupAuth(app: Express) {
         return res.status(400).send("Username already exists");
       }
 
-      // Create user with default 'guard' role - role elevation requires admin action
+      // Create user with role from invitation
       const user = await storage.createUser({
         username,
         password: await hashPassword(password),
         firstName,
         lastName,
-        role: 'guard', // Always default to guard, preventing privilege escalation
+        role: invitation.role as 'guard' | 'steward' | 'supervisor' | 'admin',
+        email: invitation.email,
       });
+
+      // Mark invitation as accepted
+      await storage.acceptInvitation(invitationToken);
 
       req.login(sanitizeUser(user), (err) => {
         if (err) return next(err);
