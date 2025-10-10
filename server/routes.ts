@@ -7,6 +7,7 @@ import { insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSch
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 import { sendInvitationEmail } from './emailService';
+import { sendNoticeNotification } from './push-notifications';
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req: Request, res: Response, next: NextFunction) {
@@ -1067,6 +1068,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData,
         postedBy: req.user.id,
       });
+
+      // Send push notifications to all subscribed users (non-blocking)
+      (async () => {
+        try {
+          const allSubscriptions = await storage.getAllPushSubscriptions();
+          const result = await sendNoticeNotification(
+            allSubscriptions,
+            notice.type,
+            notice.title,
+            notice.date
+          );
+          console.log(`Push notifications sent: ${result.sent} successful, ${result.failed} failed`);
+        } catch (error) {
+          console.error('Error sending push notifications:', error);
+        }
+      })();
+
       res.status(201).json(notice);
     } catch (error: any) {
       console.error("Error creating notice:", error);
