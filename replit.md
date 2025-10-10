@@ -36,7 +36,30 @@ The architecture emphasizes a clean separation of concerns between frontend and 
 - **Google Sheets API**: For automatic data backup and reporting of check-in logs.
 - **Browser Geolocation API**: Used for capturing guard location during check-ins.
 
-## Recent Changes (October 9, 2025)
+## Recent Changes
+
+### October 10, 2025
+- **Email Invitation System**: Implemented email sending for user invitations via Gmail
+  - **Gmail Integration**: Connected Gmail via Replit integration for sending transactional emails
+  - **Email Service**: Created email service (`server/emailService.ts`) to send invitation emails
+    - Sends professional invitation emails with registration links
+    - Includes admin name and contact information
+    - Displays expiry date when applicable
+  - **Profile Management**: Added profile update functionality
+    - API: `PATCH /api/user/profile` - Users can update email, firstName, lastName
+    - Frontend: Settings page now includes Profile Information section
+    - Admin users can set their email address for sending invitations
+  - **Invitation Flow Updates**:
+    - API: `POST /api/admin/invitations` - Now sends actual emails to invited users
+    - Fixed date validation bug with `z.coerce.date()` for expiry dates
+    - Invitations include registration link: `/register?token={token}`
+    - Graceful error handling: invitation created even if email fails
+  - **Gmail Client**: Created null-safe Gmail client (`server/gmail.ts`)
+    - Properly handles Replit connector access tokens
+    - Automatic token refresh and caching
+    - Fallback paths for different connector response structures
+
+### October 9, 2025
 - **Authentication Migration**: Migrated from Replit Auth to username/password authentication
   - Users now register and login with username/password (no Replit accounts needed)
   - Passwords hashed with scrypt in format: `hash.salt` (161 characters total)
