@@ -109,10 +109,26 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Annual leave requests table - for guards to request time off
+export const leaveRequests = pgTable("leave_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  reason: text("reason"),
+  status: varchar("status").notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkIns: many(checkIns),
   scheduledShifts: many(scheduledShifts),
+  leaveRequests: many(leaveRequests),
 }));
 
 export const sitesRelations = relations(sites, ({ many }) => ({
@@ -139,6 +155,17 @@ export const scheduledShiftsRelations = relations(scheduledShifts, ({ one }) => 
   site: one(sites, {
     fields: [scheduledShifts.siteId],
     references: [sites.id],
+  }),
+}));
+
+export const leaveRequestsRelations = relations(leaveRequests, ({ one }) => ({
+  user: one(users, {
+    fields: [leaveRequests.userId],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [leaveRequests.reviewedBy],
+    references: [users.id],
   }),
 }));
 
@@ -218,6 +245,26 @@ export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTo
   used: true,
 });
 
+export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewNotes: true,
+  status: true,
+}).extend({
+  startDate: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid date'),
+  endDate: z.coerce.date().refine((d) => !isNaN(d.getTime()), 'Invalid date'),
+});
+
+export const updateLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -242,6 +289,10 @@ export type UpdateInvitation = z.infer<typeof updateInvitationSchema>;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
 
+export type LeaveRequest = typeof leaveRequests.$inferSelect;
+export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+export type UpdateLeaveRequest = z.infer<typeof updateLeaveRequestSchema>;
+
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
   user: User;
@@ -255,4 +306,9 @@ export type UserWithCheckIns = User & {
 export type ScheduledShiftWithDetails = ScheduledShift & {
   user: User;
   site: Site;
+};
+
+export type LeaveRequestWithDetails = LeaveRequest & {
+  user: User;
+  reviewer?: User;
 };
