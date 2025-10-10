@@ -419,47 +419,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/guards', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const guards = await storage.getUsersByRole('guard');
-      console.log(`[DEBUG] Found ${guards.length} guards from database:`, guards.map(g => ({ id: g.id, name: `${g.firstName} ${g.lastName}` })));
+      console.log(`[DEBUG] Found ${guards.length} guards from database`);
+      
+      if (guards.length === 0) {
+        return res.json([]);
+      }
+
       const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
 
       // Fetch stats for each guard with individual error handling
-      const guardsWithStats = await Promise.all(
-        guards.map(async (guard) => {
+      const guardsWithStats = [];
+      
+      for (const guard of guards) {
+        try {
+          console.log(`[DEBUG] Processing guard: ${guard.firstName} ${guard.lastName}`);
+          
+          let weeklyHours = 0;
+          let recentCheckIns: any[] = [];
+          let activeCheckIn = null;
+          
           try {
-            const weeklyHours = await storage.getUserWeeklyHours(guard.id, weekStart);
-            const recentCheckIns = await storage.getUserRecentCheckIns(guard.id, 10);
-            const activeCheckIn = await storage.getActiveCheckInForUser(guard.id);
-
-            return {
-              ...guard,
-              weeklyHours: weeklyHours || 0,
-              totalShifts: recentCheckIns.length,
-              recentCheckIns: recentCheckIns.map(ci => ({
-                id: ci.id,
-                checkInTime: ci.checkInTime,
-                checkOutTime: ci.checkOutTime,
-                status: ci.status,
-              })),
-              isCurrentlyActive: !!activeCheckIn,
-            };
-          } catch (error: any) {
-            console.error(`[ERROR] Failed to process guard ${guard.id} (${guard.firstName} ${guard.lastName}):`, error.message, error.stack);
-            // Return guard with default values if stats fail
-            return {
-              ...guard,
-              weeklyHours: 0,
-              totalShifts: 0,
-              recentCheckIns: [],
-              isCurrentlyActive: false,
-            };
+            weeklyHours = await storage.getUserWeeklyHours(guard.id, weekStart);
+          } catch (err: any) {
+            console.error(`[ERROR] getUserWeeklyHours failed for ${guard.id}:`, err.message);
           }
-        })
-      );
+          
+          try {
+            recentCheckIns = await storage.getUserRecentCheckIns(guard.id, 10);
+          } catch (err: any) {
+            console.error(`[ERROR] getUserRecentCheckIns failed for ${guard.id}:`, err.message);
+          }
+          
+          try {
+            activeCheckIn = await storage.getActiveCheckInForUser(guard.id);
+          } catch (err: any) {
+            console.error(`[ERROR] getActiveCheckInForUser failed for ${guard.id}:`, err.message);
+          }
+
+          guardsWithStats.push({
+            ...guard,
+            weeklyHours: weeklyHours || 0,
+            totalShifts: recentCheckIns.length,
+            recentCheckIns: recentCheckIns.map(ci => ({
+              id: ci.id,
+              checkInTime: ci.checkInTime,
+              checkOutTime: ci.checkOutTime,
+              status: ci.status,
+            })),
+            isCurrentlyActive: !!activeCheckIn,
+          });
+        } catch (error: any) {
+          console.error(`[ERROR] Failed to process guard ${guard.id}:`, error.message);
+          // Still add the guard with default values
+          guardsWithStats.push({
+            ...guard,
+            weeklyHours: 0,
+            totalShifts: 0,
+            recentCheckIns: [],
+            isCurrentlyActive: false,
+          });
+        }
+      }
 
       console.log(`[DEBUG] Returning ${guardsWithStats.length} guards with stats`);
       res.json(guardsWithStats);
     } catch (error: any) {
-      console.error("[ERROR] Failed to fetch guards:", error.message, error.stack);
+      console.error("[ERROR] Failed to fetch guards - outer catch:", error.message, error.stack);
       res.status(500).json({ message: "Failed to fetch guards", error: error.message });
     }
   });
