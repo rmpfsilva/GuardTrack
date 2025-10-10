@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { Plus, Megaphone, Trash2, Users, Calendar, Clock, MapPin } from "lucide-react";
+import { Plus, Megaphone, Trash2, Users, Calendar, Clock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Notice, type NoticeApplication, type Site } from "@shared/schema";
+import { type Notice, type NoticeApplication } from "@shared/schema";
 import { z } from "zod";
 
 // Form schema for the UI (converts date + time strings to timestamps for backend)
@@ -79,11 +79,6 @@ export default function NoticeBoardManagement() {
     queryKey: ["/api/notices"],
   });
 
-  // Fetch sites for the dropdown
-  const { data: sites = [] } = useQuery<Site[]>({
-    queryKey: ["/api/sites"],
-  });
-
   // Fetch applications for notices
   const { data: applications = [] } = useQuery<NoticeApplication[]>({
     queryKey: ["/api/notice-applications"],
@@ -105,7 +100,7 @@ export default function NoticeBoardManagement() {
         startTime: startDateTime,
         endTime: endDateTime,
         expiresAt: expiresAtDate,
-        siteId: data.siteId || null,
+        siteId: null, // Always null - sites are managed manually
         workingRole: data.workingRole || null,
         spotsAvailable: data.spotsAvailable || null,
       };
@@ -169,12 +164,6 @@ export default function NoticeBoardManagement() {
       default:
         return { label: type, variant: "outline" as const };
     }
-  };
-
-  const getSiteName = (siteId: string | null) => {
-    if (!siteId) return null;
-    const site = sites.find(s => s.id === siteId);
-    return site?.name || null;
   };
 
   if (isLoading) {
@@ -311,35 +300,6 @@ export default function NoticeBoardManagement() {
                   />
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="siteId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Site (Optional)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || undefined}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-notice-site">
-                            <SelectValue placeholder="Select site" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">No specific site</SelectItem>
-                          {sites.filter(site => site.isActive).map((site) => (
-                            <SelectItem key={site.id} value={site.id}>
-                              {site.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Select a site if this notice is location-specific
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -447,7 +407,6 @@ export default function NoticeBoardManagement() {
           {notices.map((notice) => {
             const typeInfo = getNoticeTypeLabel(notice.type);
             const applicantCount = getApplicationCount(notice.id);
-            const siteName = getSiteName(notice.siteId);
 
             return (
               <Card key={notice.id} data-testid={`card-notice-${notice.id}`}>
@@ -486,12 +445,6 @@ export default function NoticeBoardManagement() {
                         <span>
                           {format(new Date(notice.startTime), "HH:mm")} - {format(new Date(notice.endTime), "HH:mm")}
                         </span>
-                      </div>
-                    )}
-                    {siteName && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span>{siteName}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-2">
