@@ -386,7 +386,15 @@ export class DatabaseStorage implements IStorage {
             EXTRACT(EPOCH FROM (
               COALESCE(${checkIns.checkOutTime}, NOW()) - ${checkIns.checkInTime}
             )) / 3600
-          ), 0)
+          ), 0) - COALESCE(
+            (SELECT SUM(
+              EXTRACT(EPOCH FROM (
+                COALESCE(${breaks.breakEndTime}, NOW()) - ${breaks.breakStartTime}
+              )) / 3600
+            )
+            FROM ${breaks}
+            WHERE ${breaks.checkInId} = ${checkIns.id}), 0
+          )
         `.as('total_hours'),
       })
       .from(checkIns)
@@ -408,7 +416,15 @@ export class DatabaseStorage implements IStorage {
             EXTRACT(EPOCH FROM (
               COALESCE(${checkIns.checkOutTime}, NOW()) - ${checkIns.checkInTime}
             )) / 3600
-          ), 0)
+          ), 0) - COALESCE(
+            (SELECT SUM(
+              EXTRACT(EPOCH FROM (
+                COALESCE(${breaks.breakEndTime}, NOW()) - ${breaks.breakStartTime}
+              )) / 3600
+            )
+            FROM ${breaks}
+            WHERE ${breaks.checkInId} = ${checkIns.id}), 0
+          )
         `.as('total_hours'),
       })
       .from(checkIns)
@@ -548,13 +564,25 @@ export class DatabaseStorage implements IStorage {
 
       if (!checkIn.checkOutTime) continue;
 
-      // Calculate hours worked (with 1 hour break deduction for shifts > 4 hours)
+      // Calculate hours worked
       const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
       let hoursWorked = msWorked / (1000 * 60 * 60);
       
-      // Deduct 1 hour break for shifts longer than 4 hours
-      if (hoursWorked > 4) {
-        hoursWorked -= 1;
+      // Get actual break time for this check-in
+      const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
+      let totalBreakHours = 0;
+      for (const breakRecord of breaksForCheckIn) {
+        if (breakRecord.breakEndTime) {
+          const breakMs = new Date(breakRecord.breakEndTime).getTime() - new Date(breakRecord.breakStartTime).getTime();
+          totalBreakHours += breakMs / (1000 * 60 * 60);
+        }
+      }
+      
+      // Deduct actual break time, or fall back to 1 hour break for shifts > 4 hours if no breaks recorded
+      if (totalBreakHours > 0) {
+        hoursWorked -= totalBreakHours;
+      } else if (hoursWorked > 4) {
+        hoursWorked -= 1; // Legacy: 1 hour break for shifts longer than 4 hours
       }
 
       // Get the hourly rate based on working role
@@ -630,42 +658,56 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(checkIns.checkInTime);
 
-    const activity = results
-      .filter((r) => r.check_ins && r.users && r.sites)
-      .map((r) => {
-        const checkIn = r.check_ins!;
-        const user = r.users!;
-        const site = r.sites!;
+    const activity = await Promise.all(
+      results
+        .filter((r) => r.check_ins && r.users && r.sites)
+        .map(async (r) => {
+          const checkIn = r.check_ins!;
+          const user = r.users!;
+          const site = r.sites!;
 
-        let hoursWorked = 0;
-        if (checkIn.checkOutTime) {
-          const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
-          hoursWorked = msWorked / (1000 * 60 * 60);
-          
-          // Deduct 1 hour break for shifts longer than 4 hours
-          if (hoursWorked > 4) {
-            hoursWorked -= 1;
+          let hoursWorked = 0;
+          if (checkIn.checkOutTime) {
+            const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
+            hoursWorked = msWorked / (1000 * 60 * 60);
+            
+            // Get actual break time for this check-in
+            const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
+            let totalBreakHours = 0;
+            for (const breakRecord of breaksForCheckIn) {
+              if (breakRecord.breakEndTime) {
+                const breakMs = new Date(breakRecord.breakEndTime).getTime() - new Date(breakRecord.breakStartTime).getTime();
+                totalBreakHours += breakMs / (1000 * 60 * 60);
+              }
+            }
+            
+            // Deduct actual break time, or fall back to 1 hour break for shifts > 4 hours if no breaks recorded
+            if (totalBreakHours > 0) {
+              hoursWorked -= totalBreakHours;
+            } else if (hoursWorked > 4) {
+              hoursWorked -= 1; // Legacy: 1 hour break for shifts longer than 4 hours
+            }
           }
-        }
 
-        const role = checkIn.workingRole || 'guard';
-        let hourlyRate = 15;
-        if (role === 'guard') hourlyRate = Number(site.guardRate) || 15;
-        else if (role === 'steward') hourlyRate = Number(site.stewardRate) || 18;
-        else if (role === 'supervisor') hourlyRate = Number(site.supervisorRate) || 22;
+          const role = checkIn.workingRole || 'guard';
+          let hourlyRate = 15;
+          if (role === 'guard') hourlyRate = Number(site.guardRate) || 15;
+          else if (role === 'steward') hourlyRate = Number(site.stewardRate) || 18;
+          else if (role === 'supervisor') hourlyRate = Number(site.supervisorRate) || 22;
 
-        return {
-          id: checkIn.id,
-          workerName: `${user.firstName} ${user.lastName}`,
-          role: role,
-          checkInTime: checkIn.checkInTime,
-          checkOutTime: checkIn.checkOutTime,
-          hoursWorked,
-          hourlyRate,
-          amount: hoursWorked * hourlyRate,
-          status: checkIn.status,
-        };
-      });
+          return {
+            id: checkIn.id,
+            workerName: `${user.firstName} ${user.lastName}`,
+            role: role,
+            checkInTime: checkIn.checkInTime,
+            checkOutTime: checkIn.checkOutTime,
+            hoursWorked,
+            hourlyRate,
+            amount: hoursWorked * hourlyRate,
+            status: checkIn.status,
+          };
+        })
+    );
 
     const site = await this.getSite(siteId);
 
@@ -712,9 +754,21 @@ export class DatabaseStorage implements IStorage {
       const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
       let hoursWorked = msWorked / (1000 * 60 * 60);
       
-      // Deduct 1 hour break for shifts longer than 4 hours
-      if (hoursWorked > 4) {
-        hoursWorked -= 1;
+      // Get actual break time for this check-in
+      const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
+      let totalBreakHours = 0;
+      for (const breakRecord of breaksForCheckIn) {
+        if (breakRecord.breakEndTime) {
+          const breakMs = new Date(breakRecord.breakEndTime).getTime() - new Date(breakRecord.breakStartTime).getTime();
+          totalBreakHours += breakMs / (1000 * 60 * 60);
+        }
+      }
+      
+      // Deduct actual break time, or fall back to 1 hour break for shifts > 4 hours if no breaks recorded
+      if (totalBreakHours > 0) {
+        hoursWorked -= totalBreakHours;
+      } else if (hoursWorked > 4) {
+        hoursWorked -= 1; // Legacy: 1 hour break for shifts longer than 4 hours
       }
 
       if (!employeeHours.has(userId)) {
@@ -912,49 +966,67 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(checkIns.checkInTime));
 
-    const shifts = results
-      .filter(r => r.check_ins && r.users && r.sites)
-      .map(r => {
-        const checkIn = r.check_ins!;
-        const user = r.users!;
-        const site = r.sites!;
+    const shifts = await Promise.all(
+      results
+        .filter(r => r.check_ins && r.users && r.sites)
+        .map(async r => {
+          const checkIn = r.check_ins!;
+          const user = r.users!;
+          const site = r.sites!;
 
-        let hoursWorked = 0;
-        let breakDeducted = false;
-        if (checkIn.checkOutTime) {
-          const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
-          hoursWorked = msWorked / (1000 * 60 * 60);
-          
-          if (hoursWorked > 4) {
-            hoursWorked -= 1;
-            breakDeducted = true;
+          let hoursWorked = 0;
+          let breakHours = 0;
+          let breakDeducted = false;
+          if (checkIn.checkOutTime) {
+            const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
+            hoursWorked = msWorked / (1000 * 60 * 60);
+            
+            // Get actual break time for this check-in
+            const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
+            for (const breakRecord of breaksForCheckIn) {
+              if (breakRecord.breakEndTime) {
+                const breakMs = new Date(breakRecord.breakEndTime).getTime() - new Date(breakRecord.breakStartTime).getTime();
+                breakHours += breakMs / (1000 * 60 * 60);
+              }
+            }
+            
+            // Deduct actual break time, or fall back to 1 hour break for shifts > 4 hours if no breaks recorded
+            if (breakHours > 0) {
+              hoursWorked -= breakHours;
+              breakDeducted = true;
+            } else if (hoursWorked > 4) {
+              hoursWorked -= 1;
+              breakHours = 1;
+              breakDeducted = true;
+            }
           }
-        }
 
-        const role = checkIn.workingRole || 'guard';
-        let hourlyRate = 15;
-        if (role === 'guard') hourlyRate = Number(site.guardRate) || 15;
-        else if (role === 'steward') hourlyRate = Number(site.stewardRate) || 18;
-        else if (role === 'supervisor') hourlyRate = Number(site.supervisorRate) || 22;
+          const role = checkIn.workingRole || 'guard';
+          let hourlyRate = 15;
+          if (role === 'guard') hourlyRate = Number(site.guardRate) || 15;
+          else if (role === 'steward') hourlyRate = Number(site.stewardRate) || 18;
+          else if (role === 'supervisor') hourlyRate = Number(site.supervisorRate) || 22;
 
-        return {
-          id: checkIn.id,
-          userName: `${user.firstName} ${user.lastName}`,
-          userId: user.id,
-          siteName: site.name,
-          siteId: site.id,
-          role: role,
-          checkInTime: checkIn.checkInTime,
-          checkOutTime: checkIn.checkOutTime,
-          hoursWorked,
-          breakDeducted,
-          hourlyRate,
-          amount: hoursWorked * hourlyRate,
-          status: checkIn.status,
-          location: checkIn.latitude && checkIn.longitude ? 
-            { lat: checkIn.latitude, lng: checkIn.longitude } : null,
-        };
-      });
+          return {
+            id: checkIn.id,
+            userName: `${user.firstName} ${user.lastName}`,
+            userId: user.id,
+            siteName: site.name,
+            siteId: site.id,
+            role: role,
+            checkInTime: checkIn.checkInTime,
+            checkOutTime: checkIn.checkOutTime,
+            hoursWorked,
+            breakHours,
+            breakDeducted,
+            hourlyRate,
+            amount: hoursWorked * hourlyRate,
+            status: checkIn.status,
+            location: checkIn.latitude && checkIn.longitude ? 
+              { lat: checkIn.latitude, lng: checkIn.longitude } : null,
+          };
+        })
+    );
 
     // Group by employee
     const byEmployee = new Map();
