@@ -204,11 +204,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user.id;
+      const { overtimeReason } = req.body;
 
       // Verify this check-in belongs to the user
       const activeCheckIn = await storage.getActiveCheckInForUser(userId);
       if (!activeCheckIn || activeCheckIn.id !== id) {
         return res.status(403).json({ message: "You can only check out your own active check-in" });
+      }
+
+      // Check for scheduled shift to detect overtime
+      const checkInTime = new Date(activeCheckIn.checkInTime);
+      const checkOutTime = new Date();
+      
+      // Get user's scheduled shifts for the day
+      const dayStart = new Date(checkInTime);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(checkInTime);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      const scheduledShifts = await storage.getUserScheduledShifts(userId, dayStart, dayEnd);
+      
+      // Find matching scheduled shift (within 2 hours of start time)
+      const matchingShift = scheduledShifts.find(shift => {
+        const shiftStart = new Date(shift.startTime);
+        const timeDiff = Math.abs(checkInTime.getTime() - shiftStart.getTime()) / (1000 * 60); // minutes
+        return timeDiff <= 120; // Within 2 hours
+      });
+
+      // If there's a matching shift, check for overtime
+      if (matchingShift) {
+        const scheduledEndTime = new Date(matchingShift.endTime);
+        const overtimeMinutes = (checkOutTime.getTime() - scheduledEndTime.getTime()) / (1000 * 60);
+        
+        // If overtime >30 minutes, require reason and create overtime request
+        if (overtimeMinutes > 30) {
+          if (!overtimeReason || overtimeReason.trim() === '') {
+            return res.status(400).json({ 
+              message: `You are checking out ${Math.round(overtimeMinutes)} minutes after your scheduled shift end time. Please provide a reason for the overtime.`,
+              requiresOvertimeReason: true,
+              overtimeMinutes: Math.round(overtimeMinutes)
+            });
+          }
+          
+          // Create overtime request pending approval
+          await storage.createOvertimeRequest({
+            checkInId: id,
+            userId,
+            scheduledEndTime: scheduledEndTime,
+            actualEndTime: checkOutTime,
+            overtimeMinutes: Math.round(overtimeMinutes),
+            reason: overtimeReason,
+            status: 'pending',
+          });
+        }
       }
 
       const checkIn = await storage.checkOut(id);
@@ -277,7 +325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { latitude, longitude } = req.body;
+      const { latitude, longitude, reason } = req.body;
 
       // Verify this break belongs to the user
       const activeBreak = await storage.getActiveBreakForUser(userId);
@@ -285,7 +333,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You can only end your own active break" });
       }
 
-      const breakRecord = await storage.endBreak(id, latitude, longitude);
+      // Calculate break duration
+      const breakStartTime = new Date(activeBreak.breakStartTime);
+      const breakEndTime = new Date();
+      const breakDurationHours = (breakEndTime.getTime() - breakStartTime.getTime()) / (1000 * 60 * 60);
+
+      // If break is >1 hour, require reason and mark for approval
+      if (breakDurationHours > 1) {
+        if (!reason || reason.trim() === '') {
+          return res.status(400).json({ 
+            message: "Your break was longer than 1 hour. Please provide a reason for the extended break time." 
+          });
+        }
+        // Mark as pending approval
+        await storage.updateBreak(id, {
+          breakEndTime: breakEndTime,
+          latitude: latitude || null,
+          longitude: longitude || null,
+          status: 'completed',
+          reason: reason,
+          approvalStatus: 'pending',
+        });
+      } else {
+        // Auto-approve breaks <=1 hour
+        await storage.updateBreak(id, {
+          breakEndTime: breakEndTime,
+          latitude: latitude || null,
+          longitude: longitude || null,
+          status: 'completed',
+          approvalStatus: 'auto_approved',
+        });
+      }
+
+      const breakRecord = await storage.getBreakById(id);
       res.json(breakRecord);
     } catch (error: any) {
       console.error("Error ending break:", error);
@@ -754,6 +834,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching detailed shift report:", error);
       res.status(500).json({ message: "Failed to fetch detailed shift report" });
+    }
+  });
+
+  // Break and overtime approval routes (admin only)
+  app.get('/api/admin/approvals/breaks', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const results = await db
+        .select()
+        .from(breaks)
+        .leftJoin(users, eq(breaks.userId, users.id))
+        .leftJoin(checkIns, eq(breaks.checkInId, checkIns.id))
+        .leftJoin(sites, eq(checkIns.siteId, sites.id))
+        .where(eq(breaks.approvalStatus, 'pending'))
+        .orderBy(desc(breaks.breakEndTime));
+
+      const pendingBreaks = results.map(r => ({
+        ...r.breaks,
+        user: r.users,
+        checkIn: r.check_ins,
+        site: r.sites,
+      }));
+
+      res.json(pendingBreaks);
+    } catch (error) {
+      console.error("Error fetching pending breaks:", error);
+      res.status(500).json({ message: "Failed to fetch pending breaks" });
+    }
+  });
+
+  app.post('/api/admin/approvals/breaks/:id/approve', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user.id;
+
+      const breakRecord = await storage.updateBreak(id, {
+        approvalStatus: 'approved',
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+      });
+
+      res.json(breakRecord);
+    } catch (error: any) {
+      console.error("Error approving break:", error);
+      res.status(400).json({ message: error.message || "Failed to approve break" });
+    }
+  });
+
+  app.post('/api/admin/approvals/breaks/:id/reject', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user.id;
+
+      const breakRecord = await storage.updateBreak(id, {
+        approvalStatus: 'rejected',
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+      });
+
+      res.json(breakRecord);
+    } catch (error: any) {
+      console.error("Error rejecting break:", error);
+      res.status(400).json({ message: error.message || "Failed to reject break" });
+    }
+  });
+
+  app.get('/api/admin/approvals/overtime', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const overtimeRequests = await storage.getPendingOvertimeRequests();
+      res.json(overtimeRequests);
+    } catch (error) {
+      console.error("Error fetching pending overtime:", error);
+      res.status(500).json({ message: "Failed to fetch pending overtime requests" });
+    }
+  });
+
+  app.post('/api/admin/approvals/overtime/:id/approve', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+      const adminId = req.user.id;
+
+      const overtimeRequest = await storage.approveOvertimeRequest(id, adminId, notes);
+      res.json(overtimeRequest);
+    } catch (error: any) {
+      console.error("Error approving overtime:", error);
+      res.status(400).json({ message: error.message || "Failed to approve overtime" });
+    }
+  });
+
+  app.post('/api/admin/approvals/overtime/:id/reject', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+      const adminId = req.user.id;
+
+      const overtimeRequest = await storage.rejectOvertimeRequest(id, adminId, notes);
+      res.json(overtimeRequest);
+    } catch (error: any) {
+      console.error("Error rejecting overtime:", error);
+      res.status(400).json({ message: error.message || "Failed to reject overtime" });
     }
   });
 

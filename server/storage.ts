@@ -74,6 +74,8 @@ export interface IStorage {
   getBreaksForCheckIn(checkInId: string): Promise<Break[]>;
   createBreak(breakData: InsertBreak): Promise<Break>;
   endBreak(breakId: string, latitude?: string, longitude?: string): Promise<Break>;
+  updateBreak(breakId: string, updateData: Partial<Break>): Promise<Break>;
+  getBreakById(breakId: string): Promise<Break | null>;
   
   // Scheduled shift operations
   getAllScheduledShifts(): Promise<ScheduledShiftWithDetails[]>;
@@ -92,6 +94,13 @@ export interface IStorage {
   getOvertimeReport(weekStart: Date): Promise<any>;
   getAnomalyReport(startDate: Date, endDate: Date): Promise<any>;
   getDetailedShiftReport(startDate: Date, endDate: Date): Promise<any>;
+
+  // Overtime request operations
+  createOvertimeRequest(overtimeData: any): Promise<any>;
+  getPendingOvertimeRequests(): Promise<any[]>;
+  getOvertimeRequest(id: string): Promise<any | null>;
+  approveOvertimeRequest(id: string, reviewedBy: string, notes?: string): Promise<any>;
+  rejectOvertimeRequest(id: string, reviewedBy: string, notes?: string): Promise<any>;
 
   // Invitation operations
   createInvitation(invitation: InsertInvitation): Promise<Invitation>;
@@ -340,6 +349,26 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return breakRecord;
+  }
+
+  async updateBreak(breakId: string, updateData: Partial<Break>): Promise<Break> {
+    const [breakRecord] = await db
+      .update(breaks)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(breaks.id, breakId))
+      .returning();
+    
+    return breakRecord;
+  }
+
+  async getBreakById(breakId: string): Promise<Break | null> {
+    const [breakRecord] = await db
+      .select()
+      .from(breaks)
+      .where(eq(breaks.id, breakId))
+      .limit(1);
+    
+    return breakRecord || null;
   }
 
   async getAllActiveCheckIns(): Promise<CheckInWithDetails[]> {
@@ -1059,6 +1088,72 @@ export class DatabaseStorage implements IStorage {
         totalAmount: shifts.reduce((sum, s) => sum + s.amount, 0),
       },
     };
+  }
+
+  // Overtime request operations
+  async createOvertimeRequest(overtimeData: any): Promise<any> {
+    const [overtimeRequest] = await db.insert(overtimeRequests).values(overtimeData).returning();
+    return overtimeRequest;
+  }
+
+  async getPendingOvertimeRequests(): Promise<any[]> {
+    const results = await db
+      .select()
+      .from(overtimeRequests)
+      .leftJoin(users, eq(overtimeRequests.userId, users.id))
+      .leftJoin(checkIns, eq(overtimeRequests.checkInId, checkIns.id))
+      .leftJoin(sites, eq(checkIns.siteId, sites.id))
+      .where(eq(overtimeRequests.status, 'pending'))
+      .orderBy(desc(overtimeRequests.createdAt));
+
+    return results.map(r => ({
+      ...r.overtime_requests,
+      user: r.users,
+      checkIn: r.check_ins,
+      site: r.sites,
+    }));
+  }
+
+  async getOvertimeRequest(id: string): Promise<any | null> {
+    const [result] = await db
+      .select()
+      .from(overtimeRequests)
+      .where(eq(overtimeRequests.id, id))
+      .limit(1);
+    
+    return result || null;
+  }
+
+  async approveOvertimeRequest(id: string, reviewedBy: string, notes?: string): Promise<any> {
+    const [overtimeRequest] = await db
+      .update(overtimeRequests)
+      .set({
+        status: 'approved',
+        reviewedBy,
+        reviewedAt: new Date(),
+        reviewNotes: notes || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(overtimeRequests.id, id))
+      .returning();
+    
+    return overtimeRequest;
+  }
+
+  async rejectOvertimeRequest(id: string, reviewedBy: string, notes?: string): Promise<any> {
+    const [overtimeRequest] = await db
+      .update(overtimeRequests)
+      .set({
+        status: 'rejected',
+        reviewedBy,
+        reviewedAt: new Date(),
+        reviewNotes: notes || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(overtimeRequests.id, id))
+      .returning();
+    
+    return overtimeRequest;
   }
 
   // Invitation operations
