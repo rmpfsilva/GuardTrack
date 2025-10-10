@@ -13,40 +13,21 @@ export default function AdvancedReports() {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
 
+  const endDate = addDays(weekStart, 7);
+
   // Overtime report
   const { data: overtimeReport, isLoading: overtimeLoading } = useQuery({
-    queryKey: ["/api/admin/reports/overtime", format(weekStart, 'yyyy-MM-dd')],
-    queryFn: async () => {
-      const res = await fetch(`/api/admin/reports/overtime?weekStart=${weekStart.toISOString()}`);
-      if (!res.ok) throw new Error('Failed to fetch overtime report');
-      return res.json();
-    },
+    queryKey: [`/api/admin/reports/overtime?weekStart=${weekStart.toISOString()}`],
   });
 
   // Anomaly report (last 7 days)
   const { data: anomalyReport, isLoading: anomalyLoading } = useQuery({
-    queryKey: ["/api/admin/reports/anomalies", format(weekStart, 'yyyy-MM-dd')],
-    queryFn: async () => {
-      const endDate = addDays(weekStart, 7);
-      const res = await fetch(
-        `/api/admin/reports/anomalies?startDate=${weekStart.toISOString()}&endDate=${endDate.toISOString()}`
-      );
-      if (!res.ok) throw new Error('Failed to fetch anomaly report');
-      return res.json();
-    },
+    queryKey: [`/api/admin/reports/anomalies?startDate=${weekStart.toISOString()}&endDate=${endDate.toISOString()}`],
   });
 
   // Detailed shifts report
   const { data: detailedReport, isLoading: detailedLoading } = useQuery({
-    queryKey: ["/api/admin/reports/detailed-shifts", format(weekStart, 'yyyy-MM-dd')],
-    queryFn: async () => {
-      const endDate = addDays(weekStart, 7);
-      const res = await fetch(
-        `/api/admin/reports/detailed-shifts?startDate=${weekStart.toISOString()}&endDate=${endDate.toISOString()}`
-      );
-      if (!res.ok) throw new Error('Failed to fetch detailed shift report');
-      return res.json();
-    },
+    queryKey: [`/api/admin/reports/detailed-shifts?startDate=${weekStart.toISOString()}&endDate=${endDate.toISOString()}`],
   });
 
   const handlePreviousWeek = () => {
