@@ -21,6 +21,8 @@ export default function SiteManagement() {
   const [formData, setFormData] = useState<InsertSite>({
     name: "",
     address: "",
+    contactName: "",
+    contactPhone: "",
     isActive: true,
     guardRate: "15.00",
     stewardRate: "18.00",
@@ -45,7 +47,7 @@ export default function SiteManagement() {
         description: "The site has been successfully created.",
       });
       setIsAddDialogOpen(false);
-      setFormData({ name: "", address: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
+      setFormData({ name: "", address: "", contactName: "", contactPhone: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -159,6 +161,8 @@ export default function SiteManagement() {
     setFormData({
       name: site.name,
       address: site.address,
+      contactName: site.contactName || "",
+      contactPhone: site.contactPhone || "",
       isActive: site.isActive,
       guardRate: site.guardRate || "15.00",
       stewardRate: site.stewardRate || "18.00",
@@ -207,7 +211,7 @@ export default function SiteManagement() {
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open);
             if (open) {
-              setFormData({ name: "", address: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
+              setFormData({ name: "", address: "", contactName: "", contactPhone: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
             }
           }}>
             <DialogTrigger asChild>
@@ -242,6 +246,30 @@ export default function SiteManagement() {
                     rows={3}
                     data-testid="input-site-address"
                   />
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="contactName">Contact Name</Label>
+                    <Input
+                      id="contactName"
+                      placeholder="John Smith"
+                      value={formData.contactName || ""}
+                      onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+                      data-testid="input-contact-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contactPhone">Contact Phone</Label>
+                    <Input
+                      id="contactPhone"
+                      type="tel"
+                      placeholder="+44 20 1234 5678"
+                      value={formData.contactPhone || ""}
+                      onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                      data-testid="input-contact-phone"
+                    />
+                  </div>
                 </div>
                 
                 <div className="space-y-3">
@@ -294,7 +322,7 @@ export default function SiteManagement() {
                   variant="outline" 
                   onClick={() => {
                     setIsAddDialogOpen(false);
-                    setFormData({ name: "", address: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
+                    setFormData({ name: "", address: "", contactName: "", contactPhone: "", isActive: true, guardRate: "15.00", stewardRate: "18.00", supervisorRate: "22.00" });
                   }}
                 >
                   Cancel
@@ -332,6 +360,12 @@ export default function SiteManagement() {
                     <div className="flex-1">
                       <CardTitle className="text-lg">{site.name}</CardTitle>
                       <CardDescription className="mt-1">{site.address}</CardDescription>
+                      {(site.contactName || site.contactPhone) && (
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          {site.contactName && <div>Contact: {site.contactName}</div>}
+                          {site.contactPhone && <div>Phone: {site.contactPhone}</div>}
+                        </div>
+                      )}
                     </div>
                     <Badge variant={site.isActive ? "default" : "secondary"}>
                       {site.isActive ? "Active" : "Inactive"}
@@ -404,6 +438,30 @@ export default function SiteManagement() {
                 rows={3}
                 data-testid="input-edit-site-address"
               />
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-contactName">Contact Name</Label>
+                <Input
+                  id="edit-contactName"
+                  placeholder="John Smith"
+                  value={formData.contactName || ""}
+                  onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+                  data-testid="input-edit-contact-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-contactPhone">Contact Phone</Label>
+                <Input
+                  id="edit-contactPhone"
+                  type="tel"
+                  placeholder="+44 20 1234 5678"
+                  value={formData.contactPhone || ""}
+                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                  data-testid="input-edit-contact-phone"
+                />
+              </div>
             </div>
             
             <div className="space-y-3">
