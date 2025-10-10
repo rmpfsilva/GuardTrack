@@ -407,59 +407,130 @@ export class DatabaseStorage implements IStorage {
       }));
   }
 
+  // Helper method to calculate payable hours for a single check-in
+  private async calculatePayableHours(checkIn: CheckIn): Promise<number> {
+    if (!checkIn.checkOutTime) return 0; // Skip active shifts
+
+    const userId = checkIn.userId;
+
+    // 1. Find scheduled shift to determine if we need to cap overtime
+    const dayStart = new Date(checkIn.checkInTime);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(checkIn.checkInTime);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    const scheduledShifts = await this.getUserScheduledShifts(userId, dayStart, dayEnd);
+    const matchingShift = scheduledShifts.find(shift => {
+      const shiftStart = new Date(shift.startTime);
+      const timeDiff = Math.abs(checkIn.checkInTime.getTime() - shiftStart.getTime()) / (1000 * 60);
+      return timeDiff <= 120; // Within 2 hours
+    });
+
+    // 2. Determine effective checkout time (may be capped for overtime control)
+    let effectiveCheckOutTime = checkIn.checkOutTime;
+    let approvedOvertimeHours = 0;
+
+    if (matchingShift) {
+      const scheduledEndTime = new Date(matchingShift.endTime);
+      const overtimeMinutes = (checkIn.checkOutTime.getTime() - scheduledEndTime.getTime()) / (1000 * 60);
+      
+      if (overtimeMinutes > 30) {
+        // Overtime detected - check for approval
+        const [overtimeRequest] = await db
+          .select()
+          .from(overtimeRequests)
+          .where(eq(overtimeRequests.checkInId, checkIn.id));
+        
+        if (overtimeRequest && overtimeRequest.status === 'approved') {
+          // Approved overtime: cap at scheduled end + 30 min, then add only overtime BEYOND 30 min
+          effectiveCheckOutTime = new Date(scheduledEndTime.getTime() + (30 * 60 * 1000));
+          // Subtract the 30 min already included in the cap
+          approvedOvertimeHours = Math.max(0, overtimeRequest.overtimeMinutes - 30) / 60;
+        } else {
+          // Rejected, pending, or missing overtime: cap at scheduled end + 30 min
+          effectiveCheckOutTime = new Date(scheduledEndTime.getTime() + (30 * 60 * 1000));
+        }
+      }
+    }
+
+    // 3. Calculate base payable hours from effective checkout time
+    const shiftDurationMs = effectiveCheckOutTime.getTime() - checkIn.checkInTime.getTime();
+    let payableHours = shiftDurationMs / (1000 * 60 * 60);
+
+    // 4. Apply baseline 1-hour break deduction for all shifts
+    payableHours -= 1;
+
+    // 5. Get breaks and apply extended break deductions if approved
+    const shiftsBreaks = await db
+      .select()
+      .from(breaks)
+      .where(eq(breaks.checkInId, checkIn.id));
+
+    for (const breakRecord of shiftsBreaks) {
+      if (breakRecord.breakEndTime) {
+        const breakDurationMs = breakRecord.breakEndTime.getTime() - breakRecord.breakStartTime.getTime();
+        const breakHours = breakDurationMs / (1000 * 60 * 60);
+        
+        // If break >1 hour and approved, deduct the extra time beyond baseline
+        if (breakHours > 1 && breakRecord.approvalStatus === 'approved') {
+          const extraBreakTime = breakHours - 1;
+          payableHours -= extraBreakTime;
+        }
+      }
+    }
+
+    // 6. Add approved overtime hours (already excluded from base by capping)
+    payableHours += approvedOvertimeHours;
+
+    return Math.max(0, payableHours); // Never go negative
+  }
+
   async getUserWeeklyHours(userId: string, weekStart: Date): Promise<number> {
-    const result = await db
-      .select({
-        totalHours: sql<number>`
-          COALESCE(SUM(
-            EXTRACT(EPOCH FROM (
-              COALESCE(${checkIns.checkOutTime}, NOW()) - ${checkIns.checkInTime}
-            )) / 3600
-          ), 0) - COALESCE(
-            (SELECT SUM(
-              EXTRACT(EPOCH FROM (
-                COALESCE(${breaks.breakEndTime}, NOW()) - ${breaks.breakStartTime}
-              )) / 3600
-            )
-            FROM ${breaks}
-            WHERE ${breaks.checkInId} = ${checkIns.id}), 0
-          )
-        `.as('total_hours'),
-      })
+    // Get all check-ins for the week
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    
+    const userCheckIns = await db
+      .select()
       .from(checkIns)
       .where(
         and(
           eq(checkIns.userId, userId),
-          gte(checkIns.checkInTime, weekStart)
+          gte(checkIns.checkInTime, weekStart),
+          lt(checkIns.checkInTime, weekEnd)
         )
       );
 
-    return result[0]?.totalHours || 0;
+    let totalHours = 0;
+    for (const checkIn of userCheckIns) {
+      totalHours += await this.calculatePayableHours(checkIn);
+    }
+
+    return totalHours;
   }
 
   async getAllUsersWeeklyHours(weekStart: Date): Promise<number> {
-    const result = await db
-      .select({
-        totalHours: sql<number>`
-          COALESCE(SUM(
-            EXTRACT(EPOCH FROM (
-              COALESCE(${checkIns.checkOutTime}, NOW()) - ${checkIns.checkInTime}
-            )) / 3600
-          ), 0) - COALESCE(
-            (SELECT SUM(
-              EXTRACT(EPOCH FROM (
-                COALESCE(${breaks.breakEndTime}, NOW()) - ${breaks.breakStartTime}
-              )) / 3600
-            )
-            FROM ${breaks}
-            WHERE ${breaks.checkInId} = ${checkIns.id}), 0
-          )
-        `.as('total_hours'),
-      })
+    // Get all unique users who have check-ins in the week
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    
+    const userIds = await db
+      .selectDistinct({ userId: checkIns.userId })
       .from(checkIns)
-      .where(gte(checkIns.checkInTime, weekStart));
+      .where(
+        and(
+          gte(checkIns.checkInTime, weekStart),
+          lt(checkIns.checkInTime, weekEnd)
+        )
+      );
 
-    return result[0]?.totalHours || 0;
+    let totalHours = 0;
+    for (const { userId } of userIds) {
+      const userHours = await this.getUserWeeklyHours(userId, weekStart);
+      totalHours += userHours;
+    }
+
+    return totalHours;
   }
 
   // Scheduled shift operations
@@ -593,26 +664,8 @@ export class DatabaseStorage implements IStorage {
 
       if (!checkIn.checkOutTime) continue;
 
-      // Calculate hours worked
-      const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
-      let hoursWorked = msWorked / (1000 * 60 * 60);
-      
-      // Get actual break time for this check-in
-      const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
-      let totalBreakHours = 0;
-      for (const breakRecord of breaksForCheckIn) {
-        if (breakRecord.breakEndTime) {
-          const breakMs = new Date(breakRecord.breakEndTime).getTime() - new Date(breakRecord.breakStartTime).getTime();
-          totalBreakHours += breakMs / (1000 * 60 * 60);
-        }
-      }
-      
-      // Deduct actual break time, or fall back to 1 hour break for shifts > 4 hours if no breaks recorded
-      if (totalBreakHours > 0) {
-        hoursWorked -= totalBreakHours;
-      } else if (hoursWorked > 4) {
-        hoursWorked -= 1; // Legacy: 1 hour break for shifts longer than 4 hours
-      }
+      // Calculate payable hours using the new approval-based logic
+      const hoursWorked = await this.calculatePayableHours(checkIn);
 
       // Get the hourly rate based on working role
       const role = checkIn.workingRole || 'guard';
@@ -695,28 +748,8 @@ export class DatabaseStorage implements IStorage {
           const user = r.users!;
           const site = r.sites!;
 
-          let hoursWorked = 0;
-          if (checkIn.checkOutTime) {
-            const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
-            hoursWorked = msWorked / (1000 * 60 * 60);
-            
-            // Get actual break time for this check-in
-            const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
-            let totalBreakHours = 0;
-            for (const breakRecord of breaksForCheckIn) {
-              if (breakRecord.breakEndTime) {
-                const breakMs = new Date(breakRecord.breakEndTime).getTime() - new Date(breakRecord.breakStartTime).getTime();
-                totalBreakHours += breakMs / (1000 * 60 * 60);
-              }
-            }
-            
-            // Deduct actual break time, or fall back to 1 hour break for shifts > 4 hours if no breaks recorded
-            if (totalBreakHours > 0) {
-              hoursWorked -= totalBreakHours;
-            } else if (hoursWorked > 4) {
-              hoursWorked -= 1; // Legacy: 1 hour break for shifts longer than 4 hours
-            }
-          }
+          // Calculate payable hours using the new approval-based logic
+          const hoursWorked = await this.calculatePayableHours(checkIn);
 
           const role = checkIn.workingRole || 'guard';
           let hourlyRate = 15;
@@ -780,25 +813,9 @@ export class DatabaseStorage implements IStorage {
       if (!checkIn.checkOutTime) continue;
 
       const userId = user.id;
-      const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
-      let hoursWorked = msWorked / (1000 * 60 * 60);
       
-      // Get actual break time for this check-in
-      const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
-      let totalBreakHours = 0;
-      for (const breakRecord of breaksForCheckIn) {
-        if (breakRecord.breakEndTime) {
-          const breakMs = new Date(breakRecord.breakEndTime).getTime() - new Date(breakRecord.breakStartTime).getTime();
-          totalBreakHours += breakMs / (1000 * 60 * 60);
-        }
-      }
-      
-      // Deduct actual break time, or fall back to 1 hour break for shifts > 4 hours if no breaks recorded
-      if (totalBreakHours > 0) {
-        hoursWorked -= totalBreakHours;
-      } else if (hoursWorked > 4) {
-        hoursWorked -= 1; // Legacy: 1 hour break for shifts longer than 4 hours
-      }
+      // Calculate payable hours using the new approval-based logic
+      const hoursWorked = await this.calculatePayableHours(checkIn);
 
       if (!employeeHours.has(userId)) {
         employeeHours.set(userId, {
@@ -1003,14 +1020,13 @@ export class DatabaseStorage implements IStorage {
           const user = r.users!;
           const site = r.sites!;
 
-          let hoursWorked = 0;
+          // Calculate payable hours using the new approval-based logic
+          const hoursWorked = await this.calculatePayableHours(checkIn);
+          
+          // Get break information for display
           let breakHours = 0;
           let breakDeducted = false;
           if (checkIn.checkOutTime) {
-            const msWorked = new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime();
-            hoursWorked = msWorked / (1000 * 60 * 60);
-            
-            // Get actual break time for this check-in
             const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
             for (const breakRecord of breaksForCheckIn) {
               if (breakRecord.breakEndTime) {
@@ -1018,16 +1034,8 @@ export class DatabaseStorage implements IStorage {
                 breakHours += breakMs / (1000 * 60 * 60);
               }
             }
-            
-            // Deduct actual break time, or fall back to 1 hour break for shifts > 4 hours if no breaks recorded
-            if (breakHours > 0) {
-              hoursWorked -= breakHours;
-              breakDeducted = true;
-            } else if (hoursWorked > 4) {
-              hoursWorked -= 1;
-              breakHours = 1;
-              breakDeducted = true;
-            }
+            // Always deduct at least 1 hour baseline
+            breakDeducted = true;
           }
 
           const role = checkIn.workingRole || 'guard';
