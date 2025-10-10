@@ -422,7 +422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[DEBUG] Found ${guards.length} guards from database:`, guards.map(g => ({ id: g.id, name: `${g.firstName} ${g.lastName}` })));
       const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
 
-      // Fetch stats for each guard
+      // Fetch stats for each guard with individual error handling
       const guardsWithStats = await Promise.all(
         guards.map(async (guard) => {
           try {
@@ -432,7 +432,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             return {
               ...guard,
-              weeklyHours,
+              weeklyHours: weeklyHours || 0,
               totalShifts: recentCheckIns.length,
               recentCheckIns: recentCheckIns.map(ci => ({
                 id: ci.id,
@@ -442,18 +442,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               })),
               isCurrentlyActive: !!activeCheckIn,
             };
-          } catch (error) {
-            console.error(`[DEBUG] Error processing guard ${guard.id} (${guard.firstName} ${guard.lastName}):`, error);
-            throw error;
+          } catch (error: any) {
+            console.error(`[ERROR] Failed to process guard ${guard.id} (${guard.firstName} ${guard.lastName}):`, error.message, error.stack);
+            // Return guard with default values if stats fail
+            return {
+              ...guard,
+              weeklyHours: 0,
+              totalShifts: 0,
+              recentCheckIns: [],
+              isCurrentlyActive: false,
+            };
           }
         })
       );
 
       console.log(`[DEBUG] Returning ${guardsWithStats.length} guards with stats`);
       res.json(guardsWithStats);
-    } catch (error) {
-      console.error("Error fetching guards:", error);
-      res.status(500).json({ message: "Failed to fetch guards" });
+    } catch (error: any) {
+      console.error("[ERROR] Failed to fetch guards:", error.message, error.stack);
+      res.status(500).json({ message: "Failed to fetch guards", error: error.message });
     }
   });
 
