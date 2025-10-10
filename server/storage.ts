@@ -8,6 +8,9 @@ import {
   invitations,
   passwordResetTokens,
   leaveRequests,
+  notices,
+  noticeApplications,
+  pushSubscriptions,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -30,6 +33,17 @@ import {
   type InsertLeaveRequest,
   type UpdateLeaveRequest,
   type LeaveRequestWithDetails,
+  type Notice,
+  type InsertNotice,
+  type UpdateNotice,
+  type NoticeWithDetails,
+  type NoticeApplication,
+  type InsertNoticeApplication,
+  type UpdateNoticeApplication,
+  type NoticeApplicationWithDetails,
+  type PushSubscription,
+  type InsertPushSubscription,
+  type UpdatePushSubscription,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, lt, between } from "drizzle-orm";
@@ -126,6 +140,31 @@ export interface IStorage {
   getUpcomingLeaveRequests(daysAhead: number): Promise<LeaveRequestWithDetails[]>;
   updateLeaveRequest(id: string, updates: UpdateLeaveRequest): Promise<LeaveRequest>;
   deleteLeaveRequest(id: string): Promise<void>;
+
+  // Notice operations
+  createNotice(notice: InsertNotice & { postedBy: string }): Promise<Notice>;
+  getNotice(id: string): Promise<NoticeWithDetails | undefined>;
+  getAllNotices(): Promise<NoticeWithDetails[]>;
+  getActiveNotices(): Promise<NoticeWithDetails[]>;
+  updateNotice(id: string, updates: UpdateNotice): Promise<Notice>;
+  deleteNotice(id: string): Promise<void>;
+
+  // Notice application operations
+  createNoticeApplication(application: InsertNoticeApplication): Promise<NoticeApplication>;
+  getNoticeApplication(id: string): Promise<NoticeApplicationWithDetails | undefined>;
+  getUserNoticeApplications(userId: string): Promise<NoticeApplicationWithDetails[]>;
+  getNoticeApplicationsForNotice(noticeId: string): Promise<NoticeApplicationWithDetails[]>;
+  updateNoticeApplication(id: string, updates: UpdateNoticeApplication): Promise<NoticeApplication>;
+  deleteNoticeApplication(id: string): Promise<void>;
+
+  // Push subscription operations
+  createPushSubscription(subscription: InsertPushSubscription): Promise<PushSubscription>;
+  getPushSubscription(endpoint: string): Promise<PushSubscription | undefined>;
+  getUserPushSubscriptions(userId: string): Promise<PushSubscription[]>;
+  getAllActivePushSubscriptions(): Promise<PushSubscription[]>;
+  updatePushSubscription(id: string, updates: UpdatePushSubscription): Promise<PushSubscription>;
+  deletePushSubscription(id: string): Promise<void>;
+  deletePushSubscriptionByEndpoint(endpoint: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1395,6 +1434,289 @@ export class DatabaseStorage implements IStorage {
 
   async deleteLeaveRequest(id: string): Promise<void> {
     await db.delete(leaveRequests).where(eq(leaveRequests.id, id));
+  }
+
+  // Notice operations
+  async createNotice(noticeData: InsertNotice & { postedBy: string }): Promise<Notice> {
+    const [notice] = await db.insert(notices).values(noticeData).returning();
+    return notice;
+  }
+
+  async getNotice(id: string): Promise<NoticeWithDetails | undefined> {
+    const results = await db
+      .select({
+        notice: notices,
+        poster: users,
+        site: sites,
+      })
+      .from(notices)
+      .leftJoin(users, eq(notices.postedBy, users.id))
+      .leftJoin(sites, eq(notices.siteId, sites.id))
+      .where(eq(notices.id, id));
+
+    if (results.length === 0) return undefined;
+
+    const r = results[0];
+    const applicationCount = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(noticeApplications)
+      .where(eq(noticeApplications.noticeId, id));
+
+    return {
+      ...r.notice,
+      poster: { ...r.poster!, password: '' },
+      site: r.site || undefined,
+      applicationCount: applicationCount[0]?.count || 0,
+    };
+  }
+
+  async getAllNotices(): Promise<NoticeWithDetails[]> {
+    const results = await db
+      .select({
+        notice: notices,
+        poster: users,
+        site: sites,
+      })
+      .from(notices)
+      .leftJoin(users, eq(notices.postedBy, users.id))
+      .leftJoin(sites, eq(notices.siteId, sites.id))
+      .orderBy(desc(notices.createdAt));
+
+    const noticesWithDetails = await Promise.all(
+      results.map(async (r) => {
+        const applicationCount = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(noticeApplications)
+          .where(eq(noticeApplications.noticeId, r.notice.id));
+
+        return {
+          ...r.notice,
+          poster: { ...r.poster!, password: '' },
+          site: r.site || undefined,
+          applicationCount: applicationCount[0]?.count || 0,
+        };
+      })
+    );
+
+    return noticesWithDetails;
+  }
+
+  async getActiveNotices(): Promise<NoticeWithDetails[]> {
+    const now = new Date();
+    const results = await db
+      .select({
+        notice: notices,
+        poster: users,
+        site: sites,
+      })
+      .from(notices)
+      .leftJoin(users, eq(notices.postedBy, users.id))
+      .leftJoin(sites, eq(notices.siteId, sites.id))
+      .where(
+        and(
+          eq(notices.isActive, true),
+          sql`(${notices.expiresAt} IS NULL OR ${notices.expiresAt} > ${now})`
+        )
+      )
+      .orderBy(desc(notices.createdAt));
+
+    const noticesWithDetails = await Promise.all(
+      results.map(async (r) => {
+        const applicationCount = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(noticeApplications)
+          .where(eq(noticeApplications.noticeId, r.notice.id));
+
+        return {
+          ...r.notice,
+          poster: { ...r.poster!, password: '' },
+          site: r.site || undefined,
+          applicationCount: applicationCount[0]?.count || 0,
+        };
+      })
+    );
+
+    return noticesWithDetails;
+  }
+
+  async updateNotice(id: string, updates: UpdateNotice): Promise<Notice> {
+    const [notice] = await db
+      .update(notices)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(notices.id, id))
+      .returning();
+    return notice;
+  }
+
+  async deleteNotice(id: string): Promise<void> {
+    await db.delete(notices).where(eq(notices.id, id));
+  }
+
+  // Notice application operations
+  async createNoticeApplication(applicationData: InsertNoticeApplication): Promise<NoticeApplication> {
+    const [application] = await db.insert(noticeApplications).values(applicationData).returning();
+    return application;
+  }
+
+  async getNoticeApplication(id: string): Promise<NoticeApplicationWithDetails | undefined> {
+    const results = await db
+      .select({
+        application: noticeApplications,
+        notice: notices,
+        user: users,
+        reviewer: {
+          id: sql`reviewer.id`,
+          username: sql`reviewer.username`,
+          email: sql`reviewer.email`,
+          firstName: sql`reviewer.first_name`,
+          lastName: sql`reviewer.last_name`,
+          profileImageUrl: sql`reviewer.profile_image_url`,
+          role: sql`reviewer.role`,
+          createdAt: sql`reviewer.created_at`,
+          updatedAt: sql`reviewer.updated_at`,
+        }
+      })
+      .from(noticeApplications)
+      .leftJoin(notices, eq(noticeApplications.noticeId, notices.id))
+      .leftJoin(users, eq(noticeApplications.userId, users.id))
+      .leftJoin(sql`users AS reviewer`, sql`notice_applications.reviewed_by = reviewer.id`)
+      .where(eq(noticeApplications.id, id));
+
+    if (results.length === 0) return undefined;
+
+    const r = results[0];
+    return {
+      ...r.application,
+      notice: r.notice!,
+      user: { ...r.user!, password: '' },
+      reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
+    };
+  }
+
+  async getUserNoticeApplications(userId: string): Promise<NoticeApplicationWithDetails[]> {
+    const results = await db
+      .select({
+        application: noticeApplications,
+        notice: notices,
+        user: users,
+        reviewer: {
+          id: sql`reviewer.id`,
+          username: sql`reviewer.username`,
+          email: sql`reviewer.email`,
+          firstName: sql`reviewer.first_name`,
+          lastName: sql`reviewer.last_name`,
+          profileImageUrl: sql`reviewer.profile_image_url`,
+          role: sql`reviewer.role`,
+          createdAt: sql`reviewer.created_at`,
+          updatedAt: sql`reviewer.updated_at`,
+        }
+      })
+      .from(noticeApplications)
+      .leftJoin(notices, eq(noticeApplications.noticeId, notices.id))
+      .leftJoin(users, eq(noticeApplications.userId, users.id))
+      .leftJoin(sql`users AS reviewer`, sql`notice_applications.reviewed_by = reviewer.id`)
+      .where(eq(noticeApplications.userId, userId))
+      .orderBy(desc(noticeApplications.createdAt));
+
+    return results.map(r => ({
+      ...r.application,
+      notice: r.notice!,
+      user: { ...r.user!, password: '' },
+      reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
+    }));
+  }
+
+  async getNoticeApplicationsForNotice(noticeId: string): Promise<NoticeApplicationWithDetails[]> {
+    const results = await db
+      .select({
+        application: noticeApplications,
+        notice: notices,
+        user: users,
+        reviewer: {
+          id: sql`reviewer.id`,
+          username: sql`reviewer.username`,
+          email: sql`reviewer.email`,
+          firstName: sql`reviewer.first_name`,
+          lastName: sql`reviewer.last_name`,
+          profileImageUrl: sql`reviewer.profile_image_url`,
+          role: sql`reviewer.role`,
+          createdAt: sql`reviewer.created_at`,
+          updatedAt: sql`reviewer.updated_at`,
+        }
+      })
+      .from(noticeApplications)
+      .leftJoin(notices, eq(noticeApplications.noticeId, notices.id))
+      .leftJoin(users, eq(noticeApplications.userId, users.id))
+      .leftJoin(sql`users AS reviewer`, sql`notice_applications.reviewed_by = reviewer.id`)
+      .where(eq(noticeApplications.noticeId, noticeId))
+      .orderBy(desc(noticeApplications.createdAt));
+
+    return results.map(r => ({
+      ...r.application,
+      notice: r.notice!,
+      user: { ...r.user!, password: '' },
+      reviewer: r.reviewer.id ? { ...r.reviewer, password: '' } as User : undefined,
+    }));
+  }
+
+  async updateNoticeApplication(id: string, updates: UpdateNoticeApplication): Promise<NoticeApplication> {
+    const [application] = await db
+      .update(noticeApplications)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(noticeApplications.id, id))
+      .returning();
+    return application;
+  }
+
+  async deleteNoticeApplication(id: string): Promise<void> {
+    await db.delete(noticeApplications).where(eq(noticeApplications.id, id));
+  }
+
+  // Push subscription operations
+  async createPushSubscription(subscriptionData: InsertPushSubscription): Promise<PushSubscription> {
+    const [subscription] = await db.insert(pushSubscriptions).values(subscriptionData).returning();
+    return subscription;
+  }
+
+  async getPushSubscription(endpoint: string): Promise<PushSubscription | undefined> {
+    const [subscription] = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.endpoint, endpoint));
+    return subscription;
+  }
+
+  async getUserPushSubscriptions(userId: string): Promise<PushSubscription[]> {
+    const subscriptions = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId));
+    return subscriptions;
+  }
+
+  async getAllActivePushSubscriptions(): Promise<PushSubscription[]> {
+    const subscriptions = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.isActive, true));
+    return subscriptions;
+  }
+
+  async updatePushSubscription(id: string, updates: UpdatePushSubscription): Promise<PushSubscription> {
+    const [subscription] = await db
+      .update(pushSubscriptions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(pushSubscriptions.id, id))
+      .returning();
+    return subscription;
+  }
+
+  async deletePushSubscription(id: string): Promise<void> {
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, id));
+  }
+
+  async deletePushSubscriptionByEndpoint(endpoint: string): Promise<void> {
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
   }
 }
 
