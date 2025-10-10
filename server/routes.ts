@@ -3,7 +3,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, hashPassword } from "./auth";
-import { insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema } from "@shared/schema";
+import { insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 import { sendInvitationEmail } from './emailService';
@@ -225,6 +225,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error checking out:", error);
       res.status(400).json({ message: error.message || "Failed to check out" });
+    }
+  });
+
+  // Break routes for guards/stewards (unpaid breaks)
+  app.get('/api/breaks/active', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const activeBreak = await storage.getActiveBreakForUser(userId);
+      res.json(activeBreak);
+    } catch (error) {
+      console.error("Error fetching active break:", error);
+      res.status(500).json({ message: "Failed to fetch active break" });
+    }
+  });
+
+  app.post('/api/breaks/start', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      
+      // Check if user has an active check-in
+      const activeCheckIn = await storage.getActiveCheckInForUser(userId);
+      if (!activeCheckIn) {
+        return res.status(400).json({ message: "You must be checked in to start a break" });
+      }
+
+      // Check if user already has an active break
+      const activeBreak = await storage.getActiveBreakForUser(userId);
+      if (activeBreak) {
+        return res.status(400).json({ message: "You already have an active break. Please end it first." });
+      }
+
+      const { latitude, longitude } = req.body;
+      const breakData = {
+        checkInId: activeCheckIn.id,
+        userId,
+        latitude: latitude || null,
+        longitude: longitude || null,
+        status: 'active' as const,
+      };
+
+      const breakRecord = await storage.createBreak(breakData);
+      res.status(201).json(breakRecord);
+    } catch (error: any) {
+      console.error("Error starting break:", error);
+      res.status(400).json({ message: error.message || "Failed to start break" });
+    }
+  });
+
+  app.patch('/api/breaks/:id/end', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { latitude, longitude } = req.body;
+
+      // Verify this break belongs to the user
+      const activeBreak = await storage.getActiveBreakForUser(userId);
+      if (!activeBreak || activeBreak.id !== id) {
+        return res.status(403).json({ message: "You can only end your own active break" });
+      }
+
+      const breakRecord = await storage.endBreak(id, latitude, longitude);
+      res.json(breakRecord);
+    } catch (error: any) {
+      console.error("Error ending break:", error);
+      res.status(400).json({ message: error.message || "Failed to end break" });
     }
   });
 
