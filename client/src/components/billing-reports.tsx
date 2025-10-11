@@ -227,6 +227,7 @@ export default function BillingReports() {
                             <TableRow>
                               <TableHead>Worker</TableHead>
                               <TableHead>Role</TableHead>
+                              <TableHead>Day</TableHead>
                               <TableHead>Check-In</TableHead>
                               <TableHead>Check-Out</TableHead>
                               <TableHead className="text-right">Hours</TableHead>
@@ -243,6 +244,7 @@ export default function BillingReports() {
                                     {shift.role}
                                   </Badge>
                                 </TableCell>
+                                <TableCell className="text-muted-foreground">{format(new Date(shift.checkInTime), 'EEE')}</TableCell>
                                 <TableCell>{format(new Date(shift.checkInTime), 'MMM d, HH:mm')}</TableCell>
                                 <TableCell>{format(new Date(shift.checkOutTime), 'MMM d, HH:mm')}</TableCell>
                                 <TableCell className="text-right">{shift.hoursWorked.toFixed(2)}</TableCell>
