@@ -85,3 +85,5 @@ To enable push notifications, you need to configure VAPID keys:
 - **Push Notifications**: VAPID keys configured and working. System auto-prepends "mailto:" to VAPID_SUBJECT if plain email is entered
 - **Duplicate Prevention**: Notice applications now prevent duplicate submissions - backend validates and returns 409 status code, frontend shows "Already Applied" status
 - **Error Handling**: Improved error message parsing in frontend to show proper JSON error messages from backend
+- **Location Visibility**: Admins can now view guard locations (coordinates + Google Maps links) across all check-in/break views - Active Check-ins, Recent Activity, Detailed Reports, and Edit Check-in dialogs. Location data also included in CSV exports.
+- **Privacy Notice**: Guards now see a prominent privacy notice on the check-in screen explaining that location is shared during check-in, check-out, and break actions for shift verification and attendance tracking - ensuring transparency and compliance with location tracking requirements.
