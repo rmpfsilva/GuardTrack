@@ -213,6 +213,25 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Company settings table - for invoice and company information
+export const companySettings = pgTable("company_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyName: varchar("company_name", { length: 255 }).notNull().default('ProForce Security & Events Ltd'),
+  companyAddress: text("company_address"),
+  companyEmail: varchar("company_email"),
+  companyPhone: varchar("company_phone"),
+  taxId: varchar("tax_id"), // VAT/Tax ID number
+  registrationNumber: varchar("registration_number"), // Company registration number
+  logoUrl: text("logo_url"), // URL to company logo
+  bankName: varchar("bank_name"),
+  bankAccountNumber: varchar("bank_account_number"),
+  bankSortCode: varchar("bank_sort_code"),
+  invoiceNotes: text("invoice_notes"), // Additional notes to appear on invoices
+  invoicePrefix: varchar("invoice_prefix").default('INV'), // Prefix for invoice numbers
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   checkIns: many(checkIns),
@@ -538,6 +557,18 @@ export const updatePushSubscriptionSchema = createInsertSchema(pushSubscriptions
   userAgent: z.string().nullable().optional(),
 }).partial();
 
+export const insertCompanySettingsSchema = createInsertSchema(companySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateCompanySettingsSchema = createInsertSchema(companySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 // TypeScript types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -588,6 +619,10 @@ export type UpdateNoticeApplication = z.infer<typeof updateNoticeApplicationSche
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
 export type UpdatePushSubscription = z.infer<typeof updatePushSubscriptionSchema>;
+
+export type CompanySettings = typeof companySettings.$inferSelect;
+export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
+export type UpdateCompanySettings = z.infer<typeof updateCompanySettingsSchema>;
 
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
