@@ -1335,6 +1335,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Company settings routes (admin only for updates, all authenticated users can view)
+  app.get('/api/company-settings', isAuthenticated, async (req, res) => {
+    try {
+      let settings = await storage.getCompanySettings();
+      
+      // If no settings exist, create default ones
+      if (!settings) {
+        settings = await storage.createCompanySettings({
+          companyName: 'ProForce Security & Events Ltd',
+        });
+      }
+      
+      res.json(settings);
+    } catch (error: any) {
+      console.error("Error fetching company settings:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch company settings" });
+    }
+  });
+
+  app.put('/api/company-settings', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      let settings = await storage.getCompanySettings();
+      
+      if (!settings) {
+        // Create new settings if none exist
+        settings = await storage.createCompanySettings(req.body);
+      } else {
+        // Update existing settings
+        settings = await storage.updateCompanySettings(settings.id, req.body);
+      }
+      
+      res.json(settings);
+    } catch (error: any) {
+      console.error("Error updating company settings:", error);
+      res.status(400).json({ message: error.message || "Failed to update company settings" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

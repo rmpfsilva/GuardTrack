@@ -11,6 +11,7 @@ import {
   notices,
   noticeApplications,
   pushSubscriptions,
+  companySettings,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -44,6 +45,9 @@ import {
   type PushSubscription,
   type InsertPushSubscription,
   type UpdatePushSubscription,
+  type CompanySettings,
+  type InsertCompanySettings,
+  type UpdateCompanySettings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, lt, between } from "drizzle-orm";
@@ -167,6 +171,11 @@ export interface IStorage {
   updatePushSubscription(id: string, updates: UpdatePushSubscription): Promise<PushSubscription>;
   deletePushSubscription(id: string): Promise<void>;
   deletePushSubscriptionByEndpoint(endpoint: string): Promise<void>;
+
+  // Company settings operations
+  getCompanySettings(): Promise<CompanySettings | undefined>;
+  createCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings>;
+  updateCompanySettings(id: string, updates: UpdateCompanySettings): Promise<CompanySettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1765,6 +1774,27 @@ export class DatabaseStorage implements IStorage {
 
   async deletePushSubscriptionByEndpoint(endpoint: string): Promise<void> {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+
+  // Company settings operations
+  async getCompanySettings(): Promise<CompanySettings | undefined> {
+    const [settings] = await db.select().from(companySettings).limit(1);
+    return settings;
+  }
+
+  async createCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings> {
+    const [newSettings] = await db.insert(companySettings)
+      .values(settings)
+      .returning();
+    return newSettings;
+  }
+
+  async updateCompanySettings(id: string, updates: UpdateCompanySettings): Promise<CompanySettings> {
+    const [updated] = await db.update(companySettings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(companySettings.id, id))
+      .returning();
+    return updated;
   }
 }
 
