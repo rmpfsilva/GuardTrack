@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ShieldCheck, Smartphone } from "lucide-react";
 import { InstallPWACard } from "@/components/install-pwa-card";
+import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -46,12 +47,16 @@ export default function AuthPage() {
       {/* Left side - Form */}
       <div className="flex-1 flex items-center justify-center p-8">
         <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1">
-            <div className="flex items-center gap-2 mb-2">
-              <ShieldCheck className="h-8 w-8 text-primary" />
-              <CardTitle className="text-2xl">GuardTrack</CardTitle>
+          <CardHeader className="space-y-4">
+            <div className="flex flex-col items-center gap-4">
+              <img 
+                src={guardTrackLogo} 
+                alt="GuardTrack Logo" 
+                className="w-32 h-auto"
+                data-testid="img-guardtrack-logo"
+              />
             </div>
-            <CardDescription>
+            <CardDescription className="text-center">
               {isLogin ? "Sign in to your account" : "Create your account"}
             </CardDescription>
           </CardHeader>
