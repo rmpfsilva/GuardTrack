@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import NotFound from "@/pages/not-found";
+import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
 import RegisterPage from "@/pages/register-page";
 import GuardDashboard from "@/pages/guard-dashboard";
@@ -21,6 +22,7 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/login" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
@@ -28,8 +30,10 @@ function Router() {
       <ProtectedRoute path="/settings" component={SettingsPage} />
       {user && user.role === 'admin' ? (
         <ProtectedRoute path="/" component={AdminDashboard} />
-      ) : (
+      ) : user ? (
         <ProtectedRoute path="/" component={GuardDashboard} />
+      ) : (
+        <Route path="/" component={LandingPage} />
       )}
       <Route component={NotFound} />
     </Switch>

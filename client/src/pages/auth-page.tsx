@@ -47,18 +47,18 @@ export default function AuthPage() {
       {/* Left side - Form */}
       <div className="flex-1 flex items-center justify-center p-8">
         <Card className="w-full max-w-md">
-          <CardHeader className="space-y-6">
-            <div className="flex flex-col items-center gap-6 py-4">
+          <CardHeader className="space-y-4">
+            <div className="flex flex-col items-center gap-3">
               <img 
                 src={guardTrackLogo} 
                 alt="GuardTrack Logo" 
-                className="w-48 h-auto"
+                className="h-10 w-auto"
                 data-testid="img-guardtrack-logo"
               />
-              <CardDescription className="text-center text-base">
-                {isLogin ? "Sign in to your account" : "Create your account"}
-              </CardDescription>
             </div>
+            <CardDescription className="text-center">
+              {isLogin ? "Sign in to your account" : "Create your account"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
