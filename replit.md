@@ -51,6 +51,17 @@ Future plans include a multi-tenant architecture with `companies` and `company_s
 -   **Gmail**: Integrated for sending transactional emails, specifically for user invitations.
 -   **Web Push**: For sending push notifications to subscribed users. Requires VAPID keys configuration (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT environment variables).
 
+## Deployment Configuration
+
+### Production Deployment
+The application is configured for Replit Autoscale deployment with the following settings:
+
+- **PORT Configuration**: The app automatically uses `process.env.PORT` for Cloud Run compatibility. Cloud Run may set PORT to 8080 or other values - the app adapts automatically.
+- **Error Handling**: Production includes comprehensive error handling to prevent crashes during startup or runtime errors.
+- **Host Binding**: Server binds to `0.0.0.0` to accept external traffic in containerized environments.
+- **Build Process**: Run `npm run build` before deployment to compile TypeScript and bundle frontend assets.
+- **Start Command**: Use `npm run start` for production (serves pre-built static files).
+
 ## Setup Requirements
 
 ### Push Notifications Setup
