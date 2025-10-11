@@ -49,9 +49,199 @@ export default function BillingReports() {
   const [expandedSite, setExpandedSite] = useState<string | null>(null);
 
   const handleGenerateInvoice = async (site: SiteBilling) => {
-    // Placeholder for invoice generation - will be implemented next
-    console.log("Generating invoice for site:", site);
-    alert(`Invoice generation for ${site.siteName} will be implemented shortly`);
+    try {
+      // Fetch company settings
+      const settingsResponse = await fetch('/api/company-settings');
+      if (!settingsResponse.ok) throw new Error('Failed to fetch company settings');
+      const settings = await settingsResponse.json();
+
+      // Generate invoice number
+      const invoiceNumber = `${settings.invoicePrefix || 'INV'}-${site.siteId}-${format(currentWeek, 'yyyyMMdd')}`;
+
+      // Generate invoice HTML
+      const invoiceHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Invoice ${invoiceNumber}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 20px;
+              color: #333;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-bottom: 30px;
+              padding-bottom: 20px;
+              border-bottom: 2px solid #2563eb;
+            }
+            .company-info {
+              flex: 1;
+            }
+            .company-name {
+              font-size: 24px;
+              font-weight: bold;
+              color: #2563eb;
+              margin-bottom: 10px;
+            }
+            .invoice-info {
+              text-align: right;
+            }
+            .invoice-number {
+              font-size: 28px;
+              font-weight: bold;
+              color: #2563eb;
+              margin-bottom: 10px;
+            }
+            .section {
+              margin-bottom: 30px;
+            }
+            .section-title {
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 10px;
+              color: #2563eb;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+            }
+            th {
+              background-color: #2563eb;
+              color: white;
+              padding: 12px;
+              text-align: left;
+              font-weight: 600;
+            }
+            td {
+              padding: 10px 12px;
+              border-bottom: 1px solid #e5e7eb;
+            }
+            .total-row {
+              background-color: #f3f4f6;
+              font-weight: bold;
+            }
+            .amount {
+              text-align: right;
+            }
+            .footer {
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 1px solid #e5e7eb;
+              font-size: 12px;
+              color: #6b7280;
+            }
+            @media print {
+              body {
+                margin: 0;
+                padding: 15px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="company-info">
+              ${settings.logoUrl ? `<img src="${settings.logoUrl}" alt="Company Logo" style="max-width: 150px; margin-bottom: 10px;">` : ''}
+              <div class="company-name">${settings.companyName || 'Company Name'}</div>
+              ${settings.companyAddress ? `<div>${settings.companyAddress.replace(/\n/g, '<br>')}</div>` : ''}
+              ${settings.companyPhone ? `<div>Phone: ${settings.companyPhone}</div>` : ''}
+              ${settings.companyEmail ? `<div>Email: ${settings.companyEmail}</div>` : ''}
+              ${settings.taxId ? `<div>VAT: ${settings.taxId}</div>` : ''}
+              ${settings.registrationNumber ? `<div>Reg No: ${settings.registrationNumber}</div>` : ''}
+            </div>
+            <div class="invoice-info">
+              <div class="invoice-number">INVOICE</div>
+              <div>${invoiceNumber}</div>
+              <div style="margin-top: 10px;">Date: ${format(new Date(), 'dd/MM/yyyy')}</div>
+              <div>Period: ${format(new Date(report!.weekStart), 'dd/MM/yyyy')} - ${format(new Date(report!.weekEnd), 'dd/MM/yyyy')}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Bill To:</div>
+            <div style="font-size: 16px; font-weight: 600;">${site.siteName}</div>
+            <div>${site.siteAddress}</div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Services Provided</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Role</th>
+                  <th>Date</th>
+                  <th>Hours</th>
+                  <th>Rate</th>
+                  <th class="amount">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${site.shifts.map(shift => `
+                  <tr>
+                    <td>${shift.workerName}</td>
+                    <td>${shift.role}</td>
+                    <td>${format(new Date(shift.checkInTime), 'dd/MM/yyyy')}</td>
+                    <td>${shift.hoursWorked.toFixed(1)}</td>
+                    <td>£${shift.hourlyRate.toFixed(2)}/hr</td>
+                    <td class="amount">£${shift.amount.toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+                <tr class="total-row">
+                  <td colspan="3">Total Hours: ${site.totalHours.toFixed(1)}</td>
+                  <td colspan="2">TOTAL AMOUNT</td>
+                  <td class="amount">£${site.totalAmount.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          ${settings.bankName || settings.bankAccountNumber ? `
+            <div class="section">
+              <div class="section-title">Payment Details</div>
+              ${settings.bankName ? `<div>Bank: ${settings.bankName}</div>` : ''}
+              ${settings.bankAccountNumber ? `<div>Account Number: ${settings.bankAccountNumber}</div>` : ''}
+              ${settings.bankSortCode ? `<div>Sort Code: ${settings.bankSortCode}</div>` : ''}
+            </div>
+          ` : ''}
+
+          ${settings.invoiceNotes ? `
+            <div class="section">
+              <div class="section-title">Notes</div>
+              <div>${settings.invoiceNotes.replace(/\n/g, '<br>')}</div>
+            </div>
+          ` : ''}
+
+          <div class="footer">
+            <div>This is a computer-generated invoice.</div>
+            ${settings.companyName ? `<div>${settings.companyName} - All rights reserved.</div>` : ''}
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Open invoice in new window
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(invoiceHTML);
+        printWindow.document.close();
+        printWindow.focus();
+        // Trigger print dialog after a short delay
+        setTimeout(() => {
+          printWindow.print();
+        }, 250);
+      }
+    } catch (error) {
+      console.error('Failed to generate invoice:', error);
+      alert('Failed to generate invoice. Please try again.');
+    }
   };
 
   const { data: report, isLoading } = useQuery<BillingReport>({
