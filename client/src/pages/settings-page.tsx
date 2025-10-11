@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import InvoiceSettings from "@/components/invoice-settings";
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -505,6 +506,9 @@ export default function SettingsPage() {
                 </Form>
               </CardContent>
             </Card>
+
+            {/* Invoice Settings - Admin Only */}
+            {user?.role === 'admin' && <InvoiceSettings />}
           </div>
         </main>
       </div>
