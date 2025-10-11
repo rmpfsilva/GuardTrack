@@ -4,7 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.proforce.guardtrack',
   appName: 'GuardTrack',
   webDir: 'dist/public',
-  bundledWebRuntime: false,
   server: {
     androidScheme: 'https',
     iosScheme: 'https',
