@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { Clock, MapPin, LogOut, LogIn, Calendar, Settings, Coffee } from "lucide-react";
+import { Clock, MapPin, LogOut, LogIn, Calendar, Settings, Coffee, Info } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import proForceLogo from "@assets/download_1760019684165.png";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { InstallPWAButton } from "@/components/install-pwa-button";
 import { NotificationSettingsButton } from "@/components/notification-settings-button";
@@ -436,6 +437,13 @@ export default function GuardDashboard() {
                   </Select>
                 </div>
                 
+                <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <AlertDescription className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>Location Sharing:</strong> When you check in, check out, or manage breaks, your device location will be shared with the company for shift verification and attendance tracking purposes.
+                  </AlertDescription>
+                </Alert>
+
                 <Button 
                   onClick={handleCheckIn}
                   disabled={checkInMutation.isPending || !selectedSiteId}
