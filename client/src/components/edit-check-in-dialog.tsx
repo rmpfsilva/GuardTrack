@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { LocationDisplay } from "@/components/location-display";
 import type { CheckInWithDetails } from "@shared/schema";
 
 interface EditCheckInDialogProps {
@@ -123,10 +124,17 @@ export default function EditCheckInDialog({ checkIn, isOpen, onClose }: EditChec
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="p-3 bg-muted rounded-lg text-sm">
+          <div className="p-3 bg-muted rounded-lg text-sm space-y-2">
             <p><strong>Site:</strong> {checkIn.site.name}</p>
             <p><strong>Role:</strong> {checkIn.workingRole || "guard"}</p>
             <p><strong>Status:</strong> {checkIn.status}</p>
+            <div className="pt-2 border-t border-border">
+              <LocationDisplay 
+                latitude={checkIn.latitude}
+                longitude={checkIn.longitude}
+                className="text-xs"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

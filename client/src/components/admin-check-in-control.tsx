@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { LocationDisplay } from "@/components/location-display";
 import type { User as UserType, Site, CheckInWithDetails } from "@shared/schema";
 
 export default function AdminCheckInControl() {
@@ -234,6 +235,11 @@ export default function AdminCheckInControl() {
                 <MapPin className="h-4 w-4 text-muted-foreground" />
                 <span>{activeCheckIns.find(c => c.id === selectedCheckInId)?.site.name}</span>
               </div>
+              <LocationDisplay 
+                latitude={activeCheckIns.find(c => c.id === selectedCheckInId)?.latitude || null}
+                longitude={activeCheckIns.find(c => c.id === selectedCheckInId)?.longitude || null}
+                className="text-sm"
+              />
               <Badge variant="default" className="bg-chart-2">Active</Badge>
             </div>
           )}

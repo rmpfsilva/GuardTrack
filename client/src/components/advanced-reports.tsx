@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { LocationDisplay } from "@/components/location-display";
 
 export default function AdvancedReports() {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -318,10 +319,13 @@ export default function AdvancedReports() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const csv = detailedReport?.shifts?.map((s: any) => 
-                          `${s.userName},${s.siteName},${s.role},${format(new Date(s.checkInTime), 'yyyy-MM-dd HH:mm')},${s.checkOutTime ? format(new Date(s.checkOutTime), 'yyyy-MM-dd HH:mm') : 'Active'},${s.hoursWorked},${s.amount}`
-                        ).join('\n');
-                        exportToCSV('Employee,Site,Role,Check-In,Check-Out,Hours,Amount\n' + csv, `shifts-${format(weekStart, 'yyyy-MM-dd')}.csv`);
+                        const csv = detailedReport?.shifts?.map((s: any) => {
+                          const location = s.location?.lat && s.location?.lng 
+                            ? `"${s.location.lat}, ${s.location.lng}"` 
+                            : 'No location';
+                          return `${s.userName},${s.siteName},${s.role},${format(new Date(s.checkInTime), 'yyyy-MM-dd HH:mm')},${s.checkOutTime ? format(new Date(s.checkOutTime), 'yyyy-MM-dd HH:mm') : 'Active'},${location},${s.hoursWorked},${s.amount}`;
+                        }).join('\n');
+                        exportToCSV('Employee,Site,Role,Check-In,Check-Out,Location,Hours,Amount\n' + csv, `shifts-${format(weekStart, 'yyyy-MM-dd')}.csv`);
                       }}
                       data-testid="button-export-csv"
                     >
@@ -366,6 +370,7 @@ export default function AdvancedReports() {
                         <TableHead>Role</TableHead>
                         <TableHead>Check-In</TableHead>
                         <TableHead>Check-Out</TableHead>
+                        <TableHead>Location</TableHead>
                         <TableHead className="text-right">Hours</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
                         <TableHead>Status</TableHead>
@@ -382,6 +387,14 @@ export default function AdvancedReports() {
                           <TableCell>{format(new Date(shift.checkInTime), 'MMM d, h:mm a')}</TableCell>
                           <TableCell>
                             {shift.checkOutTime ? format(new Date(shift.checkOutTime), 'MMM d, h:mm a') : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <LocationDisplay 
+                              latitude={shift.location?.lat || null}
+                              longitude={shift.location?.lng || null}
+                              className="text-xs"
+                              showLabel={false}
+                            />
                           </TableCell>
                           <TableCell className="text-right">
                             {shift.hoursWorked.toFixed(1)}

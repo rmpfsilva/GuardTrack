@@ -14,6 +14,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { InstallPWAButton } from "@/components/install-pwa-button";
 import { NotificationSettingsButton } from "@/components/notification-settings-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LocationDisplay } from "@/components/location-display";
 import type { Site, CheckInWithDetails, User } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
@@ -259,32 +260,40 @@ export default function AdminDashboard() {
                       {activeCheckIns.map((checkIn) => (
                         <div 
                           key={checkIn.id}
-                          className="flex items-center justify-between p-3 rounded-lg border border-border"
+                          className="p-3 rounded-lg border border-border space-y-2"
                           data-testid={`active-checkin-${checkIn.id}`}
                         >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={checkIn.user.profileImageUrl || undefined} />
-                              <AvatarFallback>
-                                {checkIn.user.firstName?.[0]}{checkIn.user.lastName?.[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium text-sm">
-                                {checkIn.user.firstName} {checkIn.user.lastName}
-                              </p>
-                              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {checkIn.site.name}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-9 w-9">
+                                <AvatarImage src={checkIn.user.profileImageUrl || undefined} />
+                                <AvatarFallback>
+                                  {checkIn.user.firstName?.[0]}{checkIn.user.lastName?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium text-sm">
+                                  {checkIn.user.firstName} {checkIn.user.lastName}
+                                </p>
+                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {checkIn.site.name}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <Badge variant="default" className="bg-chart-2">Active</Badge>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {format(new Date(checkIn.checkInTime), "HH:mm")}
                               </p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <Badge variant="default" className="bg-chart-2">Active</Badge>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {format(new Date(checkIn.checkInTime), "HH:mm")}
-                            </p>
-                          </div>
+                          <LocationDisplay 
+                            latitude={checkIn.latitude}
+                            longitude={checkIn.longitude}
+                            className="text-xs"
+                            showLabel={false}
+                          />
                         </div>
                       ))}
                     </div>
@@ -309,24 +318,32 @@ export default function AdminDashboard() {
                       {recentActivity.slice(0, 10).map((checkIn) => (
                         <div 
                           key={checkIn.id}
-                          className="flex items-start gap-3 p-3 rounded-lg border border-border text-sm"
+                          className="p-3 rounded-lg border border-border text-sm space-y-2"
                           data-testid={`activity-${checkIn.id}`}
                         >
-                          <div className="flex-1">
-                            <p className="font-medium">
-                              {checkIn.user.firstName} {checkIn.user.lastName}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {checkIn.site.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              In: {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
-                              {checkIn.checkOutTime && ` • Out: ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
-                            </p>
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1">
+                              <p className="font-medium">
+                                {checkIn.user.firstName} {checkIn.user.lastName}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {checkIn.site.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                In: {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
+                                {checkIn.checkOutTime && ` • Out: ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
+                              </p>
+                            </div>
+                            <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'}>
+                              {checkIn.status}
+                            </Badge>
                           </div>
-                          <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'}>
-                            {checkIn.status}
-                          </Badge>
+                          <LocationDisplay 
+                            latitude={checkIn.latitude}
+                            longitude={checkIn.longitude}
+                            className="text-xs"
+                            showLabel={false}
+                          />
                         </div>
                       ))}
                     </div>
@@ -394,48 +411,56 @@ export default function AdminDashboard() {
                     {recentActivity.map((checkIn) => (
                       <div 
                         key={checkIn.id}
-                        className="flex items-center justify-between p-4 rounded-lg border border-border hover-elevate"
+                        className="p-4 rounded-lg border border-border hover-elevate space-y-2"
                         data-testid={`full-activity-${checkIn.id}`}
                       >
-                        <div className="flex items-center gap-4">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={checkIn.user.profileImageUrl || undefined} />
-                            <AvatarFallback>
-                              {checkIn.user.firstName?.[0]}{checkIn.user.lastName?.[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">
-                              {checkIn.user.firstName} {checkIn.user.lastName}
-                            </p>
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {checkIn.site.name}
-                            </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={checkIn.user.profileImageUrl || undefined} />
+                              <AvatarFallback>
+                                {checkIn.user.firstName?.[0]}{checkIn.user.lastName?.[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">
+                                {checkIn.user.firstName} {checkIn.user.lastName}
+                              </p>
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {checkIn.site.name}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <p className="text-sm font-mono">
+                                {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
+                                {checkIn.checkOutTime && ` - ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
+                              </p>
+                              <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'} className="mt-1">
+                                {checkIn.status}
+                              </Badge>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingCheckIn(checkIn);
+                                setIsEditDialogOpen(true);
+                              }}
+                              data-testid={`button-edit-checkin-${checkIn.id}`}
+                            >
+                              Edit
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="text-sm font-mono">
-                              {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
-                              {checkIn.checkOutTime && ` - ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
-                            </p>
-                            <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'} className="mt-1">
-                              {checkIn.status}
-                            </Badge>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setEditingCheckIn(checkIn);
-                              setIsEditDialogOpen(true);
-                            }}
-                            data-testid={`button-edit-checkin-${checkIn.id}`}
-                          >
-                            Edit
-                          </Button>
-                        </div>
+                        <LocationDisplay 
+                          latitude={checkIn.latitude}
+                          longitude={checkIn.longitude}
+                          className="text-xs"
+                          showLabel={false}
+                        />
                       </div>
                     ))}
                   </div>
