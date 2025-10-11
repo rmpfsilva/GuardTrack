@@ -4,7 +4,7 @@ import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Download, Receipt, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Receipt, Clock, FileText } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -47,6 +47,12 @@ interface Shift {
 export default function BillingReports() {
   const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [expandedSite, setExpandedSite] = useState<string | null>(null);
+
+  const handleGenerateInvoice = async (site: SiteBilling) => {
+    // Placeholder for invoice generation - will be implemented next
+    console.log("Generating invoice for site:", site);
+    alert(`Invoice generation for ${site.siteName} will be implemented shortly`);
+  };
 
   const { data: report, isLoading } = useQuery<BillingReport>({
     queryKey: ['/api/admin/billing/weekly', currentWeek.toISOString()],
@@ -174,17 +180,28 @@ export default function BillingReports() {
             {report.sites.map((site) => (
               <Card key={site.siteId} data-testid={`billing-site-${site.siteId}`}>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div>
                       <CardTitle>{site.siteName}</CardTitle>
                       <CardDescription>{site.siteAddress}</CardDescription>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold">£{site.totalAmount.toFixed(2)}</p>
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {site.totalHours.toFixed(1)} hours
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-2xl font-bold">£{site.totalAmount.toFixed(2)}</p>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {site.totalHours.toFixed(1)} hours
+                        </p>
+                      </div>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleGenerateInvoice(site)}
+                        data-testid={`button-generate-invoice-${site.siteId}`}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Invoice
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
