@@ -112,7 +112,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border sticky top-0 bg-background/95 backdrop-blur z-50">
+      <header className="border-b border-border sticky top-0 bg-muted z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={guardTrackLogo} alt="GuardTrack" className="h-8" data-testid="img-company-logo" />
@@ -224,7 +224,7 @@ export default function AdminDashboard() {
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
           <div className="w-full overflow-x-auto pb-2">
-            <TabsList className="inline-flex min-w-min">
+            <TabsList className="inline-flex min-w-min bg-muted">
               <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>
               <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
               <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>

@@ -299,7 +299,7 @@ export default function GuardDashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border sticky top-0 bg-background/95 backdrop-blur z-50">
+      <header className="border-b border-border sticky top-0 bg-muted z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={guardTrackLogo} alt="GuardTrack" className="h-8" data-testid="img-company-logo" />
