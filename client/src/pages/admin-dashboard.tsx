@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { Users, MapPin, Clock, Activity, Calendar, Settings } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import proForceLogo from "@assets/download_1760019684165.png";
+import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -95,7 +95,7 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <img src={proForceLogo} alt="ProForce Security" className="h-16 mx-auto mb-4 animate-pulse" />
+          <img src={guardTrackLogo} alt="GuardTrack" className="h-16 mx-auto mb-4 animate-pulse" />
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
       <header className="border-b border-border sticky top-0 bg-background/95 backdrop-blur z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={proForceLogo} alt="ProForce Security" className="h-8" data-testid="img-company-logo" />
+            <img src={guardTrackLogo} alt="GuardTrack" className="h-8" data-testid="img-company-logo" />
             <Badge variant="secondary" className="text-xs">Admin</Badge>
           </div>
           <div className="flex items-center gap-3">

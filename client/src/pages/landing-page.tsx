@@ -52,15 +52,17 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 bg-gradient-to-br from-primary/10 to-background">
+      <section className="py-24 bg-gradient-to-br from-primary/10 to-background">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center space-y-6">
-            <img 
-              src={guardTrackLogo} 
-              alt="GuardTrack" 
-              className="h-32 w-auto mx-auto"
-              data-testid="img-logo-hero"
-            />
+          <div className="max-w-5xl mx-auto text-center space-y-8">
+            <div className="flex justify-center">
+              <img 
+                src={guardTrackLogo} 
+                alt="GuardTrack" 
+                className="w-64 h-auto"
+                data-testid="img-logo-hero"
+              />
+            </div>
             <h1 className="text-4xl md:text-6xl font-bold">
               Security Guard Management Made Simple
             </h1>
