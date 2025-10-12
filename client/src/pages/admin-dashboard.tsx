@@ -142,12 +142,9 @@ export default function AdminDashboard() {
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => {
-                logoutMutation.mutate(undefined, {
-                  onSuccess: () => {
-                    setLocation('/auth');
-                  }
-                });
+              onClick={async () => {
+                await logoutMutation.mutateAsync();
+                setLocation('/auth');
               }}
               data-testid="button-logout"
             >

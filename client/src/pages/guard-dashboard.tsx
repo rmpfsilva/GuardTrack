@@ -328,12 +328,9 @@ export default function GuardDashboard() {
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => {
-                logoutMutation.mutate(undefined, {
-                  onSuccess: () => {
-                    setLocation('/auth');
-                  }
-                });
+              onClick={async () => {
+                await logoutMutation.mutateAsync();
+                setLocation('/auth');
               }}
               data-testid="button-logout"
             >

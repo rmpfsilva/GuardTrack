@@ -29,6 +29,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware - sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
 
+  // Initialize admin user with proper hashed password if needed
+  try {
+    const adminUser = await storage.getUserByUsername('admin');
+    if (adminUser && adminUser.password === 'password') {
+      // Admin user has plain text password, update it to hashed "admin123"
+      await storage.updateUser(adminUser.id, {
+        password: await hashPassword('admin123')
+      });
+      console.log('Admin password initialized successfully');
+    }
+  } catch (error) {
+    console.error('Error initializing admin user:', error);
+  }
+
   // User management routes (admin only)
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (req, res) => {
     try {
