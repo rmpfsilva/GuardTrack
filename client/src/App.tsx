@@ -28,7 +28,7 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
-      {user && user.role === 'admin' ? (
+      {user && (user.role === 'admin' || user.role === 'super_admin') ? (
         <ProtectedRoute path="/" component={AdminDashboard} />
       ) : user ? (
         <ProtectedRoute path="/" component={GuardDashboard} />
