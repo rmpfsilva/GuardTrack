@@ -153,10 +153,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Note: Users are auto-created on first login via Replit Auth
   // This endpoint is not needed for user creation - removed to prevent ID mismatch issues
 
-  app.patch('/api/admin/users/:id', isAuthenticated, isAdmin, async (req, res) => {
+  app.patch('/api/admin/users/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const user = await storage.updateUser(id, req.body);
+      const updateData = { ...req.body };
+      
+      // Security: Only super admins can update passwords
+      // Check for password key existence (not just truthy value) to prevent empty/null attacks
+      if ('password' in updateData) {
+        if (req.user.role !== 'super_admin') {
+          // Regular admins cannot update password - strip the field
+          delete updateData.password;
+        } else {
+          // Super admin: validate and hash password
+          if (!updateData.password || typeof updateData.password !== 'string' || updateData.password.length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters" });
+          }
+          updateData.password = await hashPassword(updateData.password);
+        }
+      }
+      
+      const user = await storage.updateUser(id, updateData);
       res.json(user);
     } catch (error: any) {
       console.error("Error updating user:", error);
@@ -195,32 +212,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting user:", error);
       res.status(400).json({ message: error.message || "Failed to delete user" });
-    }
-  });
-
-  // Admin password reset for users
-  app.post('/api/admin/users/:id/reset-password', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { newPassword } = req.body;
-
-      if (!newPassword) {
-        return res.status(400).json({ message: "New password is required" });
-      }
-
-      if (newPassword.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
-      }
-
-      // Update user's password
-      await storage.updateUser(id, {
-        password: await hashPassword(newPassword),
-      });
-
-      res.status(200).json({ message: "Password reset successfully" });
-    } catch (error: any) {
-      console.error("Error resetting password:", error);
-      res.status(400).json({ message: error.message || "Failed to reset password" });
     }
   });
 
