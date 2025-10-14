@@ -28,6 +28,7 @@ import AdminLeaveManagement from "@/components/admin-leave-management";
 import AdvancedReports from "@/components/advanced-reports";
 import AdminApprovals from "@/components/admin-approvals";
 import NoticeBoardManagement from "@/components/notice-board-management";
+import CompanyManagement from "@/components/company-management";
 
 interface DashboardStats {
   activeGuards: number;
@@ -234,6 +235,9 @@ export default function AdminDashboard() {
               <TabsTrigger value="leave" data-testid="tab-leave" className="text-xs sm:text-sm whitespace-nowrap">Leave</TabsTrigger>
               <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm whitespace-nowrap">Approvals</TabsTrigger>
               <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>
+              {user.role === 'super_admin' && (
+                <TabsTrigger value="companies" data-testid="tab-companies" className="text-xs sm:text-sm whitespace-nowrap">Companies</TabsTrigger>
+              )}
               <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>
             </TabsList>
           </div>
@@ -393,6 +397,12 @@ export default function AdminDashboard() {
           <TabsContent value="notices">
             <NoticeBoardManagement />
           </TabsContent>
+
+          {user.role === 'super_admin' && (
+            <TabsContent value="companies">
+              <CompanyManagement />
+            </TabsContent>
+          )}
 
           <TabsContent value="activity">
             <Card>
