@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { User } from "@shared/schema";
+import type { User, Company } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -29,6 +30,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function UserManagement() {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
@@ -37,11 +39,50 @@ export default function UserManagement() {
     firstName: "",
     lastName: "",
     role: "guard",
+    companyId: "",
   });
 
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ['/api/admin/users'],
   });
+
+  // Fetch all companies (for super admins only)
+  const { data: companies = [] } = useQuery<Company[]>({
+    queryKey: ['/api/companies'],
+    enabled: currentUser?.role === 'super_admin',
+  });
+  
+  // Fetch individual companies for display (for regular admins)
+  // Memoize user company IDs to prevent re-renders
+  const userCompanyIds = useMemo(
+    () => [...new Set(users.map(u => u.companyId).filter(Boolean))] as string[],
+    [users]
+  );
+  
+  const { data: userCompanies = [] } = useQuery<Company[]>({
+    queryKey: ['/api/user-companies', ...userCompanyIds],
+    queryFn: async () => {
+      const results = await Promise.all(
+        userCompanyIds.map(async (id) => {
+          const res = await fetch(`/api/companies/${id}`, { credentials: 'include' });
+          if (!res.ok) return null;
+          return res.json();
+        })
+      );
+      return results.filter(Boolean) as Company[];
+    },
+    enabled: currentUser?.role !== 'super_admin' && userCompanyIds.length > 0,
+  });
+  
+  // Combine company lists for display
+  const allCompanies = currentUser?.role === 'super_admin' ? companies : userCompanies;
+  
+  // Helper to get company name by ID
+  const getCompanyName = (companyId: string | null) => {
+    if (!companyId) return null;
+    const company = allCompanies.find(c => c.id === companyId);
+    return company?.name || null;
+  };
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<typeof formData> }) => {
@@ -97,6 +138,7 @@ export default function UserManagement() {
       firstName: "",
       lastName: "",
       role: "guard",
+      companyId: "",
     });
   };
 
@@ -108,20 +150,29 @@ export default function UserManagement() {
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       role: user.role,
+      companyId: user.companyId || "",
     });
     setIsEditDialogOpen(true);
   };
 
   const handleUpdate = () => {
     if (!selectedUser) return;
+    const updateData: any = {
+      email: formData.email,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      role: formData.role,
+    };
+    
+    // Only super admins can change company assignment
+    if (currentUser?.role === 'super_admin') {
+      // Allow clearing companyId by setting to null if empty string
+      updateData.companyId = formData.companyId || null;
+    }
+    
     updateUserMutation.mutate({
       id: selectedUser.id,
-      data: {
-        email: formData.email,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        role: formData.role,
-      },
+      data: updateData,
     });
   };
 
@@ -171,19 +222,24 @@ export default function UserManagement() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} data-testid={`badge-role-${user.id}`}>
-                  {user.role === 'admin' ? (
+                <Badge variant={user.role === 'admin' || user.role === 'super_admin' ? 'default' : 'secondary'} data-testid={`badge-role-${user.id}`}>
+                  {user.role === 'admin' || user.role === 'super_admin' ? (
                     <>
                       <Shield className="mr-1 h-3 w-3" />
-                      Admin
+                      {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
                     </>
                   ) : (
                     <>
                       <UserIcon className="mr-1 h-3 w-3" />
-                      Guard
+                      {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                     </>
                   )}
                 </Badge>
+                {getCompanyName(user.companyId) && (
+                  <Badge variant="outline" className="text-xs" data-testid={`badge-company-${user.id}`}>
+                    {getCompanyName(user.companyId)}
+                  </Badge>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -259,10 +315,33 @@ export default function UserManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="guard">Guard</SelectItem>
+                  <SelectItem value="steward">Steward</SelectItem>
+                  <SelectItem value="supervisor">Supervisor</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
+                  {currentUser?.role === 'super_admin' && (
+                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
+            {currentUser?.role === 'super_admin' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-company">Company</Label>
+                <Select value={formData.companyId} onValueChange={(value) => setFormData({ ...formData, companyId: value })}>
+                  <SelectTrigger id="edit-company" data-testid="select-edit-user-company">
+                    <SelectValue placeholder="Select company (or leave empty)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No Company</SelectItem>
+                    {companies.map((company) => (
+                      <SelectItem key={company.id} value={company.id}>
+                        {company.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button 

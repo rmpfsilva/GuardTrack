@@ -15,7 +15,7 @@ import { InstallPWAButton } from "@/components/install-pwa-button";
 import { NotificationSettingsButton } from "@/components/notification-settings-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LocationDisplay } from "@/components/location-display";
-import type { Site, CheckInWithDetails, User } from "@shared/schema";
+import type { Site, CheckInWithDetails, User, Company } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
 import ScheduleManagement from "@/components/schedule-management";
@@ -92,6 +92,20 @@ export default function AdminDashboard() {
     enabled: !!user && isAdmin,
   });
 
+  // Fetch user's company information (regular admins only)
+  const { data: userCompany } = useQuery<Company>({
+    queryKey: ['/api/companies', user?.companyId],
+    queryFn: async () => {
+      if (!user?.companyId) throw new Error('No company ID');
+      const res = await fetch(`/api/companies/${user.companyId}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch company');
+      return res.json();
+    },
+    enabled: !!user?.companyId && isAdmin && user?.role !== 'super_admin',
+  });
+
   if (authLoading || !user || !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -117,7 +131,20 @@ export default function AdminDashboard() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={guardTrackLogo} alt="GuardTrack" className="h-8" data-testid="img-company-logo" />
-            <Badge variant="secondary" className="text-xs">Admin</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+              </Badge>
+              {user.role === 'super_admin' ? (
+                <Badge variant="outline" className="text-xs" data-testid="badge-platform-admin">
+                  Platform Admin
+                </Badge>
+              ) : userCompany ? (
+                <Badge variant="outline" className="text-xs" data-testid="badge-company-name">
+                  {userCompany.name}
+                </Badge>
+              ) : null}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <InstallPWAButton variant="ghost" size="sm" className="hidden sm:flex" />
