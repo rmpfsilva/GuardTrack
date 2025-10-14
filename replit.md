@@ -31,7 +31,7 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Leave Management**: Includes a system for requesting, approving, and canceling leave, with a comprehensive yearly calendar view for planning.
 - **Mobile Responsiveness**: Fully responsive design across all devices, including Progressive Web App (PWA) functionality for mobile installation. Install prompts available on login page and in authenticated dashboards for easy mobile app installation.
 - **Email Invitation System**: Allows admins to invite new users via email using Gmail integration.
-- **Password Management**: Features for users to change their own password and a secure token-based password recovery flow. Admins can also reset user passwords.
+- **Password Management**: Features for users to change their own password and a secure token-based password recovery flow. Super admins can reset passwords for any user via Settings page with comprehensive security validation.
 - **Notice Board**: Admins can post overtime opportunities and events for guards/stewards to apply to. Includes automatic push notifications to all subscribed users when new notices are posted.
 - **Push Notifications**: Web push notification system for real-time alerts about new opportunities. Guards can subscribe/unsubscribe via browser notifications. Uses service worker for offline notification delivery.
 - **Invoice System**: Comprehensive invoice generation with admin-configurable company settings. Admins can set company name, address, contact details, VAT/Tax ID, bank details, and custom invoice notes. Each site in billing reports has an "Invoice" button that generates professional, printable invoices with company branding and detailed billing breakdowns.
@@ -96,6 +96,7 @@ To enable push notifications, you need to configure VAPID keys:
 5. Admin can see applicant counts and manage applications
 
 ## Recent Updates (October 2025)
+- **Super Admin Password Reset (October 14, 2025)**: Added secure password reset functionality for super admins via Settings page. Super admins can reset any user's password with proper validation (min 6 characters) and hashing. Regular admins cannot reset passwords through any endpoint - password field is stripped from generic update requests. Professional credentials section is hidden from super admins in Settings.
 - **Multi-Tenant Architecture (October 14, 2025)**: Implemented complete multi-tenant support with companies table and company-scoped data isolation. Added companies CRUD API endpoints, super_admin role for platform management, and company foreign keys to users, sites, invitations, and company_settings. Each company operates independently with its own users, sites, and billing settings. Default company created for existing data migration.
 - **Session Persistence**: Configured persistent sessions with 30-day maxAge, secure cookies with sameSite='none' for PWA compatibility - users now stay logged in when closing/reopening the mobile app
 - **Push Notifications**: VAPID keys configured and working. System auto-prepends "mailto:" to VAPID_SUBJECT if plain email is entered
