@@ -27,16 +27,32 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// Companies table - multi-tenant support
+export const companies = pgTable("companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  address: text("address"),
+  email: varchar("email"),
+  phone: varchar("phone"),
+  taxId: varchar("tax_id"), // VAT/Tax ID number
+  registrationNumber: varchar("registration_number"),
+  logoUrl: text("logo_url"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // User storage table (username/password authentication)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: 'cascade' }), // Multi-tenant: user belongs to a company
   username: varchar("username").unique().notNull(),
   password: varchar("password").notNull(),
   email: varchar("email"),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  role: varchar("role").notNull().default('guard'), // 'guard' | 'steward' | 'supervisor' | 'admin'
+  role: varchar("role").notNull().default('guard'), // 'guard' | 'steward' | 'supervisor' | 'admin' | 'super_admin'
   siaNumber: varchar("sia_number"),
   siaExpiryDate: timestamp("sia_expiry_date"),
   stewardId: varchar("steward_id"),
@@ -48,6 +64,7 @@ export const users = pgTable("users", {
 // Sites table - locations where guards can check in
 export const sites = pgTable("sites", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Multi-tenant: site belongs to a company
   name: varchar("name", { length: 255 }).notNull(),
   address: text("address").notNull(),
   latitude: text("latitude"),
@@ -129,6 +146,7 @@ export const scheduledShifts = pgTable("scheduled_shifts", {
 // Invitations table - email invites for new users
 export const invitations = pgTable("invitations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Multi-tenant: invitation is for a specific company
   email: varchar("email").notNull().unique(),
   token: varchar("token").notNull().unique(),
   role: varchar("role").notNull().default('guard'), // Initial role: 'guard' | 'steward' | 'supervisor' | 'admin'
@@ -216,6 +234,7 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 // Company settings table - for invoice and company information
 export const companySettings = pgTable("company_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().unique().references(() => companies.id, { onDelete: 'cascade' }), // Multi-tenant: one settings record per company
   companyName: varchar("company_name", { length: 255 }).notNull().default('ProForce Security & Events Ltd'),
   companyAddress: text("company_address"),
   companyEmail: varchar("company_email"),
@@ -233,7 +252,18 @@ export const companySettings = pgTable("company_settings", {
 });
 
 // Define relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const companiesRelations = relations(companies, ({ many }) => ({
+  users: many(users),
+  sites: many(sites),
+  invitations: many(invitations),
+  companySettings: many(companySettings),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [users.companyId],
+    references: [companies.id],
+  }),
   checkIns: many(checkIns),
   breaks: many(breaks),
   scheduledShifts: many(scheduledShifts),
@@ -243,7 +273,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   pushSubscriptions: many(pushSubscriptions),
 }));
 
-export const sitesRelations = relations(sites, ({ many }) => ({
+export const sitesRelations = relations(sites, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [sites.companyId],
+    references: [companies.id],
+  }),
   checkIns: many(checkIns),
   scheduledShifts: many(scheduledShifts),
   notices: many(notices),
@@ -348,7 +382,37 @@ export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one })
   }),
 }));
 
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  company: one(companies, {
+    fields: [invitations.companyId],
+    references: [companies.id],
+  }),
+  inviter: one(users, {
+    fields: [invitations.invitedBy],
+    references: [users.id],
+  }),
+}));
+
+export const companySettingsRelations = relations(companySettings, ({ one }) => ({
+  company: one(companies, {
+    fields: [companySettings.companyId],
+    references: [companies.id],
+  }),
+}));
+
 // Zod schemas for validation
+export const insertCompanySchema = createInsertSchema(companies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateCompanySchema = createInsertSchema(companies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -570,6 +634,10 @@ export const updateCompanySettingsSchema = createInsertSchema(companySettings).o
 }).partial();
 
 // TypeScript types
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type UpdateCompany = z.infer<typeof updateCompanySchema>;
+
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
