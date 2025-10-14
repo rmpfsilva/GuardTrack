@@ -1,5 +1,6 @@
 // Referenced from blueprint:javascript_log_in_with_replit, blueprint:javascript_database, and blueprint:javascript_auth_all_persistance
 import {
+  companies,
   users,
   sites,
   checkIns,
@@ -12,6 +13,9 @@ import {
   noticeApplications,
   pushSubscriptions,
   companySettings,
+  type Company,
+  type InsertCompany,
+  type UpdateCompany,
   type User,
   type UpsertUser,
   type InsertUser,
@@ -57,6 +61,13 @@ import session from "express-session";
 export interface IStorage {
   // Session store (required for authentication)
   sessionStore: session.Store;
+
+  // Company operations (multi-tenant support)
+  getAllCompanies(): Promise<Company[]>;
+  getCompany(id: string): Promise<Company | undefined>;
+  createCompany(company: InsertCompany): Promise<Company>;
+  updateCompany(id: string, company: Partial<UpdateCompany>): Promise<Company>;
+  deleteCompany(id: string): Promise<void>;
 
   // User operations (required for authentication)
   getUser(id: string): Promise<User | undefined>;
@@ -186,6 +197,34 @@ export class DatabaseStorage implements IStorage {
     // Using in-memory session store (sessions won't persist across server restarts)
     // This allows username/password authentication without Replit accounts
     this.sessionStore = new session.MemoryStore();
+  }
+
+  // Company operations
+  async getAllCompanies(): Promise<Company[]> {
+    return await db.select().from(companies).orderBy(companies.name);
+  }
+
+  async getCompany(id: string): Promise<Company | undefined> {
+    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    return company;
+  }
+
+  async createCompany(companyData: InsertCompany): Promise<Company> {
+    const [company] = await db.insert(companies).values(companyData).returning();
+    return company;
+  }
+
+  async updateCompany(id: string, companyData: Partial<UpdateCompany>): Promise<Company> {
+    const [company] = await db
+      .update(companies)
+      .set({ ...companyData, updatedAt: new Date() })
+      .where(eq(companies.id, id))
+      .returning();
+    return company;
+  }
+
+  async deleteCompany(id: string): Promise<void> {
+    await db.delete(companies).where(eq(companies.id, id));
   }
 
   // User operations
