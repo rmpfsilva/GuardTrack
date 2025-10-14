@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,13 +8,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { ArrowLeft, Lock, IdCard, Calendar } from "lucide-react";
+import { ArrowLeft, Lock, IdCard, Calendar, UserCog } from "lucide-react";
+import type { User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import InvoiceSettings from "@/components/invoice-settings";
 
@@ -40,9 +42,19 @@ const credentialsSchema = z.object({
   stewardIdExpiryDate: z.coerce.date().optional().nullable(),
 });
 
+const resetUserPasswordSchema = z.object({
+  userId: z.string().min(1, "Please select a user"),
+  newPassword: z.string().min(6, "New password must be at least 6 characters"),
+  confirmPassword: z.string().min(1, "Please confirm the new password"),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
 type ProfileForm = z.infer<typeof profileSchema>;
 type ChangePasswordForm = z.infer<typeof changePasswordSchema>;
 type CredentialsForm = z.infer<typeof credentialsSchema>;
+type ResetUserPasswordForm = z.infer<typeof resetUserPasswordSchema>;
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -75,6 +87,21 @@ export default function SettingsPage() {
       stewardId: "",
       stewardIdExpiryDate: undefined,
     },
+  });
+
+  const resetUserPasswordForm = useForm<ResetUserPasswordForm>({
+    resolver: zodResolver(resetUserPasswordSchema),
+    defaultValues: {
+      userId: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
+
+  // Fetch all users for super admin password reset
+  const { data: allUsers = [] } = useQuery<User[]>({
+    queryKey: ['/api/admin/users'],
+    enabled: user?.role === 'super_admin',
   });
 
   // Reset profile form when user data loads
@@ -173,6 +200,35 @@ export default function SettingsPage() {
 
   const onCredentialsSubmit = (data: CredentialsForm) => {
     updateCredentialsMutation.mutate(data);
+  };
+
+  const resetUserPasswordMutation = useMutation({
+    mutationFn: async (data: { userId: string; newPassword: string }) => {
+      return await apiRequest("PATCH", `/api/admin/users/${data.userId}/reset-password`, { 
+        newPassword: data.newPassword 
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "User password reset successfully",
+      });
+      resetUserPasswordForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onResetUserPasswordSubmit = (data: ResetUserPasswordForm) => {
+    resetUserPasswordMutation.mutate({
+      userId: data.userId,
+      newPassword: data.newPassword,
+    });
   };
 
   return (
@@ -369,16 +425,110 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <IdCard className="h-5 w-5" />
-                  Professional Credentials
-                </CardTitle>
-                <CardDescription>
-                  Manage your SIA license and Steward ID information
-                </CardDescription>
-              </CardHeader>
+            {/* Reset User Password Section - Super Admin Only */}
+            {user?.role === 'super_admin' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <UserCog className="h-5 w-5" />
+                    Reset User Password
+                  </CardTitle>
+                  <CardDescription>
+                    Reset password for any user in the system
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...resetUserPasswordForm}>
+                    <form onSubmit={resetUserPasswordForm.handleSubmit(onResetUserPasswordSubmit)} className="space-y-4">
+                      <FormField
+                        control={resetUserPasswordForm.control}
+                        name="userId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Select User</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-user-for-reset">
+                                  <SelectValue placeholder="Choose a user..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {allUsers.map((u) => (
+                                  <SelectItem key={u.id} value={u.id}>
+                                    {u.firstName} {u.lastName} ({u.username}) - {u.role}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={resetUserPasswordForm.control}
+                        name="newPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>New Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="password"
+                                placeholder="Enter new password (min 6 characters)"
+                                {...field}
+                                data-testid="input-reset-password"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={resetUserPasswordForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirm New Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="password"
+                                placeholder="Confirm new password"
+                                {...field}
+                                data-testid="input-reset-confirm-password"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={resetUserPasswordMutation.isPending}
+                        data-testid="button-reset-user-password"
+                      >
+                        {resetUserPasswordMutation.isPending ? "Resetting Password..." : "Reset User Password"}
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Professional Credentials - Hidden for Super Admin */}
+            {user?.role !== 'super_admin' && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <IdCard className="h-5 w-5" />
+                    Professional Credentials
+                  </CardTitle>
+                  <CardDescription>
+                    Manage your SIA license and Steward ID information
+                  </CardDescription>
+                </CardHeader>
               <CardContent>
                 <Form {...credentialsForm}>
                   <form onSubmit={credentialsForm.handleSubmit(onCredentialsSubmit)} className="space-y-4">
@@ -506,9 +656,10 @@ export default function SettingsPage() {
                 </Form>
               </CardContent>
             </Card>
+            )}
 
-            {/* Invoice Settings - Admin Only */}
-            {user?.role === 'admin' && <InvoiceSettings />}
+            {/* Invoice Settings - Admin and Super Admin */}
+            {(user?.role === 'admin' || user?.role === 'super_admin') && <InvoiceSettings />}
           </div>
         </main>
       </div>

@@ -164,6 +164,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Reset user password (Super Admin only)
+  app.patch('/api/admin/users/:id/reset-password', isAuthenticated, isSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { newPassword } = req.body;
+
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ message: "New password must be at least 6 characters" });
+      }
+
+      // Hash the new password
+      const hashedPassword = await hashPassword(newPassword);
+      
+      // Update user's password
+      await storage.updateUser(id, { password: hashedPassword });
+      
+      res.json({ message: "Password reset successfully" });
+    } catch (error: any) {
+      console.error("Error resetting user password:", error);
+      res.status(400).json({ message: error.message || "Failed to reset password" });
+    }
+  });
+
   app.delete('/api/admin/users/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { id } = req.params;
