@@ -18,7 +18,7 @@ The system employs a professional security-themed design with a blue color schem
 GuardTrack is a full-stack web application. The frontend uses React with TypeScript, Wouter for routing, TanStack Query for state management, and Shadcn UI with Tailwind CSS for UI components. It integrates the Browser Geolocation API. The backend is built with Node.js and Express, utilizing PostgreSQL (via Neon) with Drizzle ORM. Authentication uses Passport.js (local strategy) with persistent session cookies (30-day maxAge, secure + sameSite='none' for PWA compatibility) and scrypt for password hashing. Google Sheets API is integrated for data backup.
 
 ### Feature Specifications
-- **Authentication & User Management**: Username/password authentication with role-based access (Guard, Steward, Supervisor, Admin). New registrations default to 'guard' role.
+- **Authentication & User Management**: Username/password authentication with role-based access (Guard, Steward, Supervisor, Admin, Super Admin). New registrations default to 'guard' role. Users belong to companies (multi-tenant), with super admins managing company creation and deletion.
 - **Shift Management**: Admins schedule shifts via a calendar, while guards view assigned schedules.
 - **Check-in/Check-out**: Guards perform geolocation-verified check-ins/check-outs from any device, selecting their working role. Admins can manually override check-ins/check-outs.
 - **Break Tracking**: Comprehensive tracking of unpaid breaks with geolocation and timestamps. All shifts have mandatory 1-hour baseline break deduction. Extended breaks (>1 hour) require guard to provide reason and admin approval to deduct additional time.
@@ -38,11 +38,13 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Native Mobile Apps**: Full support for Android and iOS native apps using Capacitor. The same codebase powers the web app, Android app (Google Play Store), and iOS app (Apple App Store). Includes all features with native device integration for geolocation, push notifications, and offline support.
 
 ### System Design Choices
-The architecture ensures a clear separation of concerns between frontend and backend. The database schema includes tables for `users`, `sites`, `check_ins`, `scheduled_shifts`, `invitations`, `sessions`, `breaks` (with approval fields: reason, approvalStatus, reviewedBy, reviewedAt), `overtime_requests` (tracks overtime >30 min requiring approval), `leave_requests`, `password_reset_tokens`, `notices` (overtime opportunities and events posted by admins), `notice_applications` (guards' applications to notices with status tracking), `push_subscriptions` (web push notification endpoints for users), and `company_settings` (stores organization-wide invoice configuration including company name, address, contact details, VAT/Tax ID, bank details, and invoice customization). 
+The architecture ensures a clear separation of concerns between frontend and backend. The database schema includes tables for `companies` (multi-tenant support), `users`, `sites`, `check_ins`, `scheduled_shifts`, `invitations`, `sessions`, `breaks` (with approval fields: reason, approvalStatus, reviewedBy, reviewedAt), `overtime_requests` (tracks overtime >30 min requiring approval), `leave_requests`, `password_reset_tokens`, `notices` (overtime opportunities and events posted by admins), `notice_applications` (guards' applications to notices with status tracking), `push_subscriptions` (web push notification endpoints for users), and `company_settings` (stores company-specific invoice configuration including company name, address, contact details, VAT/Tax ID, bank details, and invoice customization). 
+
+**Multi-Tenant Architecture**: The system supports multiple companies with complete data isolation. Each company has its own users, sites, and settings. The `companies` table includes: id, name, address, email, phone, taxId, registrationNumber, logoUrl, isActive. Users are associated with companies via `companyId` foreign key. Sites, invitations, and company settings are also company-scoped. User roles include: guard, steward, supervisor, admin (company-level admin), and super_admin (platform-level admin who can manage companies).
 
 **Hours Calculation Logic**: All shifts receive mandatory 1-hour baseline break deduction. Extended breaks (>1 hour) require approval - if approved, full break duration is deducted; if rejected/pending, only baseline deduction applies. Overtime (>30 min past scheduled shift) requires approval - if approved, overtime hours beyond 30 min buffer are added to paid hours; if rejected/pending, payable hours are capped at scheduled end + 30 min.
 
-Future plans include a multi-tenant architecture with `companies` and `company_subscriptions` tables.
+Future enhancements planned include subscription-based billing with `company_subscriptions` table for SaaS monetization.
 
 ## External Dependencies
 -   **PostgreSQL**: Primary database, hosted via Neon.
@@ -94,6 +96,7 @@ To enable push notifications, you need to configure VAPID keys:
 5. Admin can see applicant counts and manage applications
 
 ## Recent Updates (October 2025)
+- **Multi-Tenant Architecture (October 14, 2025)**: Implemented complete multi-tenant support with companies table and company-scoped data isolation. Added companies CRUD API endpoints, super_admin role for platform management, and company foreign keys to users, sites, invitations, and company_settings. Each company operates independently with its own users, sites, and billing settings. Default company created for existing data migration.
 - **Session Persistence**: Configured persistent sessions with 30-day maxAge, secure cookies with sameSite='none' for PWA compatibility - users now stay logged in when closing/reopening the mobile app
 - **Push Notifications**: VAPID keys configured and working. System auto-prepends "mailto:" to VAPID_SUBJECT if plain email is entered
 - **Duplicate Prevention**: Notice applications now prevent duplicate submissions - backend validates and returns 409 status code, frontend shows "Already Applied" status

@@ -5,6 +5,7 @@ import {
   sites,
   checkIns,
   breaks,
+  overtimeRequests,
   scheduledShifts,
   invitations,
   passwordResetTokens,

@@ -2,8 +2,11 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
 import { setupAuth, hashPassword } from "./auth";
-import { insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema } from "@shared/schema";
+import { users, breaks, checkIns, sites } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
+import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 import { sendInvitationEmail } from './emailService';
@@ -17,12 +20,20 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
   res.status(401).json({ message: "Unauthorized" });
 }
 
-// Middleware to check if user is admin
+// Middleware to check if user is admin or super admin
 function isAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.user && (req.user as any).role === 'admin') {
+  if (req.user && ((req.user as any).role === 'admin' || (req.user as any).role === 'super_admin')) {
     return next();
   }
   res.status(403).json({ message: "Forbidden - Admin access required" });
+}
+
+// Middleware to check if user is super admin (can manage companies)
+function isSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.user && (req.user as any).role === 'super_admin') {
+    return next();
+  }
+  res.status(403).json({ message: "Forbidden - Super Admin access required" });
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -43,10 +54,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error('Error initializing admin user:', error);
   }
 
-  // User management routes (admin only)
-  app.get('/api/admin/users', isAuthenticated, isAdmin, async (req, res) => {
+  // Company management routes
+  app.get('/api/companies', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const users = await storage.getAllUsers();
+      const user = req.user;
+      
+      // Super admins can see all companies, regular admins only see their own
+      if (user.role === 'super_admin') {
+        const companies = await storage.getAllCompanies();
+        res.json(companies);
+      } else {
+        // Regular admin - return only their company
+        if (!user.companyId) {
+          return res.status(400).json({ message: "User not assigned to a company" });
+        }
+        const company = await storage.getCompany(user.companyId);
+        res.json(company ? [company] : []);
+      }
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
+  app.get('/api/companies/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+      
+      // Super admins can access any company, regular admins only their own
+      if (user.role !== 'super_admin' && user.companyId !== id) {
+        return res.status(403).json({ message: "Forbidden - Can only access your own company" });
+      }
+      
+      const company = await storage.getCompany(id);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      res.json(company);
+    } catch (error) {
+      console.error("Error fetching company:", error);
+      res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
+  app.post('/api/companies', isAuthenticated, isSuperAdmin, async (req, res) => {
+    try {
+      const validatedData = insertCompanySchema.parse(req.body);
+      const company = await storage.createCompany(validatedData);
+      res.status(201).json(company);
+    } catch (error: any) {
+      console.error("Error creating company:", error);
+      res.status(400).json({ message: error.message || "Failed to create company" });
+    }
+  });
+
+  app.patch('/api/companies/:id', isAuthenticated, isSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = updateCompanySchema.parse(req.body);
+      const company = await storage.updateCompany(id, validatedData);
+      res.json(company);
+    } catch (error: any) {
+      console.error("Error updating company:", error);
+      res.status(400).json({ message: error.message || "Failed to update company" });
+    }
+  });
+
+  app.delete('/api/companies/:id', isAuthenticated, isSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteCompany(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting company:", error);
+      res.status(400).json({ message: error.message || "Failed to delete company" });
+    }
+  });
+
+  // User management routes (admin only)
+  app.get('/api/admin/users', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      let users = await storage.getAllUsers();
+      
+      // Regular admins only see users from their company
+      if (user.role !== 'super_admin' && user.companyId) {
+        users = users.filter(u => u.companyId === user.companyId);
+      }
+      
       res.json(users);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -106,9 +202,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sites routes
-  app.get('/api/sites', isAuthenticated, async (req, res) => {
+  app.get('/api/sites', isAuthenticated, async (req: any, res) => {
     try {
-      const sites = await storage.getAllSites();
+      const user = req.user;
+      let sites = await storage.getAllSites();
+      
+      // Filter sites by company (all users including guards only see their company's sites)
+      if (user.companyId) {
+        sites = sites.filter(s => s.companyId === user.companyId);
+      }
+      
       res.json(sites);
     } catch (error) {
       console.error("Error fetching sites:", error);
@@ -116,9 +219,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/sites', isAuthenticated, isAdmin, async (req, res) => {
+  app.post('/api/sites', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const user = req.user;
       const validatedData = insertSiteSchema.parse(req.body);
+      
+      // Set companyId from user's company (admins can only create sites in their company)
+      if (user.role !== 'super_admin') {
+        if (!user.companyId) {
+          return res.status(400).json({ message: "User not assigned to a company" });
+        }
+        validatedData.companyId = user.companyId;
+      } else if (!validatedData.companyId) {
+        // Super admin must specify companyId
+        return res.status(400).json({ message: "Company ID is required" });
+      }
+      
       const site = await storage.createSite(validatedData);
       res.status(201).json(site);
     } catch (error: any) {
@@ -1354,9 +1470,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       let settings = await storage.getCompanySettings();
       
-      // If no settings exist, create default ones
+      // If no settings exist, create default ones with the default company
       if (!settings) {
         settings = await storage.createCompanySettings({
+          companyId: '00000000-0000-0000-0000-000000000000', // Default company
           companyName: 'ProForce Security & Events Ltd',
         });
       }
