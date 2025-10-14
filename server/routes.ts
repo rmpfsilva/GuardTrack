@@ -505,19 +505,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin routes
-  app.get('/api/admin/stats', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/stats', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const user = req.user;
       const activeCheckIns = await storage.getAllActiveCheckIns();
       const allSites = await storage.getAllSites();
       const allGuards = await storage.getUsersByRole('guard');
       const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
       const weeklyHours = await storage.getAllUsersWeeklyHours(weekStart);
 
+      // Filter by company for regular admins
+      let filteredCheckIns = activeCheckIns;
+      let filteredSites = allSites;
+      let filteredGuards = allGuards;
+      let filteredWeeklyHours = weeklyHours;
+      
+      if (user.role !== 'super_admin' && user.companyId) {
+        filteredCheckIns = activeCheckIns.filter(ci => ci.user.companyId === user.companyId);
+        filteredSites = allSites.filter(s => s.companyId === user.companyId);
+        filteredGuards = allGuards.filter(g => g.companyId === user.companyId);
+        filteredWeeklyHours = weeklyHours.filter(wh => wh.user.companyId === user.companyId);
+      }
+
       const stats = {
-        activeGuards: activeCheckIns.length,
-        totalSites: allSites.filter(s => s.isActive).length,
-        totalGuards: allGuards.length,
-        weeklyHours,
+        activeGuards: filteredCheckIns.length,
+        totalSites: filteredSites.filter(s => s.isActive).length,
+        totalGuards: filteredGuards.length,
+        weeklyHours: filteredWeeklyHours,
       };
 
       res.json(stats);
@@ -527,29 +541,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/active-check-ins', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/active-check-ins', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const user = req.user;
       const activeCheckIns = await storage.getAllActiveCheckIns();
-      res.json(activeCheckIns);
+      
+      // Filter by company for regular admins
+      let filteredCheckIns = activeCheckIns;
+      if (user.role !== 'super_admin' && user.companyId) {
+        filteredCheckIns = activeCheckIns.filter(ci => ci.user.companyId === user.companyId);
+      }
+      
+      res.json(filteredCheckIns);
     } catch (error) {
       console.error("Error fetching active check-ins:", error);
       res.status(500).json({ message: "Failed to fetch active check-ins" });
     }
   });
 
-  app.get('/api/admin/recent-activity', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/recent-activity', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const user = req.user;
       const recentActivity = await storage.getAllRecentActivity(50);
-      res.json(recentActivity);
+      
+      // Filter by company for regular admins
+      let filteredActivity = recentActivity;
+      if (user.role !== 'super_admin' && user.companyId) {
+        filteredActivity = recentActivity.filter(activity => activity.user.companyId === user.companyId);
+      }
+      
+      res.json(filteredActivity);
     } catch (error) {
       console.error("Error fetching recent activity:", error);
       res.status(500).json({ message: "Failed to fetch recent activity" });
     }
   });
 
-  app.get('/api/admin/guards', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/guards', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const guards = await storage.getUsersByRole('guard');
+      const user = req.user;
+      const allGuards = await storage.getUsersByRole('guard');
+      
+      // Filter by company for regular admins
+      let guards = allGuards;
+      if (user.role !== 'super_admin' && user.companyId) {
+        guards = allGuards.filter(g => g.companyId === user.companyId);
+      }
+      
       console.log(`[DEBUG] Found ${guards.length} guards from database`);
       
       if (guards.length === 0) {
@@ -621,12 +659,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin manual check-in/out routes
-  app.post('/api/admin/manual-check-in', isAuthenticated, isAdmin, async (req, res) => {
+  app.post('/api/admin/manual-check-in', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const admin = req.user;
       const { userId, siteId, workingRole } = req.body;
       
       if (!userId || !siteId || !workingRole) {
         return res.status(400).json({ message: "userId, siteId, and workingRole are required" });
+      }
+
+      // For regular admins, validate user and site belong to their company
+      if (admin.role !== 'super_admin') {
+        const user = await storage.getUserById(userId);
+        const site = await storage.getSiteById(siteId);
+        
+        if (!user || user.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot check in users from other companies" });
+        }
+        if (!site || site.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot check in to sites from other companies" });
+        }
       }
 
       // Check if user already has an active check-in
@@ -661,8 +713,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/manual-check-out', isAuthenticated, isAdmin, async (req, res) => {
+  app.post('/api/admin/manual-check-out', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const admin = req.user;
       const { checkInId } = req.body;
       
       if (!checkInId) {
@@ -675,6 +728,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!activeCheckIn) {
         return res.status(404).json({ message: "Active check-in not found" });
+      }
+
+      // For regular admins, validate check-in belongs to their company
+      if (admin.role !== 'super_admin' && activeCheckIn.user.companyId !== admin.companyId) {
+        return res.status(403).json({ message: "Cannot check out users from other companies" });
       }
 
       const checkIn = await storage.checkOut(checkInId);
@@ -736,11 +794,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/scheduled-shifts', isAuthenticated, async (req: any, res) => {
     try {
       const user = req.user;
-      const isAdminUser = user.role === 'admin';
+      const isAdminUser = user.role === 'admin' || user.role === 'super_admin';
       
       if (isAdminUser) {
         // Admin can see all shifts
-        const shifts = await storage.getAllScheduledShifts();
+        let shifts = await storage.getAllScheduledShifts();
+        
+        // Filter by company for regular admins
+        if (user.role !== 'super_admin' && user.companyId) {
+          shifts = shifts.filter(shift => shift.user.companyId === user.companyId);
+        }
+        
         res.json(shifts);
       } else {
         // Guards see only their own shifts
@@ -754,9 +818,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/scheduled-shifts/user/:userId', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/scheduled-shifts/user/:userId', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const admin = req.user;
       const { userId } = req.params;
+      
+      // For regular admins, validate user belongs to their company
+      if (admin.role !== 'super_admin') {
+        const user = await storage.getUserById(userId);
+        if (!user || user.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot access shifts for users from other companies" });
+        }
+      }
+      
       const shifts = await storage.getUserScheduledShifts(userId);
       res.json(shifts);
     } catch (error) {
@@ -765,16 +839,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/scheduled-shifts/range', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/scheduled-shifts/range', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const admin = req.user;
       const { startDate, endDate } = req.query;
       if (!startDate || !endDate) {
         return res.status(400).json({ message: "startDate and endDate are required" });
       }
-      const shifts = await storage.getScheduledShiftsInRange(
+      let shifts = await storage.getScheduledShiftsInRange(
         new Date(startDate as string),
         new Date(endDate as string)
       );
+      
+      // Filter by company for regular admins
+      if (admin.role !== 'super_admin' && admin.companyId) {
+        shifts = shifts.filter(shift => shift.user.companyId === admin.companyId);
+      }
+      
       res.json(shifts);
     } catch (error) {
       console.error("Error fetching shifts in range:", error);
@@ -782,9 +863,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, async (req, res) => {
+  app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const admin = req.user;
       const validatedData = insertScheduledShiftSchema.parse(req.body);
+      
+      // For regular admins, validate user and site belong to their company
+      if (admin.role !== 'super_admin') {
+        const user = await storage.getUserById(validatedData.userId);
+        const site = await storage.getSiteById(validatedData.siteId);
+        
+        if (!user || user.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot create shifts for users from other companies" });
+        }
+        if (!site || site.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot create shifts for sites from other companies" });
+        }
+      }
+      
       const shift = await storage.createScheduledShift(validatedData);
       res.status(201).json(shift);
     } catch (error: any) {
@@ -793,9 +889,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/scheduled-shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+  app.patch('/api/scheduled-shifts/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const admin = req.user;
       const { id } = req.params;
+      
+      // For regular admins, validate shift belongs to their company
+      if (admin.role !== 'super_admin') {
+        const existingShift = await storage.getScheduledShift(id);
+        if (!existingShift) {
+          return res.status(404).json({ message: "Scheduled shift not found" });
+        }
+        if (existingShift.user.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot update shifts from other companies" });
+        }
+        
+        // If updating userId or siteId, validate they belong to admin's company
+        if (req.body.userId) {
+          const user = await storage.getUserById(req.body.userId);
+          if (!user || user.companyId !== admin.companyId) {
+            return res.status(403).json({ message: "Cannot assign shifts to users from other companies" });
+          }
+        }
+        if (req.body.siteId) {
+          const site = await storage.getSiteById(req.body.siteId);
+          if (!site || site.companyId !== admin.companyId) {
+            return res.status(403).json({ message: "Cannot assign shifts to sites from other companies" });
+          }
+        }
+      }
+      
       const shift = await storage.updateScheduledShift(id, req.body);
       res.json(shift);
     } catch (error: any) {
@@ -804,9 +927,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/scheduled-shifts/:id', isAuthenticated, isAdmin, async (req, res) => {
+  app.delete('/api/scheduled-shifts/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const admin = req.user;
       const { id } = req.params;
+      
+      // For regular admins, validate shift belongs to their company
+      if (admin.role !== 'super_admin') {
+        const existingShift = await storage.getScheduledShift(id);
+        if (!existingShift) {
+          return res.status(404).json({ message: "Scheduled shift not found" });
+        }
+        if (existingShift.user.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot delete shifts from other companies" });
+        }
+      }
+      
       await storage.deleteScheduledShift(id);
       res.status(204).send();
     } catch (error: any) {
