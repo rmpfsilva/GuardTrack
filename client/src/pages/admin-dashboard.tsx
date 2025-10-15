@@ -29,6 +29,7 @@ import AdvancedReports from "@/components/advanced-reports";
 import AdminApprovals from "@/components/admin-approvals";
 import NoticeBoardManagement from "@/components/notice-board-management";
 import CompanyManagement from "@/components/company-management";
+import CompanyPartnerships from "@/components/company-partnerships";
 import JobSharing from "@/components/job-sharing";
 
 interface DashboardStats {
@@ -276,6 +277,7 @@ export default function AdminDashboard() {
                   <TabsTrigger value="leave" data-testid="tab-leave" className="text-xs sm:text-sm whitespace-nowrap">Leave</TabsTrigger>
                   <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm whitespace-nowrap">Approvals</TabsTrigger>
                   <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>
+                  <TabsTrigger value="partnerships" data-testid="tab-partnerships" className="text-xs sm:text-sm whitespace-nowrap">Partnerships</TabsTrigger>
                   <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className="text-xs sm:text-sm whitespace-nowrap">Job Sharing</TabsTrigger>
                   <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>
                 </>
@@ -437,6 +439,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="notices">
             <NoticeBoardManagement />
+          </TabsContent>
+
+          <TabsContent value="partnerships">
+            <CompanyPartnerships />
           </TabsContent>
 
           <TabsContent value="job-sharing">

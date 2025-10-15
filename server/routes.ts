@@ -1654,19 +1654,205 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all companies endpoint (for job sharing - returns all companies for admins)
+  // Get partnered companies endpoint (for job sharing - returns only companies with accepted partnerships)
   app.get('/api/companies/for-job-sharing', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const user = req.user;
-      const companies = await storage.getAllCompanies();
       
-      // Filter out user's own company
-      const otherCompanies = companies.filter(c => c.id !== user.companyId);
+      // Get accepted partnerships for this company
+      const partnerships = await storage.getAcceptedPartnershipsByCompany(user.companyId);
       
-      res.json(otherCompanies);
+      // Extract the partner companies (excluding own company)
+      const partnerCompanies = partnerships.map(p => {
+        // If we're the fromCompany, return toCompany; otherwise return fromCompany
+        return p.fromCompanyId === user.companyId ? p.toCompany : p.fromCompany;
+      });
+      
+      res.json(partnerCompanies);
     } catch (error: any) {
-      console.error("Error fetching companies for job sharing:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch companies" });
+      console.error("Error fetching partnered companies for job sharing:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch partnered companies" });
+    }
+  });
+
+  // Company partnership routes (admin only)
+  app.post('/api/partnerships/search', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { searchTerm } = req.body;
+      
+      if (!searchTerm || searchTerm.trim() === '') {
+        return res.status(400).json({ message: "Search term is required" });
+      }
+
+      const company = await storage.findCompanyByNameOrEmail(searchTerm);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      // Don't allow partnering with own company
+      if (company.id === req.user.companyId) {
+        return res.status(400).json({ message: "Cannot partner with your own company" });
+      }
+
+      res.json(company);
+    } catch (error: any) {
+      console.error("Error searching for company:", error);
+      res.status(500).json({ message: error.message || "Failed to search for company" });
+    }
+  });
+
+  app.get('/api/partnerships/sent', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const partnerships = await storage.getPartnershipsSentByCompany(user.companyId);
+      res.json(partnerships);
+    } catch (error: any) {
+      console.error("Error fetching sent partnerships:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch sent partnerships" });
+    }
+  });
+
+  app.get('/api/partnerships/received', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const partnerships = await storage.getPartnershipsReceivedByCompany(user.companyId);
+      res.json(partnerships);
+    } catch (error: any) {
+      console.error("Error fetching received partnerships:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch received partnerships" });
+    }
+  });
+
+  app.get('/api/partnerships/accepted', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const partnerships = await storage.getAcceptedPartnershipsByCompany(user.companyId);
+      res.json(partnerships);
+    } catch (error: any) {
+      console.error("Error fetching accepted partnerships:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch accepted partnerships" });
+    }
+  });
+
+  app.get('/api/partnerships/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      const partnership = await storage.getPartnership(id);
+      
+      if (!partnership) {
+        return res.status(404).json({ message: "Partnership not found" });
+      }
+
+      // Multi-tenant authorization: only super admins or involved companies can view
+      if (user.role !== 'super_admin') {
+        if (partnership.fromCompanyId !== user.companyId && partnership.toCompanyId !== user.companyId) {
+          return res.status(403).json({ message: "Forbidden - You can only view partnerships involving your company" });
+        }
+      }
+
+      res.json(partnership);
+    } catch (error: any) {
+      console.error("Error fetching partnership:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch partnership" });
+    }
+  });
+
+  app.post('/api/partnerships', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      
+      // Validate required fields
+      if (!req.body.toCompanyId || req.body.toCompanyId.trim() === '') {
+        return res.status(400).json({ message: "Target company is required" });
+      }
+
+      // Prevent partnering with own company
+      if (req.body.toCompanyId === user.companyId) {
+        return res.status(400).json({ message: "Cannot partner with your own company" });
+      }
+
+      // Check if partnership already exists
+      const existingSent = await storage.getPartnershipsSentByCompany(user.companyId);
+      const existingPartnership = existingSent.find(
+        p => p.toCompanyId === req.body.toCompanyId && p.status === 'pending'
+      );
+      
+      if (existingPartnership) {
+        return res.status(400).json({ message: "Partnership request already sent to this company" });
+      }
+
+      const partnershipData = {
+        ...req.body,
+        fromCompanyId: user.companyId,
+        requestedBy: user.id,
+      };
+
+      const partnership = await storage.createPartnership(partnershipData);
+      res.status(201).json(partnership);
+    } catch (error: any) {
+      console.error("Error creating partnership:", error);
+      res.status(400).json({ message: error.message || "Failed to create partnership" });
+    }
+  });
+
+  app.patch('/api/partnerships/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      const partnership = await storage.getPartnership(id);
+      
+      if (!partnership) {
+        return res.status(404).json({ message: "Partnership not found" });
+      }
+
+      // Multi-tenant authorization: only the receiving company can accept/reject
+      if (user.role !== 'super_admin') {
+        if (partnership.toCompanyId !== user.companyId) {
+          return res.status(403).json({ message: "Forbidden - Only the receiving company can respond to partnership requests" });
+        }
+      }
+
+      const updates = {
+        ...req.body,
+        reviewedBy: user.id,
+        reviewedAt: new Date(),
+      };
+
+      const updated = await storage.updatePartnership(id, updates);
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating partnership:", error);
+      res.status(400).json({ message: error.message || "Failed to update partnership" });
+    }
+  });
+
+  app.delete('/api/partnerships/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      const partnership = await storage.getPartnership(id);
+      
+      if (!partnership) {
+        return res.status(404).json({ message: "Partnership not found" });
+      }
+
+      // Multi-tenant authorization: only the requesting company can delete
+      if (user.role !== 'super_admin') {
+        if (partnership.fromCompanyId !== user.companyId) {
+          return res.status(403).json({ message: "Forbidden - Only the requesting company can cancel partnership requests" });
+        }
+      }
+
+      await storage.deletePartnership(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting partnership:", error);
+      res.status(500).json({ message: error.message || "Failed to delete partnership" });
     }
   });
 

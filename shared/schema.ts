@@ -251,6 +251,20 @@ export const companySettings = pgTable("company_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Company partnerships table - for establishing business relationships between companies
+export const companyPartnerships = pgTable("company_partnerships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fromCompanyId: varchar("from_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Company initiating partnership
+  toCompanyId: varchar("to_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Company receiving request
+  status: varchar("status").notNull().default('pending'), // 'pending' | 'accepted' | 'rejected'
+  requestedBy: varchar("requested_by").notNull().references(() => users.id, { onDelete: 'cascade' }), // Admin who created the request
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }), // Admin who reviewed
+  reviewedAt: timestamp("reviewed_at"),
+  message: text("message"), // Optional message from requester
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Job shares table - for inter-company job sharing
 export const jobShares = pgTable("job_shares", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -421,6 +435,27 @@ export const companySettingsRelations = relations(companySettings, ({ one }) => 
   company: one(companies, {
     fields: [companySettings.companyId],
     references: [companies.id],
+  }),
+}));
+
+export const companyPartnershipsRelations = relations(companyPartnerships, ({ one }) => ({
+  fromCompany: one(companies, {
+    fields: [companyPartnerships.fromCompanyId],
+    references: [companies.id],
+    relationName: 'fromCompany',
+  }),
+  toCompany: one(companies, {
+    fields: [companyPartnerships.toCompanyId],
+    references: [companies.id],
+    relationName: 'toCompany',
+  }),
+  requester: one(users, {
+    fields: [companyPartnerships.requestedBy],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [companyPartnerships.reviewedBy],
+    references: [users.id],
   }),
 }));
 
@@ -682,6 +717,20 @@ export const updateCompanySettingsSchema = createInsertSchema(companySettings).o
   updatedAt: true,
 }).partial();
 
+export const insertCompanyPartnershipSchema = createInsertSchema(companyPartnerships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  reviewedBy: true,
+  reviewedAt: true,
+});
+
+export const updateCompanyPartnershipSchema = createInsertSchema(companyPartnerships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 export const insertJobShareSchema = createInsertSchema(jobShares).omit({
   id: true,
   createdAt: true,
@@ -756,6 +805,10 @@ export type CompanySettings = typeof companySettings.$inferSelect;
 export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
 export type UpdateCompanySettings = z.infer<typeof updateCompanySettingsSchema>;
 
+export type CompanyPartnership = typeof companyPartnerships.$inferSelect;
+export type InsertCompanyPartnership = z.infer<typeof insertCompanyPartnershipSchema>;
+export type UpdateCompanyPartnership = z.infer<typeof updateCompanyPartnershipSchema>;
+
 export type JobShare = typeof jobShares.$inferSelect;
 export type InsertJobShare = z.infer<typeof insertJobShareSchema>;
 export type UpdateJobShare = z.infer<typeof updateJobShareSchema>;
@@ -790,6 +843,13 @@ export type NoticeWithDetails = Notice & {
 export type NoticeApplicationWithDetails = NoticeApplication & {
   notice: Notice;
   user: User;
+  reviewer?: User;
+};
+
+export type CompanyPartnershipWithDetails = CompanyPartnership & {
+  fromCompany: Company;
+  toCompany: Company;
+  requester: User;
   reviewer?: User;
 };
 

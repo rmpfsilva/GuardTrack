@@ -14,6 +14,7 @@ import {
   noticeApplications,
   pushSubscriptions,
   companySettings,
+  companyPartnerships,
   jobShares,
   type Company,
   type InsertCompany,
@@ -54,6 +55,10 @@ import {
   type CompanySettings,
   type InsertCompanySettings,
   type UpdateCompanySettings,
+  type CompanyPartnership,
+  type InsertCompanyPartnership,
+  type UpdateCompanyPartnership,
+  type CompanyPartnershipWithDetails,
   type JobShare,
   type InsertJobShare,
   type UpdateJobShare,
@@ -193,6 +198,17 @@ export interface IStorage {
   getCompanySettings(): Promise<CompanySettings | undefined>;
   createCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings>;
   updateCompanySettings(id: string, updates: UpdateCompanySettings): Promise<CompanySettings>;
+
+  // Company partnership operations
+  getAllPartnerships(): Promise<CompanyPartnershipWithDetails[]>;
+  getPartnershipsSentByCompany(companyId: string): Promise<CompanyPartnershipWithDetails[]>;
+  getPartnershipsReceivedByCompany(companyId: string): Promise<CompanyPartnershipWithDetails[]>;
+  getAcceptedPartnershipsByCompany(companyId: string): Promise<CompanyPartnershipWithDetails[]>;
+  getPartnership(id: string): Promise<CompanyPartnershipWithDetails | undefined>;
+  findCompanyByNameOrEmail(searchTerm: string): Promise<Company | undefined>;
+  createPartnership(partnership: InsertCompanyPartnership): Promise<CompanyPartnership>;
+  updatePartnership(id: string, updates: UpdateCompanyPartnership): Promise<CompanyPartnership>;
+  deletePartnership(id: string): Promise<void>;
 
   // Job share operations
   getAllJobShares(): Promise<JobShareWithDetails[]>;
@@ -1849,6 +1865,210 @@ export class DatabaseStorage implements IStorage {
       .where(eq(companySettings.id, id))
       .returning();
     return updated;
+  }
+
+  // Company partnership operations
+  async getAllPartnerships(): Promise<CompanyPartnershipWithDetails[]> {
+    const partnerships = await db
+      .select()
+      .from(companyPartnerships)
+      .orderBy(desc(companyPartnerships.createdAt));
+
+    const detailedPartnerships = [];
+    for (const partnership of partnerships) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, partnership.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, partnership.toCompanyId));
+      const [requester] = await db.select().from(users).where(eq(users.id, partnership.requestedBy));
+      const reviewer = partnership.reviewedBy
+        ? (await db.select().from(users).where(eq(users.id, partnership.reviewedBy)))[0]
+        : undefined;
+
+      detailedPartnerships.push({
+        ...partnership,
+        fromCompany,
+        toCompany,
+        requester,
+        reviewer,
+      } as CompanyPartnershipWithDetails);
+    }
+
+    return detailedPartnerships;
+  }
+
+  async getPartnershipsSentByCompany(companyId: string): Promise<CompanyPartnershipWithDetails[]> {
+    const partnerships = await db
+      .select()
+      .from(companyPartnerships)
+      .where(eq(companyPartnerships.fromCompanyId, companyId))
+      .orderBy(desc(companyPartnerships.createdAt));
+
+    const detailedPartnerships = [];
+    for (const partnership of partnerships) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, partnership.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, partnership.toCompanyId));
+      const [requester] = await db.select().from(users).where(eq(users.id, partnership.requestedBy));
+      const reviewer = partnership.reviewedBy
+        ? (await db.select().from(users).where(eq(users.id, partnership.reviewedBy)))[0]
+        : undefined;
+
+      detailedPartnerships.push({
+        ...partnership,
+        fromCompany,
+        toCompany,
+        requester,
+        reviewer,
+      } as CompanyPartnershipWithDetails);
+    }
+
+    return detailedPartnerships;
+  }
+
+  async getPartnershipsReceivedByCompany(companyId: string): Promise<CompanyPartnershipWithDetails[]> {
+    const partnerships = await db
+      .select()
+      .from(companyPartnerships)
+      .where(eq(companyPartnerships.toCompanyId, companyId))
+      .orderBy(desc(companyPartnerships.createdAt));
+
+    const detailedPartnerships = [];
+    for (const partnership of partnerships) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, partnership.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, partnership.toCompanyId));
+      const [requester] = await db.select().from(users).where(eq(users.id, partnership.requestedBy));
+      const reviewer = partnership.reviewedBy
+        ? (await db.select().from(users).where(eq(users.id, partnership.reviewedBy)))[0]
+        : undefined;
+
+      detailedPartnerships.push({
+        ...partnership,
+        fromCompany,
+        toCompany,
+        requester,
+        reviewer,
+      } as CompanyPartnershipWithDetails);
+    }
+
+    return detailedPartnerships;
+  }
+
+  async getAcceptedPartnershipsByCompany(companyId: string): Promise<CompanyPartnershipWithDetails[]> {
+    const partnerships = await db
+      .select()
+      .from(companyPartnerships)
+      .where(
+        and(
+          eq(companyPartnerships.status, 'accepted'),
+          sql`(${companyPartnerships.fromCompanyId} = ${companyId} OR ${companyPartnerships.toCompanyId} = ${companyId})`
+        )
+      )
+      .orderBy(desc(companyPartnerships.createdAt));
+
+    const detailedPartnerships = [];
+    for (const partnership of partnerships) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, partnership.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, partnership.toCompanyId));
+      const [requester] = await db.select().from(users).where(eq(users.id, partnership.requestedBy));
+      const reviewer = partnership.reviewedBy
+        ? (await db.select().from(users).where(eq(users.id, partnership.reviewedBy)))[0]
+        : undefined;
+
+      detailedPartnerships.push({
+        ...partnership,
+        fromCompany,
+        toCompany,
+        requester,
+        reviewer,
+      } as CompanyPartnershipWithDetails);
+    }
+
+    return detailedPartnerships;
+  }
+
+  async getPartnership(id: string): Promise<CompanyPartnershipWithDetails | undefined> {
+    const [partnership] = await db
+      .select()
+      .from(companyPartnerships)
+      .where(eq(companyPartnerships.id, id));
+
+    if (!partnership) return undefined;
+
+    const [fromCompany] = await db.select().from(companies).where(eq(companies.id, partnership.fromCompanyId));
+    const [toCompany] = await db.select().from(companies).where(eq(companies.id, partnership.toCompanyId));
+    const [requester] = await db.select().from(users).where(eq(users.id, partnership.requestedBy));
+    const reviewer = partnership.reviewedBy
+      ? (await db.select().from(users).where(eq(users.id, partnership.reviewedBy)))[0]
+      : undefined;
+
+    return {
+      ...partnership,
+      fromCompany,
+      toCompany,
+      requester,
+      reviewer,
+    } as CompanyPartnershipWithDetails;
+  }
+
+  async findCompanyByNameOrEmail(searchTerm: string): Promise<Company | undefined> {
+    const normalizedTerm = searchTerm.toLowerCase().trim();
+    
+    // First try exact match by name
+    const [byName] = await db
+      .select()
+      .from(companies)
+      .where(sql`LOWER(${companies.name}) = ${normalizedTerm}`);
+    
+    if (byName) return byName;
+
+    // Then try exact match by email
+    const [byEmail] = await db
+      .select()
+      .from(companies)
+      .where(sql`LOWER(${companies.email}) = ${normalizedTerm}`);
+    
+    if (byEmail) return byEmail;
+
+    // Finally try finding by admin email
+    const [userByEmail] = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          sql`LOWER(${users.email}) = ${normalizedTerm}`,
+          sql`${users.role} IN ('admin', 'super_admin')`
+        )
+      );
+
+    if (userByEmail && userByEmail.companyId) {
+      const [company] = await db
+        .select()
+        .from(companies)
+        .where(eq(companies.id, userByEmail.companyId));
+      
+      return company;
+    }
+
+    return undefined;
+  }
+
+  async createPartnership(partnershipData: InsertCompanyPartnership): Promise<CompanyPartnership> {
+    const [partnership] = await db
+      .insert(companyPartnerships)
+      .values(partnershipData)
+      .returning();
+    return partnership;
+  }
+
+  async updatePartnership(id: string, updates: UpdateCompanyPartnership): Promise<CompanyPartnership> {
+    const [updated] = await db
+      .update(companyPartnerships)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(companyPartnerships.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePartnership(id: string): Promise<void> {
+    await db.delete(companyPartnerships).where(eq(companyPartnerships.id, id));
   }
 
   // Job share operations
