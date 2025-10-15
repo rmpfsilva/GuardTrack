@@ -31,6 +31,7 @@ export default function CompanyPartnerships() {
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchedCompany, setSearchedCompany] = useState<Company | null>(null);
+  const [deletingPartnershipId, setDeletingPartnershipId] = useState<string | null>(null);
 
   // Fetch partnerships
   const { data: sentPartnerships = [], isLoading: loadingSent } = useQuery<CompanyPartnershipWithDetails[]>({
@@ -130,28 +131,28 @@ export default function CompanyPartnerships() {
     },
   });
 
-  // Delete partnership mutation
-  const deletePartnershipMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest('DELETE', `/api/partnerships/${id}`, null);
-    },
-    onSuccess: () => {
+  // Delete/Cancel partnership handler
+  const handleDeletePartnership = async (id: string) => {
+    setDeletingPartnershipId(id);
+    try {
+      await apiRequest('DELETE', `/api/partnerships/${id}`);
       queryClient.invalidateQueries({ queryKey: ['/api/partnerships/sent'] });
       queryClient.invalidateQueries({ queryKey: ['/api/partnerships/received'] });
       queryClient.invalidateQueries({ queryKey: ['/api/partnerships/accepted'] });
       toast({
         title: "Partnership cancelled",
-        description: "Partnership request has been cancelled",
+        description: "The partnership has been cancelled",
       });
-    },
-    onError: (error: any) => {
+    } catch (error: any) {
       toast({
         title: "Failed to cancel partnership",
         description: error.message || "Could not cancel partnership",
         variant: "destructive",
       });
-    },
-  });
+    } finally {
+      setDeletingPartnershipId(null);
+    }
+  };
 
   const handleSearch = () => {
     if (searchTerm.trim()) {
@@ -367,8 +368,8 @@ export default function CompanyPartnerships() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => deletePartnershipMutation.mutate(partnership.id)}
-                          disabled={deletePartnershipMutation.isPending}
+                          onClick={() => handleDeletePartnership(partnership.id)}
+                          disabled={deletingPartnershipId === partnership.id}
                           data-testid={`button-cancel-${partnership.id}`}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -411,7 +412,19 @@ export default function CompanyPartnerships() {
                         Partnership established on: {partnership.reviewedAt ? new Date(partnership.reviewedAt).toLocaleDateString() : 'N/A'}
                       </CardDescription>
                     </div>
-                    {getStatusBadge(partnership.status)}
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(partnership.status)}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleDeletePartnership(partnership.id)}
+                        disabled={deletingPartnershipId === partnership.id}
+                        data-testid={`button-cancel-partnership-${partnership.id}`}
+                        title="Cancel partnership"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
               </Card>
