@@ -19,7 +19,14 @@ import { insertJobShareSchema } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { JobShareWithDetails, Company, Site } from "@shared/schema";
 
-const jobShareFormSchema = insertJobShareSchema.extend({
+const jobShareFormSchema = insertJobShareSchema.omit({
+  fromCompanyId: true,  // Added automatically by backend
+  createdBy: true,      // Added automatically by backend
+  status: true,         // Has default value
+  reviewedBy: true,     // Set later when reviewed
+  reviewedAt: true,     // Set later when reviewed
+  reviewNotes: true,    // Set later when reviewed
+}).extend({
   toCompanyId: z.string().min(1, "Please select a company"),
   siteId: z.string().min(1, "Please select a site"),
   startDate: z.string().min(1, "Start date is required"),
@@ -72,11 +79,7 @@ export default function JobSharing() {
   // Create job share mutation
   const createMutation = useMutation({
     mutationFn: async (data: JobShareFormData) => {
-      return await apiRequest('POST', '/api/job-shares', {
-        ...data,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
-      });
+      return await apiRequest('POST', '/api/job-shares', data);
     },
     onSuccess: () => {
       toast({
@@ -118,6 +121,8 @@ export default function JobSharing() {
   });
 
   const onSubmit = (data: JobShareFormData) => {
+    console.log('[Job Share] Form submitted with data:', data);
+    console.log('[Job Share] Form errors:', form.formState.errors);
     createMutation.mutate(data);
   };
 
@@ -165,7 +170,14 @@ export default function JobSharing() {
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+                console.log('[Job Share] Form validation errors:', errors);
+                toast({
+                  title: "Validation Error",
+                  description: "Please check all required fields",
+                  variant: "destructive",
+                });
+              })} className="space-y-4">
                 <FormField
                   control={form.control}
                   name="toCompanyId"

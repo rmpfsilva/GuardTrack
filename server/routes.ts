@@ -1963,6 +1963,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         fromCompanyId: user.companyId,
         createdBy: user.id,
+        // Parse date strings to Date objects
+        startDate: new Date(req.body.startDate),
+        endDate: new Date(req.body.endDate),
       };
 
       const jobShare = await storage.createJobShare(jobShareData);
