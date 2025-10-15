@@ -2011,24 +2011,16 @@ export class DatabaseStorage implements IStorage {
   async findCompanyByNameOrEmail(searchTerm: string): Promise<Company | undefined> {
     const normalizedTerm = searchTerm.toLowerCase().trim();
     
-    // First try exact match by name
+    // First try partial match by company name (case-insensitive)
     const [byName] = await db
       .select()
       .from(companies)
-      .where(sql`LOWER(${companies.name}) = ${normalizedTerm}`);
+      .where(sql`LOWER(${companies.name}) LIKE ${`%${normalizedTerm}%`}`);
     
     if (byName) return byName;
 
-    // Then try exact match by email
-    const [byEmail] = await db
-      .select()
-      .from(companies)
-      .where(sql`LOWER(${companies.email}) = ${normalizedTerm}`);
-    
-    if (byEmail) return byEmail;
-
-    // Finally try finding by admin email
-    const [userByEmail] = await db
+    // Then try to find admin user by email and get their company
+    const [adminUser] = await db
       .select()
       .from(users)
       .where(
@@ -2038,11 +2030,11 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
-    if (userByEmail && userByEmail.companyId) {
+    if (adminUser && adminUser.companyId) {
       const [company] = await db
         .select()
         .from(companies)
-        .where(eq(companies.id, userByEmail.companyId));
+        .where(eq(companies.id, adminUser.companyId));
       
       return company;
     }

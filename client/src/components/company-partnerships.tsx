@@ -18,8 +18,10 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { CompanyPartnershipWithDetails, Company } from "@shared/schema";
 import { Search, Send, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react";
 
-const partnershipFormSchema = insertCompanyPartnershipSchema.extend({
-  toCompanyId: z.string().min(1, "Please search and select a company"),
+const partnershipFormSchema = insertCompanyPartnershipSchema.omit({
+  toCompanyId: true,
+  fromCompanyId: true,
+  requestedBy: true,
 });
 
 type PartnershipFormData = z.infer<typeof partnershipFormSchema>;
@@ -47,7 +49,8 @@ export default function CompanyPartnerships() {
   const searchCompanyMutation = useMutation({
     mutationFn: async (searchTerm: string) => {
       const response = await apiRequest('POST', '/api/partnerships/search', { searchTerm });
-      return response as Company;
+      const data = await response.json();
+      return data as Company;
     },
     onSuccess: (data: Company) => {
       setSearchedCompany(data);
@@ -70,7 +73,6 @@ export default function CompanyPartnerships() {
   const form = useForm<PartnershipFormData>({
     resolver: zodResolver(partnershipFormSchema),
     defaultValues: {
-      toCompanyId: "",
       message: "",
       status: "pending",
     },
@@ -158,7 +160,21 @@ export default function CompanyPartnerships() {
   };
 
   const onSubmit = (data: PartnershipFormData) => {
-    createPartnershipMutation.mutate(data);
+    if (!searchedCompany) {
+      toast({
+        title: "Error",
+        description: "Please search and select a company first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const partnershipData = {
+      ...data,
+      toCompanyId: searchedCompany.id,
+    };
+
+    createPartnershipMutation.mutate(partnershipData);
   };
 
   const getStatusBadge = (status: string) => {
@@ -225,19 +241,6 @@ export default function CompanyPartnerships() {
                   <CardContent>
                     <Form {...form}>
                       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <FormField
-                          control={form.control}
-                          name="toCompanyId"
-                          render={({ field }) => (
-                            <FormItem className="hidden">
-                              <FormControl>
-                                <Input {...field} value={searchedCompany.id} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
                         <FormField
                           control={form.control}
                           name="message"

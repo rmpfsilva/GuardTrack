@@ -22,9 +22,11 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction) {
 
 // Middleware to check if user is admin or super admin
 function isAdmin(req: Request, res: Response, next: NextFunction) {
+  console.log('[DEBUG isAdmin] req.user:', req.user ? { id: (req.user as any).id, role: (req.user as any).role, companyId: (req.user as any).companyId } : 'undefined');
   if (req.user && ((req.user as any).role === 'admin' || (req.user as any).role === 'super_admin')) {
     return next();
   }
+  console.log('[DEBUG isAdmin] Access denied - role:', req.user ? (req.user as any).role : 'no user');
   res.status(403).json({ message: "Forbidden - Admin access required" });
 }
 
@@ -74,6 +76,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching companies:", error);
       res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
+  // Get partnered companies endpoint (for job sharing - returns only companies with accepted partnerships)
+  // IMPORTANT: This route must be defined BEFORE /api/companies/:id to avoid routing conflicts
+  app.get('/api/companies/for-job-sharing', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      
+      // Get accepted partnerships for this company
+      const partnerships = await storage.getAcceptedPartnershipsByCompany(user.companyId);
+      
+      // Extract the partner companies (excluding own company)
+      const partnerCompanies = partnerships.map(p => {
+        // If we're the fromCompany, return toCompany; otherwise return fromCompany
+        return p.fromCompanyId === user.companyId ? p.toCompany : p.fromCompany;
+      });
+      
+      res.json(partnerCompanies);
+    } catch (error: any) {
+      console.error("Error fetching partnered companies for job sharing:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch partnered companies" });
     }
   });
 
@@ -1654,27 +1678,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get partnered companies endpoint (for job sharing - returns only companies with accepted partnerships)
-  app.get('/api/companies/for-job-sharing', isAuthenticated, isAdmin, async (req: any, res) => {
-    try {
-      const user = req.user;
-      
-      // Get accepted partnerships for this company
-      const partnerships = await storage.getAcceptedPartnershipsByCompany(user.companyId);
-      
-      // Extract the partner companies (excluding own company)
-      const partnerCompanies = partnerships.map(p => {
-        // If we're the fromCompany, return toCompany; otherwise return fromCompany
-        return p.fromCompanyId === user.companyId ? p.toCompany : p.fromCompany;
-      });
-      
-      res.json(partnerCompanies);
-    } catch (error: any) {
-      console.error("Error fetching partnered companies for job sharing:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch partnered companies" });
-    }
-  });
-
   // Company partnership routes (admin only)
   app.post('/api/partnerships/search', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
@@ -1763,14 +1766,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/partnerships', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const user = req.user;
+      console.log('[DEBUG] POST /api/partnerships - Request body:', JSON.stringify(req.body));
+      console.log('[DEBUG] POST /api/partnerships - User:', { id: user.id, companyId: user.companyId });
       
       // Validate required fields
       if (!req.body.toCompanyId || req.body.toCompanyId.trim() === '') {
+        console.log('[DEBUG] POST /api/partnerships - Validation failed: toCompanyId missing');
         return res.status(400).json({ message: "Target company is required" });
       }
 
       // Prevent partnering with own company
       if (req.body.toCompanyId === user.companyId) {
+        console.log('[DEBUG] POST /api/partnerships - Validation failed: cannot partner with own company');
         return res.status(400).json({ message: "Cannot partner with your own company" });
       }
 
@@ -1781,6 +1788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       if (existingPartnership) {
+        console.log('[DEBUG] POST /api/partnerships - Partnership already exists');
         return res.status(400).json({ message: "Partnership request already sent to this company" });
       }
 
@@ -1790,7 +1798,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requestedBy: user.id,
       };
 
+      console.log('[DEBUG] POST /api/partnerships - Creating partnership with data:', JSON.stringify(partnershipData));
       const partnership = await storage.createPartnership(partnershipData);
+      console.log('[DEBUG] POST /api/partnerships - Created partnership:', JSON.stringify(partnership));
       res.status(201).json(partnership);
     } catch (error: any) {
       console.error("Error creating partnership:", error);
