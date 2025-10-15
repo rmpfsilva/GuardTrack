@@ -30,6 +30,7 @@ export const sessions = pgTable(
 // Companies table - multi-tenant support
 export const companies = pgTable("companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id", { length: 50 }).unique().notNull(), // Human-readable company ID (e.g., "COMP001")
   name: varchar("name", { length: 255 }).notNull(),
   address: text("address"),
   email: varchar("email"),
