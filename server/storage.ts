@@ -14,6 +14,7 @@ import {
   noticeApplications,
   pushSubscriptions,
   companySettings,
+  jobShares,
   type Company,
   type InsertCompany,
   type UpdateCompany,
@@ -53,6 +54,10 @@ import {
   type CompanySettings,
   type InsertCompanySettings,
   type UpdateCompanySettings,
+  type JobShare,
+  type InsertJobShare,
+  type UpdateJobShare,
+  type JobShareWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, lt, between } from "drizzle-orm";
@@ -188,6 +193,15 @@ export interface IStorage {
   getCompanySettings(): Promise<CompanySettings | undefined>;
   createCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings>;
   updateCompanySettings(id: string, updates: UpdateCompanySettings): Promise<CompanySettings>;
+
+  // Job share operations
+  getAllJobShares(): Promise<JobShareWithDetails[]>;
+  getJobSharesOfferedByCompany(companyId: string): Promise<JobShareWithDetails[]>;
+  getJobSharesReceivedByCompany(companyId: string): Promise<JobShareWithDetails[]>;
+  getJobShare(id: string): Promise<JobShareWithDetails | undefined>;
+  createJobShare(jobShare: InsertJobShare): Promise<JobShare>;
+  updateJobShare(id: string, updates: UpdateJobShare): Promise<JobShare>;
+  deleteJobShare(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1835,6 +1849,135 @@ export class DatabaseStorage implements IStorage {
       .where(eq(companySettings.id, id))
       .returning();
     return updated;
+  }
+
+  // Job share operations
+  async getAllJobShares(): Promise<JobShareWithDetails[]> {
+    const shares = await db
+      .select()
+      .from(jobShares)
+      .orderBy(desc(jobShares.createdAt));
+
+    const detailedShares = [];
+    for (const share of shares) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, share.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, share.toCompanyId));
+      const [site] = await db.select().from(sites).where(eq(sites.id, share.siteId));
+      const [creator] = await db.select().from(users).where(eq(users.id, share.createdBy));
+      const reviewer = share.reviewedBy ? (await db.select().from(users).where(eq(users.id, share.reviewedBy)))[0] : undefined;
+
+      detailedShares.push({
+        ...share,
+        fromCompany,
+        toCompany,
+        site,
+        creator,
+        reviewer,
+      } as JobShareWithDetails);
+    }
+
+    return detailedShares;
+  }
+
+  async getJobSharesOfferedByCompany(companyId: string): Promise<JobShareWithDetails[]> {
+    const shares = await db
+      .select()
+      .from(jobShares)
+      .where(eq(jobShares.fromCompanyId, companyId))
+      .orderBy(desc(jobShares.createdAt));
+
+    const detailedShares = [];
+    for (const share of shares) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, share.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, share.toCompanyId));
+      const [site] = await db.select().from(sites).where(eq(sites.id, share.siteId));
+      const [creator] = await db.select().from(users).where(eq(users.id, share.createdBy));
+      const reviewer = share.reviewedBy ? (await db.select().from(users).where(eq(users.id, share.reviewedBy)))[0] : undefined;
+
+      detailedShares.push({
+        ...share,
+        fromCompany,
+        toCompany,
+        site,
+        creator,
+        reviewer,
+      } as JobShareWithDetails);
+    }
+
+    return detailedShares;
+  }
+
+  async getJobSharesReceivedByCompany(companyId: string): Promise<JobShareWithDetails[]> {
+    const shares = await db
+      .select()
+      .from(jobShares)
+      .where(eq(jobShares.toCompanyId, companyId))
+      .orderBy(desc(jobShares.createdAt));
+
+    const detailedShares = [];
+    for (const share of shares) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, share.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, share.toCompanyId));
+      const [site] = await db.select().from(sites).where(eq(sites.id, share.siteId));
+      const [creator] = await db.select().from(users).where(eq(users.id, share.createdBy));
+      const reviewer = share.reviewedBy ? (await db.select().from(users).where(eq(users.id, share.reviewedBy)))[0] : undefined;
+
+      detailedShares.push({
+        ...share,
+        fromCompany,
+        toCompany,
+        site,
+        creator,
+        reviewer,
+      } as JobShareWithDetails);
+    }
+
+    return detailedShares;
+  }
+
+  async getJobShare(id: string): Promise<JobShareWithDetails | undefined> {
+    const [share] = await db
+      .select()
+      .from(jobShares)
+      .where(eq(jobShares.id, id));
+
+    if (!share) return undefined;
+
+    const [fromCompany] = await db.select().from(companies).where(eq(companies.id, share.fromCompanyId));
+    const [toCompany] = await db.select().from(companies).where(eq(companies.id, share.toCompanyId));
+    const [site] = await db.select().from(sites).where(eq(sites.id, share.siteId));
+    const [creator] = await db.select().from(users).where(eq(users.id, share.createdBy));
+    const reviewer = share.reviewedBy ? (await db.select().from(users).where(eq(users.id, share.reviewedBy)))[0] : undefined;
+
+    return {
+      ...share,
+      fromCompany,
+      toCompany,
+      site,
+      creator,
+      reviewer,
+    } as JobShareWithDetails;
+  }
+
+  async createJobShare(jobShareData: InsertJobShare): Promise<JobShare> {
+    const [jobShare] = await db
+      .insert(jobShares)
+      .values(jobShareData)
+      .returning();
+    return jobShare;
+  }
+
+  async updateJobShare(id: string, updates: UpdateJobShare): Promise<JobShare> {
+    const [updated] = await db
+      .update(jobShares)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(jobShares.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteJobShare(id: string): Promise<void> {
+    await db.delete(jobShares).where(eq(jobShares.id, id));
   }
 }
 

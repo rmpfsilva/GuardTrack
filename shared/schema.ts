@@ -251,12 +251,35 @@ export const companySettings = pgTable("company_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Job shares table - for inter-company job sharing
+export const jobShares = pgTable("job_shares", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fromCompanyId: varchar("from_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Company offering the jobs
+  toCompanyId: varchar("to_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Company receiving the offer
+  siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: 'cascade' }), // Site where guards are needed
+  numberOfJobs: varchar("number_of_jobs").notNull(), // Number of positions available
+  startDate: timestamp("start_date").notNull(), // When the jobs start
+  endDate: timestamp("end_date").notNull(), // When the jobs end
+  workingRole: varchar("working_role").notNull().default('guard'), // Required role: 'guard' | 'steward' | 'supervisor'
+  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull(), // Rate offered per hour
+  requirements: text("requirements"), // Description of requirements or special needs
+  status: varchar("status").notNull().default('pending'), // 'pending' | 'accepted' | 'rejected' | 'cancelled'
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: 'cascade' }), // Admin who created the share
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }), // Admin who reviewed
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"), // Notes from reviewer
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Define relations
 export const companiesRelations = relations(companies, ({ many }) => ({
   users: many(users),
   sites: many(sites),
   invitations: many(invitations),
   companySettings: many(companySettings),
+  jobSharesOffered: many(jobShares, { relationName: 'fromCompany' }),
+  jobSharesReceived: many(jobShares, { relationName: 'toCompany' }),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -281,6 +304,7 @@ export const sitesRelations = relations(sites, ({ one, many }) => ({
   checkIns: many(checkIns),
   scheduledShifts: many(scheduledShifts),
   notices: many(notices),
+  jobShares: many(jobShares),
 }));
 
 export const checkInsRelations = relations(checkIns, ({ one, many }) => ({
@@ -397,6 +421,31 @@ export const companySettingsRelations = relations(companySettings, ({ one }) => 
   company: one(companies, {
     fields: [companySettings.companyId],
     references: [companies.id],
+  }),
+}));
+
+export const jobSharesRelations = relations(jobShares, ({ one }) => ({
+  fromCompany: one(companies, {
+    fields: [jobShares.fromCompanyId],
+    references: [companies.id],
+    relationName: 'fromCompany',
+  }),
+  toCompany: one(companies, {
+    fields: [jobShares.toCompanyId],
+    references: [companies.id],
+    relationName: 'toCompany',
+  }),
+  site: one(sites, {
+    fields: [jobShares.siteId],
+    references: [sites.id],
+  }),
+  creator: one(users, {
+    fields: [jobShares.createdBy],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [jobShares.reviewedBy],
+    references: [users.id],
   }),
 }));
 
@@ -633,6 +682,21 @@ export const updateCompanySettingsSchema = createInsertSchema(companySettings).o
   updatedAt: true,
 }).partial();
 
+export const insertJobShareSchema = createInsertSchema(jobShares).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewNotes: true,
+});
+
+export const updateJobShareSchema = createInsertSchema(jobShares).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 // TypeScript types
 export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
@@ -692,6 +756,10 @@ export type CompanySettings = typeof companySettings.$inferSelect;
 export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
 export type UpdateCompanySettings = z.infer<typeof updateCompanySettingsSchema>;
 
+export type JobShare = typeof jobShares.$inferSelect;
+export type InsertJobShare = z.infer<typeof insertJobShareSchema>;
+export type UpdateJobShare = z.infer<typeof updateJobShareSchema>;
+
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
   user: User;
@@ -722,5 +790,13 @@ export type NoticeWithDetails = Notice & {
 export type NoticeApplicationWithDetails = NoticeApplication & {
   notice: Notice;
   user: User;
+  reviewer?: User;
+};
+
+export type JobShareWithDetails = JobShare & {
+  fromCompany: Company;
+  toCompany: Company;
+  site: Site;
+  creator: User;
   reviewer?: User;
 };

@@ -1654,6 +1654,158 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all companies endpoint (for job sharing - returns all companies for admins)
+  app.get('/api/companies/for-job-sharing', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const companies = await storage.getAllCompanies();
+      
+      // Filter out user's own company
+      const otherCompanies = companies.filter(c => c.id !== user.companyId);
+      
+      res.json(otherCompanies);
+    } catch (error: any) {
+      console.error("Error fetching companies for job sharing:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch companies" });
+    }
+  });
+
+  // Job share routes (admin only)
+  app.get('/api/job-shares', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      let jobShares;
+
+      if (user.role === 'super_admin') {
+        // Super admins can see all job shares
+        jobShares = await storage.getAllJobShares();
+      } else {
+        // Regular admins can only see job shares for their company
+        const offeredShares = await storage.getJobSharesOfferedByCompany(user.companyId);
+        const receivedShares = await storage.getJobSharesReceivedByCompany(user.companyId);
+        
+        // Combine and deduplicate
+        const allShares = [...offeredShares, ...receivedShares];
+        const uniqueShares = allShares.filter((share, index, self) =>
+          index === self.findIndex((s) => s.id === share.id)
+        );
+        jobShares = uniqueShares;
+      }
+
+      res.json(jobShares);
+    } catch (error: any) {
+      console.error("Error fetching job shares:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch job shares" });
+    }
+  });
+
+  app.get('/api/job-shares/offered', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const jobShares = await storage.getJobSharesOfferedByCompany(user.companyId);
+      res.json(jobShares);
+    } catch (error: any) {
+      console.error("Error fetching offered job shares:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch offered job shares" });
+    }
+  });
+
+  app.get('/api/job-shares/received', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const jobShares = await storage.getJobSharesReceivedByCompany(user.companyId);
+      res.json(jobShares);
+    } catch (error: any) {
+      console.error("Error fetching received job shares:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch received job shares" });
+    }
+  });
+
+  app.get('/api/job-shares/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+      const jobShare = await storage.getJobShare(id);
+      
+      if (!jobShare) {
+        return res.status(404).json({ message: "Job share not found" });
+      }
+
+      // Multi-tenant authorization: only super admins or companies involved can view
+      if (user.role !== 'super_admin') {
+        if (jobShare.fromCompanyId !== user.companyId && jobShare.toCompanyId !== user.companyId) {
+          return res.status(403).json({ message: "Forbidden - You can only view job shares involving your company" });
+        }
+      }
+
+      res.json(jobShare);
+    } catch (error: any) {
+      console.error("Error fetching job share:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch job share" });
+    }
+  });
+
+  app.post('/api/job-shares', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const jobShareData = {
+        ...req.body,
+        fromCompanyId: user.companyId,
+        createdBy: user.id,
+      };
+
+      const jobShare = await storage.createJobShare(jobShareData);
+      res.status(201).json(jobShare);
+    } catch (error: any) {
+      console.error("Error creating job share:", error);
+      res.status(400).json({ message: error.message || "Failed to create job share" });
+    }
+  });
+
+  app.patch('/api/job-shares/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const user = req.user;
+      
+      // Get the job share to check authorization
+      const jobShare = await storage.getJobShare(id);
+      if (!jobShare) {
+        return res.status(404).json({ message: "Job share not found" });
+      }
+      
+      // Multi-tenant authorization: only super admins or companies involved can modify
+      if (user.role !== 'super_admin') {
+        if (jobShare.fromCompanyId !== user.companyId && jobShare.toCompanyId !== user.companyId) {
+          return res.status(403).json({ message: "Forbidden - You can only modify job shares involving your company" });
+        }
+      }
+      
+      // If updating status to accepted/rejected, add review info
+      if (updates.status && updates.status !== 'pending') {
+        updates.reviewedBy = req.user.id;
+        updates.reviewedAt = new Date();
+      }
+
+      const updatedJobShare = await storage.updateJobShare(id, updates);
+      res.json(updatedJobShare);
+    } catch (error: any) {
+      console.error("Error updating job share:", error);
+      res.status(400).json({ message: error.message || "Failed to update job share" });
+    }
+  });
+
+  app.delete('/api/job-shares/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteJobShare(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting job share:", error);
+      res.status(400).json({ message: error.message || "Failed to delete job share" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
