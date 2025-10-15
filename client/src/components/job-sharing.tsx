@@ -70,7 +70,7 @@ export default function JobSharing() {
   // Create job share mutation
   const createMutation = useMutation({
     mutationFn: async (data: JobShareFormData) => {
-      return await apiRequest('/api/job-shares', 'POST', {
+      return await apiRequest('POST', '/api/job-shares', {
         ...data,
         startDate: new Date(data.startDate),
         endDate: new Date(data.endDate),
@@ -97,7 +97,7 @@ export default function JobSharing() {
   // Accept/Reject job share mutations
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
-      return await apiRequest(`/api/job-shares/${id}`, 'PATCH', { status, reviewNotes: notes });
+      return await apiRequest('PATCH', `/api/job-shares/${id}`, { status, reviewNotes: notes });
     },
     onSuccess: (_, variables) => {
       toast({
@@ -178,7 +178,13 @@ export default function JobSharing() {
                         </FormControl>
                         <SelectContent>
                           {companies.map(company => (
-                            <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>
+                            <SelectItem 
+                              key={company.id} 
+                              value={company.id}
+                              data-testid={`option-company-${company.id}`}
+                            >
+                              {company.name}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
