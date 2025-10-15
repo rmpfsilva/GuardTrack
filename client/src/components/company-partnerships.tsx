@@ -218,7 +218,7 @@ export default function CompanyPartnerships() {
             <div className="space-y-4">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Company name or admin email"
+                  placeholder="Company ID, name, or admin email"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -237,6 +237,9 @@ export default function CompanyPartnerships() {
                 <Card data-testid="card-searched-company">
                   <CardHeader>
                     <CardTitle data-testid="text-company-name">{searchedCompany.name}</CardTitle>
+                    <CardDescription data-testid="text-company-id">
+                      Company ID: {searchedCompany.companyId}
+                    </CardDescription>
                     <CardDescription data-testid="text-company-email">{searchedCompany.email}</CardDescription>
                   </CardHeader>
                   <CardContent>
