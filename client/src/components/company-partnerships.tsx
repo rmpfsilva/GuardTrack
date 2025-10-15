@@ -348,14 +348,14 @@ export default function CompanyPartnerships() {
         <TabsContent value="sent" className="space-y-4" data-testid="content-sent">
           {loadingSent ? (
             <p data-testid="text-loading-sent">Loading...</p>
-          ) : sentPartnerships.length === 0 ? (
+          ) : sentPartnerships.filter(p => p.status === 'pending').length === 0 ? (
             <Card data-testid="card-no-sent">
               <CardContent className="py-8 text-center text-muted-foreground">
-                No partnership requests sent
+                No pending partnership requests
               </CardContent>
             </Card>
           ) : (
-            sentPartnerships.map((partnership) => (
+            sentPartnerships.filter(p => p.status === 'pending').map((partnership) => (
               <Card key={partnership.id} data-testid={`card-partnership-${partnership.id}`}>
                 <CardHeader>
                   <div className="flex items-start justify-between">

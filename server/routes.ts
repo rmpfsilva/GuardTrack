@@ -1778,18 +1778,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Prevent partnering with own company
       if (req.body.toCompanyId === user.companyId) {
         console.log('[DEBUG] POST /api/partnerships - Validation failed: cannot partner with own company');
-        return res.status(400).json({ message: "Cannot partner with your own company" });
+        return res.status(400).json({ message: "You cannot create a partnership with your own company" });
       }
 
-      // Check if partnership already exists
+      // Check if partnership already exists in either direction
       const existingSent = await storage.getPartnershipsSentByCompany(user.companyId);
-      const existingPartnership = existingSent.find(
-        p => p.toCompanyId === req.body.toCompanyId && p.status === 'pending'
-      );
+      const existingReceived = await storage.getPartnershipsReceivedByCompany(user.companyId);
       
-      if (existingPartnership) {
-        console.log('[DEBUG] POST /api/partnerships - Partnership already exists');
-        return res.status(400).json({ message: "Partnership request already sent to this company" });
+      // Check for existing partnership sent by this company
+      const sentPartnership = existingSent.find(p => p.toCompanyId === req.body.toCompanyId);
+      if (sentPartnership) {
+        if (sentPartnership.status === 'pending') {
+          console.log('[DEBUG] POST /api/partnerships - Pending request already exists');
+          return res.status(400).json({ message: "You have already sent a partnership request to this company" });
+        } else if (sentPartnership.status === 'accepted') {
+          console.log('[DEBUG] POST /api/partnerships - Active partnership already exists');
+          return res.status(400).json({ message: "You are already in partnership with this company" });
+        }
+      }
+      
+      // Check for existing partnership received from the target company
+      const receivedPartnership = existingReceived.find(p => p.fromCompanyId === req.body.toCompanyId);
+      if (receivedPartnership) {
+        if (receivedPartnership.status === 'pending') {
+          console.log('[DEBUG] POST /api/partnerships - Incoming request already exists');
+          return res.status(400).json({ message: "This company has already sent you a partnership request. Please check your Received Requests tab" });
+        } else if (receivedPartnership.status === 'accepted') {
+          console.log('[DEBUG] POST /api/partnerships - Active partnership already exists (received)');
+          return res.status(400).json({ message: "You are already in partnership with this company" });
+        }
       }
 
       const partnershipData = {
