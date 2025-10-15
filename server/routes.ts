@@ -1748,6 +1748,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/job-shares', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const user = req.user;
+      
+      // Validate required fields
+      if (!req.body.toCompanyId || req.body.toCompanyId.trim() === '') {
+        return res.status(400).json({ message: "Target company is required" });
+      }
+      
+      if (!req.body.siteId || req.body.siteId.trim() === '') {
+        return res.status(400).json({ message: "Site is required" });
+      }
+      
+      // Prevent sharing with own company
+      if (req.body.toCompanyId === user.companyId) {
+        return res.status(400).json({ message: "Cannot share jobs with your own company" });
+      }
+      
       const jobShareData = {
         ...req.body,
         fromCompanyId: user.companyId,

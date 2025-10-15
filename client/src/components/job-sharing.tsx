@@ -20,6 +20,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { JobShareWithDetails, Company, Site } from "@shared/schema";
 
 const jobShareFormSchema = insertJobShareSchema.extend({
+  toCompanyId: z.string().min(1, "Please select a company"),
+  siteId: z.string().min(1, "Please select a site"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
 });
