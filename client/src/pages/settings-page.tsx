@@ -8,8 +8,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { ArrowLeft, Lock, IdCard, Calendar, UserCog } from "lucide-react";
-import type { User } from "@shared/schema";
+import { ArrowLeft, Lock, IdCard, Calendar, UserCog, Building2 } from "lucide-react";
+import type { User, Company } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -102,6 +102,12 @@ export default function SettingsPage() {
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ['/api/admin/users'],
     enabled: user?.role === 'super_admin',
+  });
+
+  // Fetch company information
+  const { data: company } = useQuery<Company>({
+    queryKey: ['/api/companies', user?.companyId],
+    enabled: !!user?.companyId,
   });
 
   // Reset profile form when user data loads
@@ -257,6 +263,39 @@ export default function SettingsPage() {
         {/* Main Content */}
         <main className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto space-y-6">
+            {/* Company Information Section */}
+            {company && (
+              <Card data-testid="card-company-info">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Company Information
+                  </CardTitle>
+                  <CardDescription>
+                    Your company details and unique identifier
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Company Name</label>
+                      <p className="text-base" data-testid="text-company-name">{company.name}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Company ID</label>
+                      <p className="text-base font-mono" data-testid="text-company-id">{company.companyId}</p>
+                    </div>
+                    {company.email && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Email</label>
+                        <p className="text-base" data-testid="text-company-email">{company.email}</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Profile Update Section */}
             <Card>
               <CardHeader>
