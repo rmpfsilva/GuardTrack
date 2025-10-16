@@ -62,11 +62,15 @@ async function seedDemo() {
     });
     console.log("✅ Companies created\n");
 
-    // 2. Create Demo Users (password: demo123 for all)
+    // 2. Create Demo Users (password: demo123 for all, super admin password: admin123)
     console.log("👥 Creating demo users...");
     const hashedPassword = await hashPassword('demo123');
+    const superAdminPassword = await hashPassword('admin123');
     
     await db.insert(users).values([
+      // Super Admin (no company affiliation)
+      { id: 'demo-super-admin', username: 'admin', password: superAdminPassword, firstName: 'System', lastName: 'Administrator', email: 'admin@guardtrack.com', role: 'super_admin', companyId: null },
+      
       // Elite Security Services
       { id: 'demo-admin-elite', username: 'admin.elite', password: hashedPassword, firstName: 'Sarah', lastName: 'Johnson', email: 'sarah.johnson@elitesecurity.com', role: 'admin', companyId: 'demo-elite-security' },
       { id: 'demo-supervisor-elite', username: 'super.elite', password: hashedPassword, firstName: 'Michael', lastName: 'Chen', email: 'michael.chen@elitesecurity.com', role: 'supervisor', companyId: 'demo-elite-security' },

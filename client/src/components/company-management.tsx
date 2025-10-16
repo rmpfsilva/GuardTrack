@@ -73,10 +73,7 @@ export default function CompanyManagement() {
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertCompany) => {
-      return await apiRequest("/api/companies", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      return await apiRequest("POST", "/api/companies", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
@@ -98,10 +95,7 @@ export default function CompanyManagement() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<InsertCompany> }) => {
-      return await apiRequest(`/api/companies/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      });
+      return await apiRequest("PATCH", `/api/companies/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
@@ -122,9 +116,7 @@ export default function CompanyManagement() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/companies/${id}`, {
-        method: "DELETE",
-      });
+      return await apiRequest("DELETE", `/api/companies/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
@@ -145,10 +137,7 @@ export default function CompanyManagement() {
 
   const setTrialMutation = useMutation({
     mutationFn: async ({ id, trialDays }: { id: string; trialDays: number }) => {
-      return await apiRequest(`/api/companies/${id}/trial`, {
-        method: "POST",
-        body: JSON.stringify({ trialDays }),
-      });
+      return await apiRequest("POST", `/api/companies/${id}/trial`, { trialDays });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
@@ -169,9 +158,7 @@ export default function CompanyManagement() {
 
   const convertToFullMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/companies/${id}/trial/convert-to-full`, {
-        method: "POST",
-      });
+      return await apiRequest("POST", `/api/companies/${id}/trial/convert-to-full`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
