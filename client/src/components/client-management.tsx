@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus } from "lucide-react";
+import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Company } from "@shared/schema";
 import {
@@ -40,6 +40,7 @@ export default function ClientManagement() {
   const [selectedClient, setSelectedClient] = useState<ClientWithStatus | null>(null);
   const [isTrialDialogOpen, setIsTrialDialogOpen] = useState(false);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
   const [isInviteTrialDialogOpen, setIsInviteTrialDialogOpen] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
@@ -73,6 +74,31 @@ export default function ClientManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to block client",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteClientMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/companies/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      setIsDeleteDialogOpen(false);
+      setSelectedClient(null);
+      toast({
+        title: "Client deleted",
+        description: "Client and all associated data has been permanently deleted.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete client",
         variant: "destructive",
       });
     },
@@ -290,6 +316,18 @@ export default function ClientManagement() {
                       Block Client
                     </Button>
                     <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                      data-testid={`button-delete-${client.id}`}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Client
+                    </Button>
+                    <Button
                       variant="outline"
                       size="sm"
                       onClick={() => {
@@ -378,6 +416,18 @@ export default function ClientManagement() {
                       Block Client
                     </Button>
                     <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                      data-testid={`button-delete-${client.id}`}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Client
+                    </Button>
+                    <Button
                       variant="outline"
                       size="sm"
                       onClick={() => {
@@ -431,6 +481,18 @@ export default function ClientManagement() {
                     >
                       <Ban className="h-4 w-4 mr-2" />
                       Block Client
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                      data-testid={`button-delete-${client.id}`}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Client
                     </Button>
                     <Button
                       variant="outline"
@@ -615,6 +677,51 @@ export default function ClientManagement() {
               data-testid="button-confirm-block"
             >
               {blockClientMutation.isPending ? "Blocking..." : "Block Client"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Client Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent data-testid="dialog-delete-client">
+          <DialogHeader>
+            <DialogTitle>Delete Client</DialogTitle>
+            <DialogDescription className="space-y-2">
+              <p className="text-destructive font-semibold">
+                ⚠️ Warning: This action cannot be undone!
+              </p>
+              <p>
+                Are you sure you want to permanently delete {selectedClient?.name}? 
+                This will remove all associated data including:
+              </p>
+              <ul className="list-disc list-inside text-sm">
+                <li>All users belonging to this company</li>
+                <li>All shifts and check-ins</li>
+                <li>All sites and settings</li>
+                <li>All billing records</li>
+              </ul>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              data-testid="button-cancel-delete"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (selectedClient) {
+                  deleteClientMutation.mutate(selectedClient.id);
+                }
+              }}
+              disabled={deleteClientMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteClientMutation.isPending ? "Deleting..." : "Permanently Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
