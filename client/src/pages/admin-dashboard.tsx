@@ -31,6 +31,8 @@ import NoticeBoardManagement from "@/components/notice-board-management";
 import CompanyManagement from "@/components/company-management";
 import CompanyPartnerships from "@/components/company-partnerships";
 import JobSharing from "@/components/job-sharing";
+import ClientManagement from "@/components/client-management";
+import ClientUsageReports from "@/components/client-usage-reports";
 
 interface DashboardStats {
   activeGuards: number;
@@ -251,16 +253,15 @@ export default function AdminDashboard() {
         )}
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue={user.role === 'super_admin' ? 'companies' : 'overview'} className="space-y-6">
+        <Tabs defaultValue={user.role === 'super_admin' ? 'clients' : 'overview'} className="space-y-6">
           <div className="w-full overflow-x-auto pb-2">
             <TabsList className="inline-flex min-w-min bg-muted">
               {user.role === 'super_admin' ? (
                 <>
                   {/* Super Admin Tabs - Platform Management */}
-                  <TabsTrigger value="companies" data-testid="tab-companies" className="text-xs sm:text-sm whitespace-nowrap">Companies</TabsTrigger>
-                  <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
-                  <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
-                  <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>
+                  <TabsTrigger value="clients" data-testid="tab-clients" className="text-xs sm:text-sm whitespace-nowrap">Clients</TabsTrigger>
+                  <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">All Users</TabsTrigger>
+                  <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
                 </>
               ) : (
                 <>
@@ -450,9 +451,15 @@ export default function AdminDashboard() {
           </TabsContent>
 
           {user.role === 'super_admin' && (
-            <TabsContent value="companies">
-              <CompanyManagement />
-            </TabsContent>
+            <>
+              <TabsContent value="clients">
+                <ClientManagement />
+              </TabsContent>
+              
+              <TabsContent value="reports">
+                <ClientUsageReports />
+              </TabsContent>
+            </>
           )}
 
           <TabsContent value="activity">

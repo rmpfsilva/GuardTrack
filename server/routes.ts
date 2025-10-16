@@ -2144,6 +2144,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Super Admin Client Management Routes
+  app.get('/api/super-admin/clients', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const allCompanies = await storage.getAllCompanies();
+      
+      // Enrich each company with trial status and duration info
+      const clientsWithStatus = await Promise.all(
+        allCompanies.map(async (company) => {
+          const trialStatus = await storage.checkTrialStatus(company.id);
+          
+          // Calculate days since joined (using createdAt if available)
+          const daysSinceJoined = company.createdAt 
+            ? Math.floor((Date.now() - new Date(company.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+            : undefined;
+          
+          return {
+            ...company,
+            trialStatus: trialStatus.status,
+            daysRemaining: trialStatus.daysRemaining,
+            daysSinceJoined,
+          };
+        })
+      );
+      
+      res.json(clientsWithStatus);
+    } catch (error) {
+      console.error("Error fetching clients:", error);
+      res.status(500).json({ message: "Failed to fetch clients" });
+    }
+  });
+
+  app.post('/api/companies/:id/block', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Set company to inactive
+      const [company] = await db
+        .update(companies)
+        .set({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(companies.id, id))
+        .returning();
+      
+      res.json(company);
+    } catch (error: any) {
+      console.error("Error blocking company:", error);
+      res.status(400).json({ message: error.message || "Failed to block company" });
+    }
+  });
+
+  app.post('/api/super-admin/send-message', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { clientId, subject, body } = req.body;
+      
+      if (!clientId || !subject || !body) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      
+      // Get company details
+      const company = await storage.getCompany(clientId);
+      if (!company || !company.email) {
+        return res.status(404).json({ message: "Company not found or no email address" });
+      }
+      
+      // Send email using the email service
+      await sendInvitationEmail(company.email, subject, body);
+      
+      res.json({ message: "Message sent successfully" });
+    } catch (error: any) {
+      console.error("Error sending message:", error);
+      res.status(400).json({ message: error.message || "Failed to send message" });
+    }
+  });
+
+  app.get('/api/super-admin/usage-reports', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { month, year } = req.query;
+      
+      // Default to current month if not specified
+      const targetMonth = month ? parseInt(month as string) : new Date().getMonth();
+      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      
+      const allCompanies = await storage.getAllCompanies();
+      
+      // Calculate usage stats for each company
+      const usageReports = await Promise.all(
+        allCompanies.map(async (company) => {
+          // Get all check-ins for this company in the target month
+          const companyCheckIns = await db
+            .select()
+            .from(checkIns)
+            .leftJoin(users, eq(checkIns.userId, users.id))
+            .where(eq(users.companyId, company.id));
+          
+          // Filter check-ins by month/year
+          const monthCheckIns = companyCheckIns.filter(({ check_ins: checkIn }) => {
+            const checkInDate = new Date(checkIn.checkInTime);
+            return checkInDate.getMonth() === targetMonth && checkInDate.getFullYear() === targetYear;
+          });
+          
+          // Calculate total hours
+          const totalHours = monthCheckIns.reduce((sum, { check_ins: checkIn }) => {
+            if (checkIn.checkOutTime) {
+              const hours = (new Date(checkIn.checkOutTime).getTime() - new Date(checkIn.checkInTime).getTime()) / (1000 * 60 * 60);
+              return sum + hours;
+            }
+            return sum;
+          }, 0);
+          
+          // Get active users count
+          const activeUserIds = new Set(monthCheckIns.map(({ check_ins: checkIn }) => checkIn.userId));
+          
+          return {
+            companyId: company.id,
+            companyName: company.name,
+            month: targetMonth + 1,
+            year: targetYear,
+            checkInsCount: monthCheckIns.length,
+            totalHours: Math.round(totalHours * 10) / 10,
+            activeUsers: activeUserIds.size,
+          };
+        })
+      );
+      
+      res.json({
+        month: targetMonth + 1,
+        year: targetYear,
+        reports: usageReports,
+      });
+    } catch (error) {
+      console.error("Error generating usage reports:", error);
+      res.status(500).json({ message: "Failed to generate usage reports" });
+    }
+  });
+
   // Periodic trial expiration check (runs every hour)
   const expireTrialsInterval = setInterval(async () => {
     try {

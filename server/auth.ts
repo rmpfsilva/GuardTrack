@@ -153,14 +153,41 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: any, user: SelectUser | false, info: any) => {
+  app.post("/api/login", async (req, res, next) => {
+    passport.authenticate("local", async (err: any, user: SelectUser | false, info: any) => {
       if (err) {
         return next(err);
       }
       
       if (!user) {
         return res.status(401).send("Invalid credentials");
+      }
+      
+      // Check trial status for non-super-admin users with companies
+      if (user.role !== 'super_admin' && user.companyId) {
+        try {
+          const trialStatus = await storage.checkTrialStatus(user.companyId);
+          
+          if (!trialStatus.isActive && trialStatus.status === 'expired') {
+            // Trial has expired - send email notification and block login
+            const company = await storage.getCompany(user.companyId);
+            if (company && company.email) {
+              await sendInvitationEmail(
+                company.email,
+                'Trial Period Expired - GuardTrack',
+                `Dear ${company.name} Team,\n\nYour trial period for GuardTrack has expired. To continue using the platform, please contact our support team to upgrade to a full account.\n\nThank you for trying GuardTrack.\n\nBest regards,\nGuardTrack Team`
+              );
+            }
+            
+            return res.status(403).json({ 
+              message: "Your trial period has expired. An email has been sent to your company administrator. Please contact support to upgrade.",
+              trialExpired: true 
+            });
+          }
+        } catch (trialError) {
+          console.error('Error checking trial on login:', trialError);
+          // Continue with login even if trial check fails
+        }
       }
       
       req.login(user, (loginErr) => {
