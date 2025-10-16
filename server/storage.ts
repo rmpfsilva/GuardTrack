@@ -757,13 +757,84 @@ export class DatabaseStorage implements IStorage {
       .where(eq(scheduledShifts.isActive, true))
       .orderBy(scheduledShifts.startTime);
 
-    return results
+    const shiftsWithDetails = results
       .filter((r) => r.users && r.sites)
       .map((r) => ({
         ...r.scheduled_shifts,
         user: r.users!,
         site: r.sites!,
+        checkIn: null as CheckIn | null,
       }));
+
+    if (shiftsWithDetails.length === 0) {
+      return shiftsWithDetails;
+    }
+
+    // Batch fetch all potentially relevant check-ins
+    const userIds = Array.from(new Set(shiftsWithDetails.map(s => s.userId)));
+    const siteIds = Array.from(new Set(shiftsWithDetails.map(s => s.siteId)));
+    const minDate = new Date(Math.min(...shiftsWithDetails.map(s => new Date(s.startTime).getTime())));
+    const maxDate = new Date(Math.max(...shiftsWithDetails.map(s => new Date(s.endTime).getTime())));
+    
+    // Extend date range by 12 hours on each side to catch shifts that span midnight
+    minDate.setHours(minDate.getHours() - 12);
+    maxDate.setHours(maxDate.getHours() + 12);
+
+    const allCheckIns = await db
+      .select()
+      .from(checkIns)
+      .where(
+        and(
+          sql`${checkIns.userId} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`,
+          sql`${checkIns.siteId} IN (${sql.join(siteIds.map(id => sql`${id}`), sql`, `)})`,
+          gte(checkIns.checkInTime, minDate),
+          lte(checkIns.checkInTime, maxDate)
+        )
+      );
+
+    // Match check-ins to shifts based on strict temporal overlap
+    for (const shift of shiftsWithDetails) {
+      const shiftStart = new Date(shift.startTime).getTime();
+      const shiftEnd = new Date(shift.endTime).getTime();
+
+      // Find best matching check-in for this shift
+      const candidates = allCheckIns.filter(checkIn =>
+        checkIn.userId === shift.userId &&
+        checkIn.siteId === shift.siteId
+      );
+
+      let bestMatch: typeof allCheckIns[0] | null = null;
+      let bestScore = Infinity;
+
+      for (const checkIn of candidates) {
+        const checkInStart = new Date(checkIn.checkInTime).getTime();
+        const checkInEnd = checkIn.checkOutTime ? new Date(checkIn.checkOutTime).getTime() : Date.now();
+
+        // Check for actual temporal overlap between shift and check-in windows
+        // The intervals overlap if: max(start1, start2) < min(end1, end2)
+        const overlapStart = Math.max(shiftStart, checkInStart);
+        const overlapEnd = Math.min(shiftEnd, checkInEnd);
+        
+        // Only match if there's genuine overlap, OR check-in is within 30 min of shift start (late arrival)
+        const hasOverlap = overlapStart < overlapEnd;
+        const isLateArrival = checkInStart >= shiftStart && checkInStart <= shiftStart + (30 * 60 * 1000);
+        
+        if (hasOverlap || isLateArrival) {
+          // Calculate how close the check-in time is to shift start (prefer closest match)
+          const timeDiff = Math.abs(checkInStart - shiftStart);
+          if (timeDiff < bestScore) {
+            bestScore = timeDiff;
+            bestMatch = checkIn;
+          }
+        }
+      }
+
+      if (bestMatch) {
+        shift.checkIn = bestMatch;
+      }
+    }
+
+    return shiftsWithDetails;
   }
 
   async getUserScheduledShifts(userId: string, startDate?: Date, endDate?: Date): Promise<ScheduledShiftWithDetails[]> {
@@ -798,28 +869,57 @@ export class DatabaseStorage implements IStorage {
         checkIn: null as CheckIn | null,
       }));
 
-    // Get matching check-ins for these shifts
-    for (const shift of shiftsWithDetails) {
-      // Find check-in that matches this shift (same user, same site, same day)
-      const shiftDate = new Date(shift.startTime);
-      const dayStart = new Date(shiftDate.setHours(0, 0, 0, 0));
-      const dayEnd = new Date(shiftDate.setHours(23, 59, 59, 999));
-      
-      const [matchingCheckIn] = await db
-        .select()
-        .from(checkIns)
-        .where(
-          and(
-            eq(checkIns.userId, shift.userId),
-            eq(checkIns.siteId, shift.siteId),
-            gte(checkIns.checkInTime, dayStart),
-            lte(checkIns.checkInTime, dayEnd)
-          )
+    if (shiftsWithDetails.length === 0) {
+      return shiftsWithDetails;
+    }
+
+    // Batch fetch all potentially relevant check-ins for this user
+    const siteIds = [...new Set(shiftsWithDetails.map(s => s.siteId))];
+    const minDate = new Date(Math.min(...shiftsWithDetails.map(s => new Date(s.startTime).getTime())));
+    const maxDate = new Date(Math.max(...shiftsWithDetails.map(s => new Date(s.endTime).getTime())));
+    
+    minDate.setHours(minDate.getHours() - 12);
+    maxDate.setHours(maxDate.getHours() + 12);
+
+    const allCheckIns = await db
+      .select()
+      .from(checkIns)
+      .where(
+        and(
+          eq(checkIns.userId, userId),
+          sql`${checkIns.siteId} IN (${sql.join(siteIds.map(id => sql`${id}`), sql`, `)})`,
+          gte(checkIns.checkInTime, minDate),
+          lte(checkIns.checkInTime, maxDate)
         )
-        .limit(1);
-      
-      if (matchingCheckIn) {
-        shift.checkIn = matchingCheckIn;
+      );
+
+    // Match check-ins to shifts based on temporal overlap with 2-hour tolerance
+    for (const shift of shiftsWithDetails) {
+      const shiftStart = new Date(shift.startTime);
+      const shiftEnd = new Date(shift.endTime);
+      const tolerance = 2 * 60 * 60 * 1000;
+
+      const candidates = allCheckIns.filter(checkIn => checkIn.siteId === shift.siteId);
+      let bestMatch: typeof allCheckIns[0] | null = null;
+      let bestScore = Infinity;
+
+      for (const checkIn of candidates) {
+        const checkInStart = new Date(checkIn.checkInTime);
+        const checkInEnd = checkIn.checkOutTime ? new Date(checkIn.checkOutTime) : new Date();
+        const overlapStart = Math.max(shiftStart.getTime() - tolerance, checkInStart.getTime());
+        const overlapEnd = Math.min(shiftEnd.getTime() + tolerance, checkInEnd.getTime());
+        
+        if (overlapStart < overlapEnd) {
+          const timeDiff = Math.abs(checkInStart.getTime() - shiftStart.getTime());
+          if (timeDiff < bestScore) {
+            bestScore = timeDiff;
+            bestMatch = checkIn;
+          }
+        }
+      }
+
+      if (bestMatch) {
+        shift.checkIn = bestMatch;
       }
     }
 
@@ -873,28 +973,61 @@ export class DatabaseStorage implements IStorage {
         checkIn: null as CheckIn | null,
       }));
 
-    // Get matching check-ins for these shifts
-    for (const shift of shiftsWithDetails) {
-      // Find check-in that matches this shift (same user, same site, same day)
-      const shiftDate = new Date(shift.startTime);
-      const dayStart = new Date(shiftDate.setHours(0, 0, 0, 0));
-      const dayEnd = new Date(shiftDate.setHours(23, 59, 59, 999));
-      
-      const [matchingCheckIn] = await db
-        .select()
-        .from(checkIns)
-        .where(
-          and(
-            eq(checkIns.userId, shift.userId),
-            eq(checkIns.siteId, shift.siteId),
-            gte(checkIns.checkInTime, dayStart),
-            lte(checkIns.checkInTime, dayEnd)
-          )
+    if (shiftsWithDetails.length === 0) {
+      return shiftsWithDetails;
+    }
+
+    // Batch fetch all potentially relevant check-ins
+    const userIds = [...new Set(shiftsWithDetails.map(s => s.userId))];
+    const siteIds = [...new Set(shiftsWithDetails.map(s => s.siteId))];
+    const minDate = new Date(startDate);
+    const maxDate = new Date(endDate);
+    
+    minDate.setHours(minDate.getHours() - 12);
+    maxDate.setHours(maxDate.getHours() + 12);
+
+    const allCheckIns = await db
+      .select()
+      .from(checkIns)
+      .where(
+        and(
+          sql`${checkIns.userId} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`,
+          sql`${checkIns.siteId} IN (${sql.join(siteIds.map(id => sql`${id}`), sql`, `)})`,
+          gte(checkIns.checkInTime, minDate),
+          lte(checkIns.checkInTime, maxDate)
         )
-        .limit(1);
+      );
+
+    // Match check-ins to shifts based on temporal overlap with 2-hour tolerance
+    for (const shift of shiftsWithDetails) {
+      const shiftStart = new Date(shift.startTime);
+      const shiftEnd = new Date(shift.endTime);
+      const tolerance = 2 * 60 * 60 * 1000;
+
+      const candidates = allCheckIns.filter(checkIn =>
+        checkIn.userId === shift.userId && checkIn.siteId === shift.siteId
+      );
       
-      if (matchingCheckIn) {
-        shift.checkIn = matchingCheckIn;
+      let bestMatch: typeof allCheckIns[0] | null = null;
+      let bestScore = Infinity;
+
+      for (const checkIn of candidates) {
+        const checkInStart = new Date(checkIn.checkInTime);
+        const checkInEnd = checkIn.checkOutTime ? new Date(checkIn.checkOutTime) : new Date();
+        const overlapStart = Math.max(shiftStart.getTime() - tolerance, checkInStart.getTime());
+        const overlapEnd = Math.min(shiftEnd.getTime() + tolerance, checkInEnd.getTime());
+        
+        if (overlapStart < overlapEnd) {
+          const timeDiff = Math.abs(checkInStart.getTime() - shiftStart.getTime());
+          if (timeDiff < bestScore) {
+            bestScore = timeDiff;
+            bestMatch = checkIn;
+          }
+        }
+      }
+
+      if (bestMatch) {
+        shift.checkIn = bestMatch;
       }
     }
 
