@@ -313,13 +313,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/sites/:id', isAuthenticated, isAdmin, async (req, res) => {
+  app.patch('/api/sites/:id', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const user = req.user;
+      
+      // For regular admins, validate site belongs to their company
+      if (user.role !== 'super_admin') {
+        const site = await storage.getSite(id);
+        if (!site) {
+          return res.status(404).json({ message: "Site not found" });
+        }
+        if (site.companyId !== user.companyId) {
+          return res.status(403).json({ message: "Cannot update sites from other companies" });
+        }
+      }
+      
       // Validate using partial update schema (strip unknown fields)
       const validatedData = updateSiteSchema.parse(req.body);
-      const site = await storage.updateSite(id, validatedData);
-      res.json(site);
+      const updatedSite = await storage.updateSite(id, validatedData);
+      res.json(updatedSite);
     } catch (error: any) {
       console.error("Error updating site:", error);
       if (error.name === 'ZodError') {
@@ -329,9 +342,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/sites/:id', isAuthenticated, isAdmin, async (req, res) => {
+  app.delete('/api/sites/:id', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const user = req.user;
+      
+      // For regular admins, validate site belongs to their company
+      if (user.role !== 'super_admin') {
+        const site = await storage.getSite(id);
+        if (!site) {
+          return res.status(404).json({ message: "Site not found" });
+        }
+        if (site.companyId !== user.companyId) {
+          return res.status(403).json({ message: "Cannot delete sites from other companies" });
+        }
+      }
+      
       await storage.deleteSite(id);
       res.status(204).send();
     } catch (error: any) {
