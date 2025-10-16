@@ -747,7 +747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For regular admins, validate user and site belong to their company
       if (admin.role !== 'super_admin') {
         const user = await storage.getUserById(userId);
-        const site = await storage.getSiteById(siteId);
+        const site = await storage.getSite(siteId);
         
         if (!user || user.companyId !== admin.companyId) {
           return res.status(403).json({ message: "Cannot check in users from other companies" });
@@ -947,7 +947,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For regular admins, validate user and site belong to their company
       if (admin.role !== 'super_admin') {
         const user = await storage.getUserById(validatedData.userId);
-        const site = await storage.getSiteById(validatedData.siteId);
+        const site = await storage.getSite(validatedData.siteId);
         
         if (!user || user.companyId !== admin.companyId) {
           return res.status(403).json({ message: "Cannot create shifts for users from other companies" });
@@ -988,7 +988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         if (req.body.siteId) {
-          const site = await storage.getSiteById(req.body.siteId);
+          const site = await storage.getSite(req.body.siteId);
           if (!site || site.companyId !== admin.companyId) {
             return res.status(403).json({ message: "Cannot assign shifts to sites from other companies" });
           }
