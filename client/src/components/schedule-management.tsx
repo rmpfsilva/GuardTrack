@@ -383,11 +383,23 @@ export default function ScheduleManagement() {
                           <MapPin className="w-3 h-3" />
                           <span className="truncate">{shift.site.name}</span>
                         </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          <span>
-                            {format(new Date(shift.startTime), "HH:mm")} - {format(new Date(shift.endTime), "HH:mm")}
-                          </span>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            <span>
+                              Scheduled: {format(new Date(shift.startTime), "HH:mm")} - {format(new Date(shift.endTime), "HH:mm")}
+                            </span>
+                          </div>
+                          {shift.checkIn && (
+                            <div className="flex items-center gap-1 text-xs">
+                              <Clock className="w-3 h-3 text-primary" />
+                              <span className="text-primary font-medium">
+                                Actual: {format(new Date(shift.checkIn.checkInTime), "HH:mm")}
+                                {shift.checkIn.checkOutTime && ` - ${format(new Date(shift.checkIn.checkOutTime), "HH:mm")}`}
+                                {!shift.checkIn.checkOutTime && " - (In Progress)"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {shift.recurrence !== 'none' && (
                           <Badge variant="secondary" className="text-xs">

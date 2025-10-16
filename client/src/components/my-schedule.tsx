@@ -90,12 +90,22 @@ export default function MySchedule() {
                         data-testid={`guard-shift-${shift.id}`}
                       >
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-sm">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Clock className="w-4 h-4" />
-                            <span className="font-medium font-mono">
-                              {format(new Date(shift.startTime), "HH:mm")} - {format(new Date(shift.endTime), "HH:mm")}
+                            <span className="font-mono">
+                              Scheduled: {format(new Date(shift.startTime), "HH:mm")} - {format(new Date(shift.endTime), "HH:mm")}
                             </span>
                           </div>
+                          {shift.checkIn && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Clock className="w-4 h-4 text-primary" />
+                              <span className="font-medium font-mono text-primary">
+                                Actual: {format(new Date(shift.checkIn.checkInTime), "HH:mm")}
+                                {shift.checkIn.checkOutTime && ` - ${format(new Date(shift.checkIn.checkOutTime), "HH:mm")}`}
+                                {!shift.checkIn.checkOutTime && " - (Active)"}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <MapPin className="w-4 h-4" />
                             <span>{shift.site.name}</span>
