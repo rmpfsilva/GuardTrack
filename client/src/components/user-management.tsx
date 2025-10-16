@@ -327,12 +327,12 @@ export default function UserManagement() {
             {currentUser?.role === 'super_admin' && (
               <div className="space-y-2">
                 <Label htmlFor="edit-company">Company</Label>
-                <Select value={formData.companyId} onValueChange={(value) => setFormData({ ...formData, companyId: value })}>
+                <Select value={formData.companyId || "none"} onValueChange={(value) => setFormData({ ...formData, companyId: value === "none" ? "" : value })}>
                   <SelectTrigger id="edit-company" data-testid="select-edit-user-company">
                     <SelectValue placeholder="Select company (or leave empty)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Company</SelectItem>
+                    <SelectItem value="none">No Company</SelectItem>
                     {companies.map((company) => (
                       <SelectItem key={company.id} value={company.id}>
                         {company.name}
