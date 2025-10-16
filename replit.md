@@ -19,7 +19,7 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 
 ### Feature Specifications
 - **Authentication & User Management**: Role-based access (Guard, Steward, Supervisor, Admin, Super Admin) with multi-tenant company affiliation.
-- **Shift Management**: Calendar-based shift scheduling for admins, assigned schedule viewing for guards.
+- **Shift Management**: Calendar-based shift scheduling for admins, assigned schedule viewing for guards. Enhanced schedule calendar displays both scheduled shift times and actual check-in/check-out times side-by-side for easy comparison. Uses strict temporal overlap matching with 30-minute late-arrival tolerance to accurately associate check-ins with shifts.
 - **Check-in/Check-out**: Geolocation-verified check-ins/check-outs; manual overrides by admins.
 - **Break Tracking**: Geolocation and timestamp-based tracking of unpaid breaks, with a mandatory 1-hour baseline deduction and approval system for extended breaks.
 - **Overtime Tracking**: Automatic detection of overtime (>30 min past scheduled shift end) requiring admin approval for payment.
