@@ -12,6 +12,7 @@ import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
 import RegisterPage from "@/pages/register-page";
+import TrialRegistrationPage from "@/pages/trial-registration";
 import GuardDashboard from "@/pages/guard-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
 import SettingsPage from "@/pages/settings-page";
@@ -28,6 +29,7 @@ function Router() {
         <Route path="/login" component={AuthPage} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/register" component={RegisterPage} />
+        <Route path="/register-trial" component={TrialRegistrationPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <ProtectedRoute path="/settings" component={SettingsPage} />
