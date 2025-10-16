@@ -218,6 +218,12 @@ export interface IStorage {
   createJobShare(jobShare: InsertJobShare): Promise<JobShare>;
   updateJobShare(id: string, updates: UpdateJobShare): Promise<JobShare>;
   deleteJobShare(id: string): Promise<void>;
+
+  // Trial management operations
+  setCompanyTrial(companyId: string, trialDays: number): Promise<Company>;
+  extendCompanyTrial(companyId: string, additionalDays: number): Promise<Company>;
+  checkTrialStatus(companyId: string): Promise<{ isActive: boolean; daysRemaining: number; status: string }>;
+  expireTrials(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2198,6 +2204,113 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobShare(id: string): Promise<void> {
     await db.delete(jobShares).where(eq(jobShares.id, id));
+  }
+
+  // Trial management operations
+  async setCompanyTrial(companyId: string, trialDays: number): Promise<Company> {
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + trialDays);
+
+    const [company] = await db
+      .update(companies)
+      .set({
+        trialStatus: 'trial',
+        trialEndDate: trialEndDate,
+        trialDays: String(trialDays),
+        updatedAt: new Date(),
+      })
+      .where(eq(companies.id, companyId))
+      .returning();
+    
+    return company;
+  }
+
+  async extendCompanyTrial(companyId: string, additionalDays: number): Promise<Company> {
+    const company = await this.getCompany(companyId);
+    if (!company) {
+      throw new Error('Company not found');
+    }
+
+    let newEndDate = company.trialEndDate ? new Date(company.trialEndDate) : new Date();
+    
+    // If trial has already expired, start from today
+    if (newEndDate < new Date()) {
+      newEndDate = new Date();
+    }
+    
+    newEndDate.setDate(newEndDate.getDate() + additionalDays);
+
+    const newTotalDays = parseInt(company.trialDays || '0') + additionalDays;
+
+    const [updatedCompany] = await db
+      .update(companies)
+      .set({
+        trialStatus: 'trial',
+        trialEndDate: newEndDate,
+        trialDays: String(newTotalDays),
+        updatedAt: new Date(),
+      })
+      .where(eq(companies.id, companyId))
+      .returning();
+    
+    return updatedCompany;
+  }
+
+  async checkTrialStatus(companyId: string): Promise<{ isActive: boolean; daysRemaining: number; status: string }> {
+    const company = await this.getCompany(companyId);
+    if (!company) {
+      throw new Error('Company not found');
+    }
+
+    if (company.trialStatus === 'full') {
+      return {
+        isActive: true,
+        daysRemaining: -1, // -1 indicates full version (unlimited)
+        status: 'full',
+      };
+    }
+
+    if (!company.trialEndDate || company.trialStatus === 'expired') {
+      return {
+        isActive: false,
+        daysRemaining: 0,
+        status: 'expired',
+      };
+    }
+
+    const now = new Date();
+    const endDate = new Date(company.trialEndDate);
+    const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysRemaining <= 0) {
+      return {
+        isActive: false,
+        daysRemaining: 0,
+        status: 'expired',
+      };
+    }
+
+    return {
+      isActive: true,
+      daysRemaining: daysRemaining,
+      status: 'trial',
+    };
+  }
+
+  async expireTrials(): Promise<void> {
+    const now = new Date();
+    await db
+      .update(companies)
+      .set({
+        trialStatus: 'expired',
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(companies.trialStatus, 'trial'),
+          lt(companies.trialEndDate, now)
+        )
+      );
   }
 }
 

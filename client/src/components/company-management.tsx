@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Edit, Trash2, Building2 } from "lucide-react";
+import { Plus, Edit, Trash2, Building2, Timer, Check } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCompanySchema, type InsertCompany, type Company } from "@shared/schema";
@@ -46,6 +46,8 @@ export default function CompanyManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [deletingCompany, setDeletingCompany] = useState<Company | null>(null);
+  const [trialCompany, setTrialCompany] = useState<Company | null>(null);
+  const [trialDays, setTrialDays] = useState<number>(14);
 
   const { data: companies = [], isLoading } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
@@ -136,6 +138,53 @@ export default function CompanyManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const setTrialMutation = useMutation({
+    mutationFn: async ({ id, trialDays }: { id: string; trialDays: number }) => {
+      return await apiRequest(`/api/companies/${id}/trial`, {
+        method: "POST",
+        body: JSON.stringify({ trialDays }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      setTrialCompany(null);
+      toast({
+        title: "Trial set",
+        description: `Company trial has been set to ${trialDays} days.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to set trial",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const convertToFullMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/companies/${id}/trial/convert-to-full`, {
+        method: "POST",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      setTrialCompany(null);
+      toast({
+        title: "Converted to full",
+        description: "Company has been converted to full version.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to convert to full",
         variant: "destructive",
       });
     },
@@ -340,9 +389,28 @@ export default function CompanyManagement() {
                   </div>
                   <div>
                     <CardTitle className="text-lg" data-testid={`text-company-name-${company.id}`}>{company.name}</CardTitle>
-                    <Badge variant={company.isActive ? "default" : "secondary"} className="mt-1">
-                      {company.isActive ? "Active" : "Inactive"}
-                    </Badge>
+                    <div className="flex gap-2 mt-1">
+                      <Badge variant={company.isActive ? "default" : "secondary"}>
+                        {company.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {company.trialStatus === 'trial' && (
+                        <Badge variant="outline" className="border-amber-500 text-amber-600">
+                          <Timer className="h-3 w-3 mr-1" />
+                          Trial
+                        </Badge>
+                      )}
+                      {company.trialStatus === 'full' && (
+                        <Badge variant="outline" className="border-green-500 text-green-600">
+                          <Check className="h-3 w-3 mr-1" />
+                          Full
+                        </Badge>
+                      )}
+                      {company.trialStatus === 'expired' && (
+                        <Badge variant="destructive">
+                          Expired
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -366,7 +434,7 @@ export default function CompanyManagement() {
                   <span className="line-clamp-2" data-testid={`text-company-address-${company.id}`}>{company.address}</span>
                 </div>
               )}
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-2 flex-wrap">
                 <Button
                   variant="outline"
                   size="sm"
@@ -375,6 +443,15 @@ export default function CompanyManagement() {
                 >
                   <Edit className="h-3 w-3 mr-1" />
                   Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setTrialCompany(company); setTrialDays(14); }}
+                  data-testid={`button-manage-trial-${company.id}`}
+                >
+                  <Timer className="h-3 w-3 mr-1" />
+                  Trial
                 </Button>
                 <Button
                   variant="outline"
@@ -558,6 +635,111 @@ export default function CompanyManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Trial Management Dialog */}
+      <Dialog open={!!trialCompany} onOpenChange={(open) => !open && setTrialCompany(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Trial for {trialCompany?.name}</DialogTitle>
+            <DialogDescription>
+              Set or update the trial period for this company
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Current Status</Label>
+              <div className="flex gap-2">
+                {trialCompany?.trialStatus === 'trial' && (
+                  <Badge variant="outline" className="border-amber-500 text-amber-600">
+                    <Timer className="h-3 w-3 mr-1" />
+                    Trial Active
+                  </Badge>
+                )}
+                {trialCompany?.trialStatus === 'full' && (
+                  <Badge variant="outline" className="border-green-500 text-green-600">
+                    <Check className="h-3 w-3 mr-1" />
+                    Full Version
+                  </Badge>
+                )}
+                {trialCompany?.trialStatus === 'expired' && (
+                  <Badge variant="destructive">Trial Expired</Badge>
+                )}
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="trial-days">Trial Duration (Days)</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={trialDays === 3 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrialDays(3)}
+                  data-testid="button-trial-3-days"
+                >
+                  3 Days
+                </Button>
+                <Button
+                  variant={trialDays === 7 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrialDays(7)}
+                  data-testid="button-trial-7-days"
+                >
+                  7 Days
+                </Button>
+                <Button
+                  variant={trialDays === 14 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrialDays(14)}
+                  data-testid="button-trial-14-days"
+                >
+                  14 Days
+                </Button>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="custom-days">Custom Days</Label>
+              <Input
+                id="custom-days"
+                type="number"
+                min="1"
+                value={trialDays}
+                onChange={(e) => setTrialDays(parseInt(e.target.value) || 14)}
+                data-testid="input-custom-trial-days"
+                placeholder="Enter number of days"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setTrialCompany(null)}
+              data-testid="button-cancel-trial"
+            >
+              Cancel
+            </Button>
+            {trialCompany?.trialStatus !== 'full' && (
+              <Button
+                onClick={() => trialCompany && convertToFullMutation.mutate(trialCompany.id)}
+                disabled={convertToFullMutation.isPending}
+                data-testid="button-convert-to-full"
+                variant="secondary"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                {convertToFullMutation.isPending ? "Converting..." : "Convert to Full"}
+              </Button>
+            )}
+            <Button
+              onClick={() => trialCompany && setTrialMutation.mutate({ id: trialCompany.id, trialDays })}
+              disabled={setTrialMutation.isPending}
+              data-testid="button-set-trial"
+            >
+              <Timer className="h-4 w-4 mr-2" />
+              {setTrialMutation.isPending ? "Setting..." : "Set Trial"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

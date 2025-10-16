@@ -39,6 +39,9 @@ export const companies = pgTable("companies", {
   registrationNumber: varchar("registration_number"),
   logoUrl: text("logo_url"),
   isActive: boolean("is_active").notNull().default(true),
+  trialStatus: varchar("trial_status").default('full'), // 'trial' | 'expired' | 'full'
+  trialEndDate: timestamp("trial_end_date"),
+  trialDays: numeric("trial_days", { precision: 3, scale: 0 }), // Number of trial days (3, 7, 14, etc.)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

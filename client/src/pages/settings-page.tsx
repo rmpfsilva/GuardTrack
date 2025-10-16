@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { ArrowLeft, Lock, IdCard, Calendar, UserCog, Building2 } from "lucide-react";
+import { ArrowLeft, Lock, IdCard, Calendar, UserCog, Building2, Timer, Check, AlertTriangle } from "lucide-react";
 import type { User, Company } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import InvoiceSettings from "@/components/invoice-settings";
 
@@ -108,6 +109,12 @@ export default function SettingsPage() {
   const { data: company } = useQuery<Company>({
     queryKey: ['/api/companies', user?.companyId],
     enabled: !!user?.companyId,
+  });
+
+  // Fetch trial status (for admins and above)
+  const { data: trialStatus } = useQuery<{ isActive: boolean; daysRemaining: number; status: string }>({
+    queryKey: [`/api/companies/${user?.companyId}/trial/status`],
+    enabled: !!user?.companyId && (user?.role === 'admin' || user?.role === 'super_admin'),
   });
 
   // Reset profile form when user data loads
@@ -285,6 +292,39 @@ export default function SettingsPage() {
                       <label className="text-sm font-medium text-muted-foreground">Company ID</label>
                       <p className="text-base font-mono" data-testid="text-company-id">{company.companyId}</p>
                     </div>
+                    {trialStatus && (user?.role === 'admin' || user?.role === 'super_admin') && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Account Status</label>
+                        <div className="flex items-center gap-2 mt-1">
+                          {trialStatus.status === 'trial' && (
+                            <>
+                              <Badge variant="outline" className="border-amber-500 text-amber-600" data-testid="badge-trial-status">
+                                <Timer className="h-3 w-3 mr-1" />
+                                Trial ({trialStatus.daysRemaining} days remaining)
+                              </Badge>
+                              {trialStatus.daysRemaining <= 3 && (
+                                <p className="text-sm text-amber-600 flex items-center gap-1">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  Trial expires soon
+                                </p>
+                              )}
+                            </>
+                          )}
+                          {trialStatus.status === 'full' && (
+                            <Badge variant="outline" className="border-green-500 text-green-600" data-testid="badge-full-status">
+                              <Check className="h-3 w-3 mr-1" />
+                              Full Version
+                            </Badge>
+                          )}
+                          {trialStatus.status === 'expired' && (
+                            <Badge variant="destructive" data-testid="badge-expired-status">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Trial Expired
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     {company.email && (
                       <div>
                         <label className="text-sm font-medium text-muted-foreground">Email</label>

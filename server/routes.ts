@@ -4,7 +4,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { setupAuth, hashPassword } from "./auth";
-import { users, breaks, checkIns, sites } from "@shared/schema";
+import { users, breaks, checkIns, sites, companies } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
@@ -2034,6 +2034,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting job share:", error);
       res.status(400).json({ message: error.message || "Failed to delete job share" });
+    }
+  });
+
+  // Trial Management Routes (Super Admin only)
+  app.post('/api/companies/:id/trial', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { trialDays } = req.body;
+
+      if (!trialDays || trialDays <= 0) {
+        return res.status(400).json({ message: "Trial days must be a positive number" });
+      }
+
+      const company = await storage.setCompanyTrial(id, trialDays);
+      res.json(company);
+    } catch (error: any) {
+      console.error("Error setting company trial:", error);
+      res.status(400).json({ message: error.message || "Failed to set company trial" });
+    }
+  });
+
+  app.post('/api/companies/:id/trial/extend', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { additionalDays } = req.body;
+
+      if (!additionalDays || additionalDays <= 0) {
+        return res.status(400).json({ message: "Additional days must be a positive number" });
+      }
+
+      const company = await storage.extendCompanyTrial(id, additionalDays);
+      res.json(company);
+    } catch (error: any) {
+      console.error("Error extending company trial:", error);
+      res.status(400).json({ message: error.message || "Failed to extend company trial" });
+    }
+  });
+
+  app.get('/api/companies/:id/trial/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      // Multi-tenant check: users can only check their own company's trial status
+      // unless they are super admin
+      if (user.role !== 'super_admin' && user.companyId !== id) {
+        return res.status(403).json({ message: "Forbidden - You can only check your own company's trial status" });
+      }
+
+      const trialStatus = await storage.checkTrialStatus(id);
+      res.json(trialStatus);
+    } catch (error: any) {
+      console.error("Error checking trial status:", error);
+      res.status(400).json({ message: error.message || "Failed to check trial status" });
+    }
+  });
+
+  app.post('/api/companies/:id/trial/convert-to-full', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+
+      const [company] = await db
+        .update(companies)
+        .set({
+          trialStatus: 'full',
+          trialEndDate: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(companies.id, id))
+        .returning();
+
+      res.json(company);
+    } catch (error: any) {
+      console.error("Error converting company to full:", error);
+      res.status(400).json({ message: error.message || "Failed to convert company to full" });
     }
   });
 
