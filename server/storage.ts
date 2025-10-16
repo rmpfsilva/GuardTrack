@@ -9,6 +9,8 @@ import {
   scheduledShifts,
   invitations,
   trialInvitations,
+  userLogins,
+  supportMessages,
   passwordResetTokens,
   leaveRequests,
   notices,
@@ -39,6 +41,11 @@ import {
   type TrialInvitation,
   type InsertTrialInvitation,
   type UpdateTrialInvitation,
+  type UserLogin,
+  type InsertUserLogin,
+  type SupportMessage,
+  type InsertSupportMessage,
+  type UpdateSupportMessage,
   type PasswordResetToken,
   type InsertPasswordResetToken,
   type LeaveRequest,
@@ -162,6 +169,19 @@ export interface IStorage {
   getAllTrialInvitations(): Promise<TrialInvitation[]>;
   markTrialInvitationAccepted(token: string): Promise<TrialInvitation>;
   expireTrialInvitation(id: string): Promise<TrialInvitation>;
+
+  // User login tracking operations
+  createUserLogin(login: InsertUserLogin): Promise<UserLogin>;
+  getUserLoginsByCompany(companyId: string, startDate: Date, endDate: Date): Promise<UserLogin[]>;
+  getUserLoginStats(companyId: string | null, period: 'day' | 'week' | 'month'): Promise<{date: string, count: number}[]>;
+  getCompanyUserGrowth(companyId: string, currentMonth: Date, previousMonth: Date): Promise<{current: number, previous: number}>;
+
+  // Support message operations
+  createSupportMessage(message: InsertSupportMessage): Promise<SupportMessage>;
+  getSupportMessagesByCompany(companyId: string): Promise<SupportMessage[]>;
+  getAllSupportMessages(): Promise<SupportMessage[]>;
+  markSupportMessageAsRead(messageId: string): Promise<SupportMessage>;
+  getUnreadSupportMessagesCount(companyId?: string): Promise<number>;
 
   // Password reset token operations
   createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
@@ -1405,6 +1425,133 @@ export class DatabaseStorage implements IStorage {
       .where(eq(trialInvitations.id, id))
       .returning();
     return invitation;
+  }
+
+  // User login tracking operations
+  async createUserLogin(loginData: InsertUserLogin): Promise<UserLogin> {
+    const [login] = await db.insert(userLogins).values(loginData).returning();
+    return login;
+  }
+
+  async getUserLoginsByCompany(companyId: string, startDate: Date, endDate: Date): Promise<UserLogin[]> {
+    return await db
+      .select()
+      .from(userLogins)
+      .where(and(
+        eq(userLogins.companyId, companyId),
+        gte(userLogins.loginTime, startDate),
+        lte(userLogins.loginTime, endDate)
+      ))
+      .orderBy(desc(userLogins.loginTime));
+  }
+
+  async getUserLoginStats(companyId: string | null, period: 'day' | 'week' | 'month'): Promise<{date: string, count: number}[]> {
+    const now = new Date();
+    let startDate: Date;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+    }
+
+    const whereConditions = companyId
+      ? and(eq(userLogins.companyId, companyId), gte(userLogins.loginTime, startDate))
+      : gte(userLogins.loginTime, startDate);
+
+    const results = await db
+      .select({
+        date: sql<string>`DATE(${userLogins.loginTime})`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(userLogins)
+      .where(whereConditions)
+      .groupBy(sql`DATE(${userLogins.loginTime})`)
+      .orderBy(sql`DATE(${userLogins.loginTime})`);
+
+    return results;
+  }
+
+  async getCompanyUserGrowth(companyId: string, currentMonth: Date, previousMonth: Date): Promise<{current: number, previous: number}> {
+    const currentMonthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const currentMonthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    const previousMonthStart = new Date(previousMonth.getFullYear(), previousMonth.getMonth(), 1);
+    const previousMonthEnd = new Date(previousMonth.getFullYear(), previousMonth.getMonth() + 1, 0);
+
+    const [currentCount] = await db
+      .select({ count: sql<number>`COUNT(DISTINCT ${userLogins.userId})::int` })
+      .from(userLogins)
+      .where(and(
+        eq(userLogins.companyId, companyId),
+        gte(userLogins.loginTime, currentMonthStart),
+        lte(userLogins.loginTime, currentMonthEnd)
+      ));
+
+    const [previousCount] = await db
+      .select({ count: sql<number>`COUNT(DISTINCT ${userLogins.userId})::int` })
+      .from(userLogins)
+      .where(and(
+        eq(userLogins.companyId, companyId),
+        gte(userLogins.loginTime, previousMonthStart),
+        lte(userLogins.loginTime, previousMonthEnd)
+      ));
+
+    return {
+      current: currentCount?.count || 0,
+      previous: previousCount?.count || 0,
+    };
+  }
+
+  // Support message operations
+  async createSupportMessage(messageData: InsertSupportMessage): Promise<SupportMessage> {
+    const [message] = await db.insert(supportMessages).values(messageData).returning();
+    return message;
+  }
+
+  async getSupportMessagesByCompany(companyId: string): Promise<SupportMessage[]> {
+    return await db
+      .select()
+      .from(supportMessages)
+      .where(eq(supportMessages.companyId, companyId))
+      .orderBy(desc(supportMessages.createdAt));
+  }
+
+  async getAllSupportMessages(): Promise<SupportMessage[]> {
+    return await db
+      .select()
+      .from(supportMessages)
+      .orderBy(desc(supportMessages.createdAt));
+  }
+
+  async markSupportMessageAsRead(messageId: string): Promise<SupportMessage> {
+    const [message] = await db
+      .update(supportMessages)
+      .set({
+        isRead: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(supportMessages.id, messageId))
+      .returning();
+    return message;
+  }
+
+  async getUnreadSupportMessagesCount(companyId?: string): Promise<number> {
+    const whereConditions = companyId
+      ? and(eq(supportMessages.companyId, companyId), eq(supportMessages.isRead, false))
+      : eq(supportMessages.isRead, false);
+
+    const [result] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(supportMessages)
+      .where(whereConditions);
+
+    return result?.count || 0;
   }
 
   // Password reset token operations

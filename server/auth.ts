@@ -190,10 +190,22 @@ export function setupAuth(app: Express) {
         }
       }
       
-      req.login(user, (loginErr) => {
+      req.login(user, async (loginErr) => {
         if (loginErr) {
           return next(loginErr);
         }
+        
+        // Track user login for analytics
+        try {
+          await storage.createUserLogin({
+            userId: user.id,
+            companyId: user.companyId || null,
+          });
+        } catch (trackingError) {
+          console.error('Error tracking user login:', trackingError);
+          // Continue with login even if tracking fails
+        }
+        
         return res.status(200).json(sanitizeUser(user as SelectUser));
       });
     })(req, res, next);
