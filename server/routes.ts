@@ -2281,6 +2281,172 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Trial Invitation Routes
+  app.post('/api/super-admin/invite-trial', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { insertTrialInvitationSchema } = await import("@shared/schema");
+      const { randomBytes } = await import("crypto");
+      const { sendInvitationEmail } = await import("./auth");
+      
+      // Validate input
+      const validatedData = insertTrialInvitationSchema.parse({
+        ...req.body,
+        invitedBy: req.user.id,
+      });
+      
+      // Generate unique token
+      const token = randomBytes(32).toString("hex");
+      
+      // Set expiration (7 days from now)
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      
+      // Create trial invitation
+      const invitation = await storage.createTrialInvitation({
+        ...validatedData,
+        token,
+        expiresAt,
+      });
+      
+      // Send email with registration link
+      const registrationLink = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/register-trial?token=${token}`;
+      const emailBody = `Hello,
+
+You've been invited to try GuardTrack for ${validatedData.durationDays} days!
+
+${validatedData.companyName ? `Company: ${validatedData.companyName}\n` : ''}
+Click the link below to complete your registration and start your free trial:
+
+${registrationLink}
+
+This invitation will expire in 7 days.
+
+Best regards,
+GuardTrack Team`;
+      
+      await sendInvitationEmail(
+        validatedData.email,
+        `Invitation to Try GuardTrack - ${validatedData.durationDays} Day Trial`,
+        emailBody
+      );
+      
+      res.json({ 
+        message: "Trial invitation sent successfully", 
+        invitation: {
+          id: invitation.id,
+          email: invitation.email,
+          companyName: invitation.companyName,
+          durationDays: invitation.durationDays,
+          expiresAt: invitation.expiresAt,
+        }
+      });
+    } catch (error: any) {
+      console.error("Error sending trial invitation:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid input" });
+      }
+      res.status(400).json({ message: error.message || "Failed to send trial invitation" });
+    }
+  });
+
+  app.get('/api/trial-invitation/:token', async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      
+      const invitation = await storage.getTrialInvitationByToken(token);
+      
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found or expired" });
+      }
+      
+      res.json({
+        email: invitation.email,
+        companyName: invitation.companyName,
+        durationDays: invitation.durationDays,
+        expiresAt: invitation.expiresAt,
+      });
+    } catch (error: any) {
+      console.error("Error fetching trial invitation:", error);
+      res.status(400).json({ message: error.message || "Failed to fetch invitation" });
+    }
+  });
+
+  app.post('/api/trial-registration', async (req: any, res) => {
+    try {
+      const { token, companyName, adminUsername, adminPassword, adminFirstName, adminLastName, adminEmail } = req.body;
+      
+      // Validate required fields
+      if (!token || !companyName || !adminUsername || !adminPassword || !adminFirstName || !adminLastName) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      
+      // Get trial invitation
+      const invitation = await storage.getTrialInvitationByToken(token);
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found or expired" });
+      }
+      
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(adminUsername);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      
+      // Import hash password function
+      const { hashPassword } = await import("./auth");
+      
+      // Generate unique company ID
+      const allCompanies = await storage.getAllCompanies();
+      const maxCompanyNum = allCompanies.reduce((max, c) => {
+        const match = c.companyId.match(/COMP(\d+)/);
+        return match ? Math.max(max, parseInt(match[1])) : max;
+      }, 0);
+      const newCompanyId = `COMP${String(maxCompanyNum + 1).padStart(3, '0')}`;
+      
+      // Calculate trial end date
+      const trialDays = parseInt(invitation.durationDays as string);
+      const trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+      
+      // Create company with trial settings
+      const company = await storage.createCompany({
+        companyId: newCompanyId,
+        name: invitation.companyName || companyName,
+        email: invitation.email,
+        isActive: true,
+        trialStatus: 'trial',
+        trialEndDate,
+        trialDays: trialDays.toString(),
+      });
+      
+      // Create admin user
+      const hashedPassword = await hashPassword(adminPassword);
+      const adminUser = await storage.createUser({
+        companyId: company.id,
+        username: adminUsername,
+        password: hashedPassword,
+        firstName: adminFirstName,
+        lastName: adminLastName,
+        email: adminEmail || invitation.email,
+        role: 'admin',
+      });
+      
+      // Mark invitation as accepted
+      await storage.markTrialInvitationAccepted(token);
+      
+      res.json({ 
+        message: "Registration successful! You can now log in.",
+        company: {
+          id: company.id,
+          name: company.name,
+          trialDays,
+          trialEndDate,
+        }
+      });
+    } catch (error: any) {
+      console.error("Error during trial registration:", error);
+      res.status(400).json({ message: error.message || "Failed to complete registration" });
+    }
+  });
+
   // Periodic trial expiration check (runs every hour)
   const expireTrialsInterval = setInterval(async () => {
     try {
