@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3 } from "lucide-react";
+import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Company } from "@shared/schema";
 import {
@@ -41,9 +41,15 @@ export default function ClientManagement() {
   const [isTrialDialogOpen, setIsTrialDialogOpen] = useState(false);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
+  const [isInviteTrialDialogOpen, setIsInviteTrialDialogOpen] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
+  
+  // Trial invitation form state
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteCompanyName, setInviteCompanyName] = useState("");
+  const [inviteDuration, setInviteDuration] = useState<"3" | "7" | "14">("14");
 
   const { data: clients = [], isLoading } = useQuery<ClientWithStatus[]>({
     queryKey: ["/api/super-admin/clients"],
@@ -140,6 +146,29 @@ export default function ClientManagement() {
     },
   });
 
+  const inviteTrialMutation = useMutation({
+    mutationFn: async ({ email, companyName, durationDays }: { email: string; companyName: string; durationDays: string }) => {
+      return await apiRequest("POST", `/api/super-admin/invite-trial`, { email, companyName, durationDays });
+    },
+    onSuccess: () => {
+      setIsInviteTrialDialogOpen(false);
+      setInviteEmail("");
+      setInviteCompanyName("");
+      setInviteDuration("14");
+      toast({
+        title: "Trial invitation sent",
+        description: "The trial invitation has been sent successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send trial invitation",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getStatusBadge = (client: ClientWithStatus) => {
     if (client.trialStatus === 'expired') {
       return <Badge variant="destructive" data-testid={`badge-status-${client.id}`}>Expired Trial</Badge>;
@@ -168,9 +197,18 @@ export default function ClientManagement() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">Client Management</h2>
-        <p className="text-muted-foreground">Manage client subscriptions, trials, and communications</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold">Client Management</h2>
+          <p className="text-muted-foreground">Manage client subscriptions, trials, and communications</p>
+        </div>
+        <Button 
+          onClick={() => setIsInviteTrialDialogOpen(true)}
+          data-testid="button-invite-trial"
+        >
+          <UserPlus className="mr-2 h-4 w-4" />
+          Invite Trial Client
+        </Button>
       </div>
 
       <Tabs defaultValue="all" className="w-full">
@@ -650,6 +688,82 @@ export default function ClientManagement() {
               data-testid="button-send-message"
             >
               {sendMessageMutation.isPending ? "Sending..." : "Send Message"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite Trial Client Dialog */}
+      <Dialog open={isInviteTrialDialogOpen} onOpenChange={setIsInviteTrialDialogOpen}>
+        <DialogContent data-testid="dialog-invite-trial">
+          <DialogHeader>
+            <DialogTitle>Invite Trial Client</DialogTitle>
+            <DialogDescription>
+              Send a trial invitation to a potential client
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">Email Address *</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="client@example.com"
+                data-testid="input-invite-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-company">Company Name (Optional)</Label>
+              <Input
+                id="invite-company"
+                value={inviteCompanyName}
+                onChange={(e) => setInviteCompanyName(e.target.value)}
+                placeholder="Company name"
+                data-testid="input-invite-company"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-duration">Trial Duration</Label>
+              <select
+                id="invite-duration"
+                value={inviteDuration}
+                onChange={(e) => setInviteDuration(e.target.value as "3" | "7" | "14")}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                data-testid="select-invite-duration"
+              >
+                <option value="3">3 Days</option>
+                <option value="7">7 Days</option>
+                <option value="14">14 Days</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsInviteTrialDialogOpen(false);
+                setInviteEmail("");
+                setInviteCompanyName("");
+                setInviteDuration("14");
+              }}
+              data-testid="button-cancel-invite"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                inviteTrialMutation.mutate({
+                  email: inviteEmail,
+                  companyName: inviteCompanyName,
+                  durationDays: inviteDuration,
+                });
+              }}
+              disabled={inviteTrialMutation.isPending || !inviteEmail}
+              data-testid="button-send-invite"
+            >
+              {inviteTrialMutation.isPending ? "Sending..." : "Send Invitation"}
             </Button>
           </DialogFooter>
         </DialogContent>
