@@ -7,6 +7,10 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     iosScheme: 'https',
+    // IMPORTANT: Replace with your actual Replit URL
+    // Find it in your Replit webview URL (e.g., https://89026148-be12-4eb2-842c-9cd0afd3b68f-00-mtjsf5kyoq4z.picard.replit.dev)
+    url: 'https://YOUR-REPLIT-URL.replit.dev',
+    cleartext: false,
   },
   plugins: {
     SplashScreen: {
