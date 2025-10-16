@@ -76,7 +76,7 @@ import {
   type JobShareWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, gte, lte, lt, between } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
 import session from "express-session";
 
 // Interface for storage operations
@@ -293,7 +293,63 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCompany(id: string): Promise<void> {
-    await db.delete(companies).where(eq(companies.id, id));
+    // Wrap everything in a transaction to ensure atomicity
+    await db.transaction(async (tx) => {
+      // Delete all related records in the correct order (child tables first)
+      
+      // Get all users for this company to delete their related data
+      const companyUsers = await tx.select().from(users).where(eq(users.companyId, id));
+      const userIds = companyUsers.map(u => u.id);
+      
+      // Delete user-specific data
+      if (userIds.length > 0) {
+        await tx.delete(pushSubscriptions).where(inArray(pushSubscriptions.userId, userIds));
+        await tx.delete(userLogins).where(inArray(userLogins.userId, userIds));
+        await tx.delete(passwordResetTokens).where(inArray(passwordResetTokens.userId, userIds));
+      }
+      
+      // Get all notices for this company to delete related applications
+      const companyNotices = await tx.select().from(notices).where(eq(notices.companyId, id));
+      const noticeIds = companyNotices.map(n => n.id);
+      
+      if (noticeIds.length > 0) {
+        await tx.delete(noticeApplications).where(inArray(noticeApplications.noticeId, noticeIds));
+      }
+      
+      // Get all check-ins for this company to delete breaks and overtime
+      const companyCheckIns = await tx.select().from(checkIns).where(eq(checkIns.companyId, id));
+      const checkInIds = companyCheckIns.map(c => c.id);
+      
+      if (checkInIds.length > 0) {
+        await tx.delete(breaks).where(inArray(breaks.checkInId, checkInIds));
+        await tx.delete(overtimeRequests).where(inArray(overtimeRequests.checkInId, checkInIds));
+      }
+      
+      // Delete company-specific data
+      await tx.delete(invitations).where(eq(invitations.companyId, id));
+      await tx.delete(checkIns).where(eq(checkIns.companyId, id));
+      await tx.delete(scheduledShifts).where(eq(scheduledShifts.companyId, id));
+      await tx.delete(leaveRequests).where(eq(leaveRequests.companyId, id));
+      await tx.delete(notices).where(eq(notices.companyId, id));
+      await tx.delete(sites).where(eq(sites.companyId, id));
+      await tx.delete(companySettings).where(eq(companySettings.companyId, id));
+      await tx.delete(supportMessages).where(eq(supportMessages.companyId, id));
+      await tx.delete(trialInvitations).where(eq(trialInvitations.companyId, id));
+      
+      // Delete partnerships (both as company and as partner)
+      await tx.delete(companyPartnerships).where(eq(companyPartnerships.companyId, id));
+      await tx.delete(companyPartnerships).where(eq(companyPartnerships.partnerCompanyId, id));
+      
+      // Delete job shares (both as sender and receiver)
+      await tx.delete(jobShares).where(eq(jobShares.fromCompanyId, id));
+      await tx.delete(jobShares).where(eq(jobShares.toCompanyId, id));
+      
+      // Delete users
+      await tx.delete(users).where(eq(users.companyId, id));
+      
+      // Finally, delete the company itself
+      await tx.delete(companies).where(eq(companies.id, id));
+    });
   }
 
   // User operations
