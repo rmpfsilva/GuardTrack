@@ -178,6 +178,27 @@ export const trialInvitations = pgTable("trial_invitations", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// User logins table - tracks login activity for usage analytics
+export const userLogins = pgTable("user_logins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: 'cascade' }), // For filtering by company
+  loginTime: timestamp("login_time").notNull().defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Support messages table - customer-owner communication system
+export const supportMessages = pgTable("support_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Which company sent the message
+  senderId: varchar("sender_id").notNull().references(() => users.id, { onDelete: 'cascade' }), // User who sent the message
+  message: text("message").notNull(),
+  isAdminReply: boolean("is_admin_reply").notNull().default(false), // true if sent by Super Admin, false if sent by company admin
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Password reset tokens table - for password recovery
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -645,6 +666,26 @@ export const updateTrialInvitationSchema = createInsertSchema(trialInvitations).
   updatedAt: true,
 }).partial();
 
+export const insertUserLoginSchema = createInsertSchema(userLogins).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSupportMessageSchema = createInsertSchema(supportMessages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  isRead: true,
+}).extend({
+  message: z.string().min(1, 'Message cannot be empty'),
+});
+
+export const updateSupportMessageSchema = createInsertSchema(supportMessages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({
   id: true,
   createdAt: true,
@@ -829,6 +870,13 @@ export type UpdateInvitation = z.infer<typeof updateInvitationSchema>;
 export type TrialInvitation = typeof trialInvitations.$inferSelect;
 export type InsertTrialInvitation = z.infer<typeof insertTrialInvitationSchema>;
 export type UpdateTrialInvitation = z.infer<typeof updateTrialInvitationSchema>;
+
+export type UserLogin = typeof userLogins.$inferSelect;
+export type InsertUserLogin = z.infer<typeof insertUserLoginSchema>;
+
+export type SupportMessage = typeof supportMessages.$inferSelect;
+export type InsertSupportMessage = z.infer<typeof insertSupportMessageSchema>;
+export type UpdateSupportMessage = z.infer<typeof updateSupportMessageSchema>;
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
