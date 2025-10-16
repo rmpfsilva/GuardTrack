@@ -8,12 +8,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { ArrowLeft, Lock, IdCard, Calendar, UserCog, Building2, Timer, Check, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Lock, IdCard, Calendar, UserCog, Building2, Timer, Check, AlertTriangle, MessageSquare } from "lucide-react";
 import type { User, Company } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,6 +62,7 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const [supportMessage, setSupportMessage] = useState("");
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -242,6 +244,41 @@ export default function SettingsPage() {
       userId: data.userId,
       newPassword: data.newPassword,
     });
+  };
+
+  const sendSupportMessageMutation = useMutation({
+    mutationFn: async (message: string) => {
+      return await apiRequest('/api/support/send', {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Message sent",
+        description: "Your message has been sent to support. We'll get back to you soon.",
+      });
+      setSupportMessage("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send message",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSendSupportMessage = () => {
+    if (!supportMessage.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a message",
+        variant: "destructive",
+      });
+      return;
+    }
+    sendSupportMessageMutation.mutate(supportMessage);
   };
 
   return (
@@ -739,6 +776,39 @@ export default function SettingsPage() {
 
             {/* Invoice Settings - Admin and Super Admin */}
             {(user?.role === 'admin' || user?.role === 'super_admin') && <InvoiceSettings />}
+
+            {/* Contact Support - Company Admin only (not Super Admin) */}
+            {user?.role === 'admin' && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5" />
+                    <CardTitle>Contact Support</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Need help? Send a message to our support team
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Textarea
+                    placeholder="Type your message or question here..."
+                    value={supportMessage}
+                    onChange={(e) => setSupportMessage(e.target.value)}
+                    className="min-h-[120px]"
+                    data-testid="textarea-support-message"
+                  />
+                  <Button
+                    onClick={handleSendSupportMessage}
+                    disabled={sendSupportMessageMutation.isPending || !supportMessage.trim()}
+                    className="w-full"
+                    data-testid="button-send-support"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    {sendSupportMessageMutation.isPending ? "Sending..." : "Send Message"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </main>
       </div>
