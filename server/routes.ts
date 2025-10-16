@@ -1214,11 +1214,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Billing reports routes (admin only)
-  app.get('/api/admin/billing/weekly', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/billing/weekly', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { weekStart } = req.query;
+      const user = req.user;
       const startDate = weekStart ? new Date(weekStart as string) : startOfWeek(new Date(), { weekStartsOn: 1 });
-      const report = await storage.getWeeklyBillingReport(startDate);
+      
+      // Pass companyId for regular admins, null for super admin (all companies)
+      const companyId = user.role === 'super_admin' ? null : user.companyId;
+      const report = await storage.getWeeklyBillingReport(startDate, companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching weekly billing report:", error);
@@ -1240,11 +1244,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Advanced reporting routes (admin only)
-  app.get('/api/admin/reports/overtime', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/reports/overtime', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { weekStart } = req.query;
+      const user = req.user;
       const startDate = weekStart ? new Date(weekStart as string) : startOfWeek(new Date(), { weekStartsOn: 1 });
-      const report = await storage.getOvertimeReport(startDate);
+      
+      // Pass companyId for regular admins, null for super admin (all companies)
+      const companyId = user.role === 'super_admin' ? null : user.companyId;
+      const report = await storage.getOvertimeReport(startDate, companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching overtime report:", error);
@@ -1252,12 +1260,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/reports/anomalies', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/reports/anomalies', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { startDate, endDate } = req.query;
+      const user = req.user;
       const start = startDate ? new Date(startDate as string) : startOfWeek(new Date(), { weekStartsOn: 1 });
       const end = endDate ? new Date(endDate as string) : new Date();
-      const report = await storage.getAnomalyReport(start, end);
+      
+      // Pass companyId for regular admins, null for super admin (all companies)
+      const companyId = user.role === 'super_admin' ? null : user.companyId;
+      const report = await storage.getAnomalyReport(start, end, companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching anomaly report:", error);
@@ -1265,12 +1277,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/reports/detailed-shifts', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/reports/detailed-shifts', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { startDate, endDate } = req.query;
+      const user = req.user;
       const start = startDate ? new Date(startDate as string) : startOfWeek(new Date(), { weekStartsOn: 1 });
       const end = endDate ? new Date(endDate as string) : new Date();
-      const report = await storage.getDetailedShiftReport(start, end);
+      
+      // Pass companyId for regular admins, null for super admin (all companies)
+      const companyId = user.role === 'super_admin' ? null : user.companyId;
+      const report = await storage.getDetailedShiftReport(start, end, companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching detailed shift report:", error);

@@ -138,13 +138,13 @@ export interface IStorage {
   getScheduledShiftsInRange(startDate: Date, endDate: Date): Promise<ScheduledShiftWithDetails[]>;
 
   // Billing operations
-  getWeeklyBillingReport(weekStart: Date): Promise<any>;
+  getWeeklyBillingReport(weekStart: Date, companyId?: string | null): Promise<any>;
   getDailyActivityBySite(siteId: string, date: Date): Promise<any>;
   
   // Overtime and anomaly detection
-  getOvertimeReport(weekStart: Date): Promise<any>;
-  getAnomalyReport(startDate: Date, endDate: Date): Promise<any>;
-  getDetailedShiftReport(startDate: Date, endDate: Date): Promise<any>;
+  getOvertimeReport(weekStart: Date, companyId?: string | null): Promise<any>;
+  getAnomalyReport(startDate: Date, endDate: Date, companyId?: string | null): Promise<any>;
+  getDetailedShiftReport(startDate: Date, endDate: Date, companyId?: string | null): Promise<any>;
 
   // Overtime request operations
   createOvertimeRequest(overtimeData: any): Promise<any>;
@@ -846,9 +846,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Billing operations
-  async getWeeklyBillingReport(weekStart: Date): Promise<any> {
+  async getWeeklyBillingReport(weekStart: Date, companyId?: string | null): Promise<any> {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
+
+    // Build the where conditions
+    const conditions = [
+      eq(checkIns.status, 'completed'),
+      gte(checkIns.checkInTime, weekStart),
+      lte(checkIns.checkInTime, weekEnd)
+    ];
+
+    // Add company filter if companyId is provided (regular admin)
+    if (companyId) {
+      conditions.push(eq(sites.companyId, companyId));
+    }
 
     // Get all completed check-ins for the week
     const results = await db
@@ -856,13 +868,7 @@ export class DatabaseStorage implements IStorage {
       .from(checkIns)
       .leftJoin(users, eq(checkIns.userId, users.id))
       .leftJoin(sites, eq(checkIns.siteId, sites.id))
-      .where(
-        and(
-          eq(checkIns.status, 'completed'),
-          gte(checkIns.checkInTime, weekStart),
-          lte(checkIns.checkInTime, weekEnd)
-        )
-      )
+      .where(and(...conditions))
       .orderBy(checkIns.checkInTime);
 
     // Group by site and calculate totals
@@ -997,9 +1003,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Overtime and Anomaly Detection
-  async getOvertimeReport(weekStart: Date): Promise<any> {
+  async getOvertimeReport(weekStart: Date, companyId?: string | null): Promise<any> {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
+
+    // Build the where conditions
+    const conditions = [
+      eq(checkIns.status, 'completed'),
+      gte(checkIns.checkInTime, weekStart),
+      lte(checkIns.checkInTime, weekEnd)
+    ];
+
+    // Add company filter if companyId is provided (regular admin)
+    if (companyId) {
+      conditions.push(eq(sites.companyId, companyId));
+    }
 
     // Get all completed check-ins for the week
     const results = await db
@@ -1007,13 +1025,7 @@ export class DatabaseStorage implements IStorage {
       .from(checkIns)
       .leftJoin(users, eq(checkIns.userId, users.id))
       .leftJoin(sites, eq(checkIns.siteId, sites.id))
-      .where(
-        and(
-          eq(checkIns.status, 'completed'),
-          gte(checkIns.checkInTime, weekStart),
-          lte(checkIns.checkInTime, weekEnd)
-        )
-      )
+      .where(and(...conditions))
       .orderBy(checkIns.checkInTime);
 
     // Calculate overtime by employee
@@ -1072,8 +1084,17 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getAnomalyReport(startDate: Date, endDate: Date): Promise<any> {
+  async getAnomalyReport(startDate: Date, endDate: Date, companyId?: string | null): Promise<any> {
     const anomalies = [];
+
+    // Build the where conditions for check-ins
+    const checkInConditions = [
+      gte(checkIns.checkInTime, startDate),
+      lte(checkIns.checkInTime, endDate)
+    ];
+    if (companyId) {
+      checkInConditions.push(eq(sites.companyId, companyId));
+    }
 
     // Get all check-ins in the period
     const checkInResults = await db
@@ -1081,13 +1102,18 @@ export class DatabaseStorage implements IStorage {
       .from(checkIns)
       .leftJoin(users, eq(checkIns.userId, users.id))
       .leftJoin(sites, eq(checkIns.siteId, sites.id))
-      .where(
-        and(
-          gte(checkIns.checkInTime, startDate),
-          lte(checkIns.checkInTime, endDate)
-        )
-      )
+      .where(and(...checkInConditions))
       .orderBy(checkIns.checkInTime);
+
+    // Build the where conditions for scheduled shifts
+    const shiftConditions = [
+      eq(scheduledShifts.isActive, true),
+      gte(scheduledShifts.startTime, startDate),
+      lte(scheduledShifts.endTime, endDate)
+    ];
+    if (companyId) {
+      shiftConditions.push(eq(sites.companyId, companyId));
+    }
 
     // Get scheduled shifts in the period
     const shiftResults = await db
@@ -1095,13 +1121,7 @@ export class DatabaseStorage implements IStorage {
       .from(scheduledShifts)
       .leftJoin(users, eq(scheduledShifts.userId, users.id))
       .leftJoin(sites, eq(scheduledShifts.siteId, sites.id))
-      .where(
-        and(
-          eq(scheduledShifts.isActive, true),
-          gte(scheduledShifts.startTime, startDate),
-          lte(scheduledShifts.endTime, endDate)
-        )
-      );
+      .where(and(...shiftConditions));
 
     // 1. Detect missing check-outs (shifts active for > 14 hours)
     for (const row of checkInResults) {
@@ -1212,18 +1232,24 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getDetailedShiftReport(startDate: Date, endDate: Date): Promise<any> {
+  async getDetailedShiftReport(startDate: Date, endDate: Date, companyId?: string | null): Promise<any> {
+    // Build the where conditions
+    const conditions = [
+      gte(checkIns.checkInTime, startDate),
+      lte(checkIns.checkInTime, endDate)
+    ];
+
+    // Add company filter if companyId is provided (regular admin)
+    if (companyId) {
+      conditions.push(eq(sites.companyId, companyId));
+    }
+
     const results = await db
       .select()
       .from(checkIns)
       .leftJoin(users, eq(checkIns.userId, users.id))
       .leftJoin(sites, eq(checkIns.siteId, sites.id))
-      .where(
-        and(
-          gte(checkIns.checkInTime, startDate),
-          lte(checkIns.checkInTime, endDate)
-        )
-      )
+      .where(and(...conditions))
       .orderBy(desc(checkIns.checkInTime));
 
     const shifts = await Promise.all(
