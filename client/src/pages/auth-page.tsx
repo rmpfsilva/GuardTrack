@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShieldCheck, Smartphone } from "lucide-react";
-import { InstallPWACard } from "@/components/install-pwa-card";
+import { ShieldCheck } from "lucide-react";
+import { SiAndroid, SiApple } from "react-icons/si";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 
 export default function AuthPage() {
@@ -151,9 +151,43 @@ export default function AuthPage() {
           </CardContent>
         </Card>
 
-        {/* Install App Card */}
-        <div className="w-full max-w-md mt-4">
-          <InstallPWACard />
+        {/* Download App Buttons */}
+        <div className="w-full max-w-md mt-6">
+          <div className="text-center space-y-3">
+            <p className="text-sm text-muted-foreground">Download GuardTrack Mobile App</p>
+            <div className="flex gap-3 justify-center">
+              <Button
+                variant="outline"
+                className="flex items-center gap-2"
+                onClick={() => {
+                  // Placeholder - will be replaced with actual store link
+                  alert('Android app coming soon! Link will be available after Play Store approval.');
+                }}
+                data-testid="button-download-android"
+              >
+                <SiAndroid className="h-5 w-5" />
+                <div className="text-left">
+                  <div className="text-xs text-muted-foreground">GET IT ON</div>
+                  <div className="font-semibold">Google Play</div>
+                </div>
+              </Button>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2"
+                onClick={() => {
+                  // Placeholder - will be replaced with actual store link
+                  alert('iOS app coming soon! Link will be available after App Store approval.');
+                }}
+                data-testid="button-download-ios"
+              >
+                <SiApple className="h-5 w-5" />
+                <div className="text-left">
+                  <div className="text-xs text-muted-foreground">Download on the</div>
+                  <div className="font-semibold">App Store</div>
+                </div>
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
