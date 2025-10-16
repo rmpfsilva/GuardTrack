@@ -582,19 +582,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allSites = await storage.getAllSites();
       const allGuards = await storage.getUsersByRole('guard');
       const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
-      const weeklyHours = await storage.getAllUsersWeeklyHours(weekStart);
 
       // Filter by company for regular admins
       let filteredCheckIns = activeCheckIns;
       let filteredSites = allSites;
       let filteredGuards = allGuards;
-      let filteredWeeklyHours = weeklyHours;
+      let filteredWeeklyHours = 0;
       
       if (user.role !== 'super_admin' && user.companyId) {
         filteredCheckIns = activeCheckIns.filter(ci => ci.user.companyId === user.companyId);
         filteredSites = allSites.filter(s => s.companyId === user.companyId);
         filteredGuards = allGuards.filter(g => g.companyId === user.companyId);
-        filteredWeeklyHours = weeklyHours.filter(wh => wh.user.companyId === user.companyId);
+        
+        // Calculate weekly hours for company users only
+        for (const guard of filteredGuards) {
+          filteredWeeklyHours += await storage.getUserWeeklyHours(guard.id, weekStart);
+        }
+      } else {
+        // For super_admin, get all weekly hours
+        filteredWeeklyHours = await storage.getAllUsersWeeklyHours(weekStart);
       }
 
       const stats = {
@@ -2286,7 +2292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { insertTrialInvitationSchema } = await import("@shared/schema");
       const { randomBytes } = await import("crypto");
-      const { sendInvitationEmail } = await import("./auth");
+      const { sendTrialInvitationEmail } = await import("./emailService");
       
       // Validate input
       const validatedData = insertTrialInvitationSchema.parse({
@@ -2323,7 +2329,7 @@ This invitation will expire in 7 days.
 Best regards,
 GuardTrack Team`;
       
-      await sendInvitationEmail(
+      await sendTrialInvitationEmail(
         validatedData.email,
         `Invitation to Try GuardTrack - ${validatedData.durationDays} Day Trial`,
         emailBody
@@ -2372,10 +2378,10 @@ GuardTrack Team`;
 
   app.post('/api/trial-registration', async (req: any, res) => {
     try {
-      const { token, companyName, adminUsername, adminPassword, adminFirstName, adminLastName, adminEmail } = req.body;
+      const { token, companyName, adminName, username, password } = req.body;
       
       // Validate required fields
-      if (!token || !companyName || !adminUsername || !adminPassword || !adminFirstName || !adminLastName) {
+      if (!token || !companyName || !adminName || !username || !password) {
         return res.status(400).json({ message: "Missing required fields" });
       }
       
@@ -2386,7 +2392,7 @@ GuardTrack Team`;
       }
       
       // Check if username already exists
-      const existingUser = await storage.getUserByUsername(adminUsername);
+      const existingUser = await storage.getUserByUsername(username);
       if (existingUser) {
         return res.status(400).json({ message: "Username already exists" });
       }
@@ -2417,15 +2423,20 @@ GuardTrack Team`;
         trialDays: trialDays.toString(),
       });
       
+      // Split adminName into first and last name (simple split by space)
+      const nameParts = adminName.trim().split(/\s+/);
+      const firstName = nameParts[0] || adminName;
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
       // Create admin user
-      const hashedPassword = await hashPassword(adminPassword);
+      const hashedPassword = await hashPassword(password);
       const adminUser = await storage.createUser({
         companyId: company.id,
-        username: adminUsername,
+        username,
         password: hashedPassword,
-        firstName: adminFirstName,
-        lastName: adminLastName,
-        email: adminEmail || invitation.email,
+        firstName,
+        lastName,
+        email: invitation.email,
         role: 'admin',
       });
       

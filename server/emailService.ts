@@ -99,3 +99,59 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
     throw new Error('Failed to send invitation email');
   }
 }
+
+export async function sendTrialInvitationEmail(toEmail: string, subject: string, body: string): Promise<void> {
+  try {
+    const gmail = await getUncachableGmailClient();
+    
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #f8f9fa; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+    <h2 style="color: #1e40af; margin-top: 0;">GuardTrack Trial Invitation</h2>
+    <div style="white-space: pre-wrap;">${body}</div>
+  </div>
+
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; color: #666; font-size: 14px;">
+    <p style="margin-bottom: 0;">Best regards,<br><strong>GuardTrack Team</strong></p>
+  </div>
+</body>
+</html>`;
+
+    // Get sender email from environment or use default
+    const senderEmail = process.env.GMAIL_USER || 'noreply@guardtrack.com';
+    
+    const message = [
+      `From: GuardTrack <${senderEmail}>`,
+      `To: ${toEmail}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage,
+      },
+    });
+
+    console.log(`Trial invitation email sent successfully to ${toEmail}`);
+  } catch (error) {
+    console.error('Error sending trial invitation email:', error);
+    throw new Error('Failed to send trial invitation email');
+  }
+}

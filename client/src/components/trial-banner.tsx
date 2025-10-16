@@ -68,5 +68,28 @@ export function TrialBanner({ user }: TrialBannerProps) {
     );
   }
 
+  // Show info banner for active trials (>3 days, can be dismissed)
+  if (trialStatus.status === 'trial' && trialStatus.daysRemaining > 3) {
+    return (
+      <Alert className="border-blue-500 bg-blue-50 dark:bg-blue-950/20 rounded-none" data-testid="alert-trial-active">
+        <Timer className="h-5 w-5 text-blue-600" />
+        <AlertDescription className="flex items-center justify-between">
+          <span className="text-blue-900 dark:text-blue-100">
+            Trial period: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? 'day' : 'days'} remaining
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 hover-elevate"
+            onClick={() => setDismissed(true)}
+            data-testid="button-dismiss-trial-info"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return null;
 }
