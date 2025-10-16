@@ -404,9 +404,12 @@ export default function AdminDashboard() {
             <BillingReports />
           </TabsContent>
 
-          <TabsContent value="reports">
-            <AdvancedReports />
-          </TabsContent>
+          {/* Operational reports only for company admins, not super admin */}
+          {user.role !== 'super_admin' && (
+            <TabsContent value="reports">
+              <AdvancedReports />
+            </TabsContent>
+          )}
 
           <TabsContent value="schedule">
             <ScheduleManagement />
