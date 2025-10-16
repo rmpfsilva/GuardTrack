@@ -162,6 +162,22 @@ export const invitations = pgTable("invitations", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Trial invitations table - email invites for potential clients to start trial
+export const trialInvitations = pgTable("trial_invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  companyName: varchar("company_name", { length: 255 }),
+  durationDays: numeric("duration_days", { precision: 2, scale: 0 }).notNull(), // 3, 7, or 14 days
+  token: varchar("token").notNull().unique(),
+  status: varchar("status").notNull().default('pending'), // 'pending' | 'accepted' | 'expired' | 'revoked'
+  invitedBy: varchar("invited_by").notNull().references(() => users.id, { onDelete: 'cascade' }), // Super admin who sent invite
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  metadata: jsonb("metadata"), // Store additional data if needed
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Password reset tokens table - for password recovery
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -435,6 +451,13 @@ export const invitationsRelations = relations(invitations, ({ one }) => ({
   }),
 }));
 
+export const trialInvitationsRelations = relations(trialInvitations, ({ one }) => ({
+  inviter: one(users, {
+    fields: [trialInvitations.invitedBy],
+    references: [users.id],
+  }),
+}));
+
 export const companySettingsRelations = relations(companySettings, ({ one }) => ({
   company: one(companies, {
     fields: [companySettings.companyId],
@@ -597,6 +620,26 @@ export const insertInvitationSchema = createInsertSchema(invitations).omit({
 });
 
 export const updateInvitationSchema = createInsertSchema(invitations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export const insertTrialInvitationSchema = createInsertSchema(trialInvitations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+  acceptedAt: true,
+  token: true,
+}).extend({
+  email: z.string().email('Invalid email address'),
+  companyName: z.string().min(2, 'Company name must be at least 2 characters').optional().nullable(),
+  durationDays: z.enum(['3', '7', '14']).transform(val => parseInt(val)),
+  expiresAt: z.coerce.date().optional(),
+});
+
+export const updateTrialInvitationSchema = createInsertSchema(trialInvitations).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -782,6 +825,10 @@ export type UpdateScheduledShift = z.infer<typeof updateScheduledShiftSchema>;
 export type Invitation = typeof invitations.$inferSelect;
 export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
 export type UpdateInvitation = z.infer<typeof updateInvitationSchema>;
+
+export type TrialInvitation = typeof trialInvitations.$inferSelect;
+export type InsertTrialInvitation = z.infer<typeof insertTrialInvitationSchema>;
+export type UpdateTrialInvitation = z.infer<typeof updateTrialInvitationSchema>;
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
