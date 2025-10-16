@@ -2476,6 +2476,117 @@ GuardTrack Team`;
     }
   });
 
+  // Support Message Routes
+  app.post('/api/support/send', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { insertSupportMessageSchema } = await import("@shared/schema");
+      
+      const validatedData = insertSupportMessageSchema.parse({
+        ...req.body,
+        companyId: req.user.companyId,
+        senderId: req.user.id,
+        isAdminReply: req.user.role === 'super_admin',
+      });
+
+      const message = await storage.createSupportMessage(validatedData);
+      res.json(message);
+    } catch (error: any) {
+      console.error("Error sending support message:", error);
+      res.status(400).json({ message: error.message || "Failed to send message" });
+    }
+  });
+
+  app.get('/api/support/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      let messages;
+      
+      if (req.user.role === 'super_admin') {
+        // Super Admin sees all messages
+        messages = await storage.getAllSupportMessages();
+      } else if (req.user.companyId) {
+        // Company users see their company's messages
+        messages = await storage.getSupportMessagesByCompany(req.user.companyId);
+      } else {
+        messages = [];
+      }
+      
+      res.json(messages);
+    } catch (error: any) {
+      console.error("Error fetching support messages:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch messages" });
+    }
+  });
+
+  app.patch('/api/support/messages/:id/read', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const message = await storage.markSupportMessageAsRead(id);
+      res.json(message);
+    } catch (error: any) {
+      console.error("Error marking message as read:", error);
+      res.status(500).json({ message: error.message || "Failed to mark message as read" });
+    }
+  });
+
+  app.get('/api/support/unread-count', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.user.role === 'super_admin' ? undefined : req.user.companyId;
+      const count = await storage.getUnreadSupportMessagesCount(companyId);
+      res.json({ count });
+    } catch (error: any) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch unread count" });
+    }
+  });
+
+  // App Usage Stats Routes
+  app.get('/api/super-admin/app-usage', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId, month, year } = req.query;
+      
+      // Default to current month if not specified
+      const targetMonth = month ? parseInt(month as string) - 1 : new Date().getMonth();
+      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      
+      const currentMonthDate = new Date(targetYear, targetMonth, 1);
+      const previousMonthDate = new Date(targetYear, targetMonth - 1, 1);
+      
+      if (companyId) {
+        // Get stats for specific company
+        const dailyLogins = await storage.getUserLoginStats(companyId, 'day');
+        const weeklyLogins = await storage.getUserLoginStats(companyId, 'week');
+        const monthlyLogins = await storage.getUserLoginStats(companyId, 'month');
+        const userGrowth = await storage.getCompanyUserGrowth(companyId, currentMonthDate, previousMonthDate);
+        
+        res.json({
+          companyId,
+          dailyLogins,
+          weeklyLogins,
+          monthlyLogins,
+          userGrowth,
+          month: targetMonth + 1,
+          year: targetYear,
+        });
+      } else {
+        // Get overall stats for all companies
+        const dailyLogins = await storage.getUserLoginStats(null, 'day');
+        const weeklyLogins = await storage.getUserLoginStats(null, 'week');
+        const monthlyLogins = await storage.getUserLoginStats(null, 'month');
+        
+        res.json({
+          dailyLogins,
+          weeklyLogins,
+          monthlyLogins,
+          month: targetMonth + 1,
+          year: targetYear,
+        });
+      }
+    } catch (error: any) {
+      console.error("Error fetching app usage stats:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch app usage stats" });
+    }
+  });
+
   // Periodic trial expiration check (runs every hour)
   const expireTrialsInterval = setInterval(async () => {
     try {
