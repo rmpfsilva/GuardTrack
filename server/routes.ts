@@ -1001,25 +1001,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       const admin = req.user;
+      
+      console.log('[CREATE SHIFT] Request body:', req.body);
+      console.log('[CREATE SHIFT] Admin:', { id: admin.id, role: admin.role, companyId: admin.companyId });
+      
       const validatedData = insertScheduledShiftSchema.parse(req.body);
+      console.log('[CREATE SHIFT] Validated data:', validatedData);
       
       // For regular admins, validate user and site belong to their company
       if (admin.role !== 'super_admin') {
         const user = await storage.getUserById(validatedData.userId);
         const site = await storage.getSite(validatedData.siteId);
         
+        console.log('[CREATE SHIFT] Validation:', { 
+          userFound: !!user, 
+          userCompany: user?.companyId,
+          siteFound: !!site,
+          siteCompany: site?.companyId,
+          adminCompany: admin.companyId 
+        });
+        
         if (!user || user.companyId !== admin.companyId) {
+          console.log('[CREATE SHIFT] User validation failed');
           return res.status(403).json({ message: "Cannot create shifts for users from other companies" });
         }
         if (!site || site.companyId !== admin.companyId) {
+          console.log('[CREATE SHIFT] Site validation failed');
           return res.status(403).json({ message: "Cannot create shifts for sites from other companies" });
         }
       }
       
+      console.log('[CREATE SHIFT] Creating shift...');
       const shift = await storage.createScheduledShift(validatedData);
+      console.log('[CREATE SHIFT] Shift created successfully:', shift.id);
       res.status(201).json(shift);
     } catch (error: any) {
-      console.error("Error creating scheduled shift:", error);
+      console.error("[CREATE SHIFT ERROR]", error);
+      if (error.name === 'ZodError') {
+        console.error("[CREATE SHIFT] Zod validation errors:", error.errors);
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid input data" });
+      }
       res.status(400).json({ message: error.message || "Failed to create shift" });
     }
   });
