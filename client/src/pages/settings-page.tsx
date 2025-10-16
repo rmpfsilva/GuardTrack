@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import InvoiceSettings from "@/components/invoice-settings";
+import CompanySupportMessages from "@/components/company-support-messages";
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -776,6 +777,9 @@ export default function SettingsPage() {
 
             {/* Invoice Settings - Admin and Super Admin */}
             {(user?.role === 'admin' || user?.role === 'super_admin') && <InvoiceSettings />}
+
+            {/* Support Messages - Company Admin only (not Super Admin) */}
+            {user?.role === 'admin' && <CompanySupportMessages />}
 
             {/* Contact Support - Company Admin only (not Super Admin) */}
             {user?.role === 'admin' && (
