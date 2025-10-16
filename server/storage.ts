@@ -8,6 +8,7 @@ import {
   overtimeRequests,
   scheduledShifts,
   invitations,
+  trialInvitations,
   passwordResetTokens,
   leaveRequests,
   notices,
@@ -35,6 +36,9 @@ import {
   type ScheduledShiftWithDetails,
   type Invitation,
   type InsertInvitation,
+  type TrialInvitation,
+  type InsertTrialInvitation,
+  type UpdateTrialInvitation,
   type PasswordResetToken,
   type InsertPasswordResetToken,
   type LeaveRequest,
@@ -150,6 +154,14 @@ export interface IStorage {
   acceptInvitation(token: string): Promise<Invitation>;
   revokeInvitation(id: string): Promise<Invitation>;
   deleteInvitation(id: string): Promise<void>;
+
+  // Trial invitation operations
+  createTrialInvitation(invitation: InsertTrialInvitation): Promise<TrialInvitation>;
+  getTrialInvitationByToken(token: string): Promise<TrialInvitation | undefined>;
+  getTrialInvitationByEmail(email: string): Promise<TrialInvitation | undefined>;
+  getAllTrialInvitations(): Promise<TrialInvitation[]>;
+  markTrialInvitationAccepted(token: string): Promise<TrialInvitation>;
+  expireTrialInvitation(id: string): Promise<TrialInvitation>;
 
   // Password reset token operations
   createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
@@ -1337,6 +1349,62 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInvitation(id: string): Promise<void> {
     await db.delete(invitations).where(eq(invitations.id, id));
+  }
+
+  // Trial invitation operations
+  async createTrialInvitation(invitationData: InsertTrialInvitation): Promise<TrialInvitation> {
+    const [invitation] = await db.insert(trialInvitations).values(invitationData).returning();
+    return invitation;
+  }
+
+  async getTrialInvitationByToken(token: string): Promise<TrialInvitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(trialInvitations)
+      .where(and(
+        eq(trialInvitations.token, token),
+        eq(trialInvitations.status, 'pending'),
+        gte(trialInvitations.expiresAt, new Date())
+      ));
+    return invitation;
+  }
+
+  async getTrialInvitationByEmail(email: string): Promise<TrialInvitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(trialInvitations)
+      .where(eq(trialInvitations.email, email))
+      .orderBy(desc(trialInvitations.createdAt));
+    return invitation;
+  }
+
+  async getAllTrialInvitations(): Promise<TrialInvitation[]> {
+    return await db.select().from(trialInvitations).orderBy(desc(trialInvitations.createdAt));
+  }
+
+  async markTrialInvitationAccepted(token: string): Promise<TrialInvitation> {
+    const [invitation] = await db
+      .update(trialInvitations)
+      .set({
+        status: 'accepted',
+        acceptedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(trialInvitations.token, token))
+      .returning();
+    return invitation;
+  }
+
+  async expireTrialInvitation(id: string): Promise<TrialInvitation> {
+    const [invitation] = await db
+      .update(trialInvitations)
+      .set({
+        status: 'expired',
+        updatedAt: new Date(),
+      })
+      .where(eq(trialInvitations.id, id))
+      .returning();
+    return invitation;
   }
 
   // Password reset token operations
