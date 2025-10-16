@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
+import { TrialBanner } from "@/components/trial-banner";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
@@ -21,22 +22,25 @@ function Router() {
   const { user } = useAuth();
 
   return (
-    <Switch>
-      <Route path="/login" component={AuthPage} />
-      <Route path="/auth" component={AuthPage} />
-      <Route path="/register" component={RegisterPage} />
-      <Route path="/forgot-password" component={ForgotPasswordPage} />
-      <Route path="/reset-password" component={ResetPasswordPage} />
-      <ProtectedRoute path="/settings" component={SettingsPage} />
-      {user && (user.role === 'admin' || user.role === 'super_admin') ? (
-        <ProtectedRoute path="/" component={AdminDashboard} />
-      ) : user ? (
-        <ProtectedRoute path="/" component={GuardDashboard} />
-      ) : (
-        <Route path="/" component={LandingPage} />
-      )}
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <TrialBanner user={user} />
+      <Switch>
+        <Route path="/login" component={AuthPage} />
+        <Route path="/auth" component={AuthPage} />
+        <Route path="/register" component={RegisterPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/reset-password" component={ResetPasswordPage} />
+        <ProtectedRoute path="/settings" component={SettingsPage} />
+        {user && (user.role === 'admin' || user.role === 'super_admin') ? (
+          <ProtectedRoute path="/" component={AdminDashboard} />
+        ) : user ? (
+          <ProtectedRoute path="/" component={GuardDashboard} />
+        ) : (
+          <Route path="/" component={LandingPage} />
+        )}
+        <Route component={NotFound} />
+      </Switch>
+    </>
   );
 }
 

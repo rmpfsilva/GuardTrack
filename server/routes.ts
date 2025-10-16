@@ -38,6 +38,38 @@ function isSuperAdmin(req: Request, res: Response, next: NextFunction) {
   res.status(403).json({ message: "Forbidden - Super Admin access required" });
 }
 
+// Middleware to check if company trial is active (allows super admin to bypass)
+async function requireActiveTrial(req: Request, res: Response, next: NextFunction) {
+  const user = req.user as any;
+  
+  // Super admin always has access
+  if (user && user.role === 'super_admin') {
+    return next();
+  }
+  
+  // Check if user has a company
+  if (!user || !user.companyId) {
+    return res.status(403).json({ message: "No company associated with user" });
+  }
+  
+  try {
+    const trialStatus = await storage.checkTrialStatus(user.companyId);
+    
+    if (!trialStatus.isActive) {
+      return res.status(403).json({ 
+        message: "Trial has expired. Please contact support to upgrade.",
+        trialExpired: true,
+        daysRemaining: trialStatus.daysRemaining
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error('Error checking trial status:', error);
+    res.status(500).json({ message: "Failed to check trial status" });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware - sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
@@ -257,7 +289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/sites', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post('/api/sites', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       const user = req.user;
       const validatedData = insertSiteSchema.parse(req.body);
@@ -331,7 +363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/check-ins', isAuthenticated, async (req: any, res) => {
+  app.post('/api/check-ins', isAuthenticated, requireActiveTrial, async (req: any, res) => {
     try {
       const userId = req.user.id;
       
@@ -901,7 +933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       const admin = req.user;
       const validatedData = insertScheduledShiftSchema.parse(req.body);
@@ -990,7 +1022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Leave request routes
-  app.post('/api/leave-requests', isAuthenticated, async (req: any, res) => {
+  app.post('/api/leave-requests', isAuthenticated, requireActiveTrial, async (req: any, res) => {
     try {
       const validatedData = insertLeaveRequestSchema.parse({
         ...req.body,
@@ -1365,7 +1397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Notice routes
-  app.post('/api/notices', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post('/api/notices', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       console.log('Received notice creation request:', JSON.stringify(req.body, null, 2));
       const validatedData = insertNoticeSchema.parse(req.body);
@@ -1763,7 +1795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/partnerships', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post('/api/partnerships', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       const user = req.user;
       console.log('[DEBUG] POST /api/partnerships - Request body:', JSON.stringify(req.body));
@@ -1958,7 +1990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/job-shares', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post('/api/job-shares', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       const user = req.user;
       
@@ -2112,6 +2144,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Periodic trial expiration check (runs every hour)
+  const expireTrialsInterval = setInterval(async () => {
+    try {
+      const expiredCount = await storage.expireTrials();
+      if (expiredCount > 0) {
+        console.log(`[Trial Check] Expired ${expiredCount} trial(s)`);
+      }
+    } catch (error) {
+      console.error('[Trial Check] Error expiring trials:', error);
+    }
+  }, 60 * 60 * 1000); // Every hour
+
+  // Run trial expiration check on startup
+  storage.expireTrials().then(count => {
+    if (count > 0) {
+      console.log(`[Trial Check] Initial check: Expired ${count} trial(s)`);
+    }
+  }).catch(error => {
+    console.error('[Trial Check] Initial check error:', error);
+  });
+
+  // Clean up interval on server shutdown
   const httpServer = createServer(app);
+  httpServer.on('close', () => {
+    clearInterval(expireTrialsInterval);
+  });
+
   return httpServer;
 }
