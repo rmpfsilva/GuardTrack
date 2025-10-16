@@ -1514,19 +1514,49 @@ export class DatabaseStorage implements IStorage {
     return message;
   }
 
-  async getSupportMessagesByCompany(companyId: string): Promise<SupportMessage[]> {
-    return await db
-      .select()
+  async getSupportMessagesByCompany(companyId: string): Promise<any[]> {
+    const result = await db
+      .select({
+        id: supportMessages.id,
+        companyId: supportMessages.companyId,
+        senderId: supportMessages.senderId,
+        message: supportMessages.message,
+        isAdminReply: supportMessages.isAdminReply,
+        isRead: supportMessages.isRead,
+        createdAt: supportMessages.createdAt,
+        updatedAt: supportMessages.updatedAt,
+        senderName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        companyName: companies.name,
+      })
       .from(supportMessages)
+      .leftJoin(users, eq(supportMessages.senderId, users.id))
+      .leftJoin(companies, eq(supportMessages.companyId, companies.id))
       .where(eq(supportMessages.companyId, companyId))
       .orderBy(desc(supportMessages.createdAt));
+    
+    return result;
   }
 
-  async getAllSupportMessages(): Promise<SupportMessage[]> {
-    return await db
-      .select()
+  async getAllSupportMessages(): Promise<any[]> {
+    const result = await db
+      .select({
+        id: supportMessages.id,
+        companyId: supportMessages.companyId,
+        senderId: supportMessages.senderId,
+        message: supportMessages.message,
+        isAdminReply: supportMessages.isAdminReply,
+        isRead: supportMessages.isRead,
+        createdAt: supportMessages.createdAt,
+        updatedAt: supportMessages.updatedAt,
+        senderName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        companyName: companies.name,
+      })
       .from(supportMessages)
+      .leftJoin(users, eq(supportMessages.senderId, users.id))
+      .leftJoin(companies, eq(supportMessages.companyId, companies.id))
       .orderBy(desc(supportMessages.createdAt));
+    
+    return result;
   }
 
   async markSupportMessageAsRead(messageId: string): Promise<SupportMessage> {

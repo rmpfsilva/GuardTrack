@@ -33,6 +33,7 @@ import CompanyPartnerships from "@/components/company-partnerships";
 import JobSharing from "@/components/job-sharing";
 import ClientManagement from "@/components/client-management";
 import ClientUsageReports from "@/components/client-usage-reports";
+import SupportMessages from "@/components/support-messages";
 
 interface DashboardStats {
   activeGuards: number;
@@ -262,6 +263,7 @@ export default function AdminDashboard() {
                   <TabsTrigger value="clients" data-testid="tab-clients" className="text-xs sm:text-sm whitespace-nowrap">Clients</TabsTrigger>
                   <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">All Users</TabsTrigger>
                   <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
+                  <TabsTrigger value="messages" data-testid="tab-messages" className="text-xs sm:text-sm whitespace-nowrap">Messages</TabsTrigger>
                 </>
               ) : (
                 <>
@@ -458,6 +460,10 @@ export default function AdminDashboard() {
               
               <TabsContent value="reports">
                 <ClientUsageReports />
+              </TabsContent>
+
+              <TabsContent value="messages">
+                <SupportMessages />
               </TabsContent>
             </>
           )}
