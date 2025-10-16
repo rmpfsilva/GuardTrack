@@ -182,6 +182,82 @@ export default function UserManagement() {
     }
   };
 
+  // Group users by company
+  const usersByCompany = useMemo(() => {
+    const grouped: Record<string, User[]> = {};
+    const noCompany: User[] = [];
+    
+    users.forEach((user) => {
+      if (!user.companyId) {
+        noCompany.push(user);
+      } else {
+        if (!grouped[user.companyId]) {
+          grouped[user.companyId] = [];
+        }
+        grouped[user.companyId].push(user);
+      }
+    });
+    
+    return { grouped, noCompany };
+  }, [users]);
+
+  const renderUserCard = (user: User, showCompanyBadge: boolean = true) => (
+    <Card key={user.id} data-testid={`card-user-${user.id}`}>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-2">
+        <div className="flex items-center gap-4">
+          <Avatar>
+            <AvatarImage src={user.profileImageUrl || undefined} />
+            <AvatarFallback>
+              {user.firstName?.[0]}{user.lastName?.[0]}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <CardTitle className="text-lg">
+              {user.firstName} {user.lastName}
+            </CardTitle>
+            <CardDescription>{user.email}</CardDescription>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={user.role === 'admin' || user.role === 'super_admin' ? 'default' : 'secondary'} data-testid={`badge-role-${user.id}`}>
+            {user.role === 'admin' || user.role === 'super_admin' ? (
+              <>
+                <Shield className="mr-1 h-3 w-3" />
+                {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+              </>
+            ) : (
+              <>
+                <UserIcon className="mr-1 h-3 w-3" />
+                {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+              </>
+            )}
+          </Badge>
+          {showCompanyBadge && getCompanyName(user.companyId) && (
+            <Badge variant="outline" className="text-xs" data-testid={`badge-company-${user.id}`}>
+              {getCompanyName(user.companyId)}
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleEdit(user)}
+            data-testid={`button-edit-user-${user.id}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDelete(user.id)}
+            data-testid={`button-delete-user-${user.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+    </Card>
+  );
+
   if (isLoading) {
     return <div className="p-6">Loading users...</div>;
   }
@@ -190,7 +266,11 @@ export default function UserManagement() {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold">User Management</h2>
-        <p className="text-muted-foreground">Manage guard and admin accounts</p>
+        <p className="text-muted-foreground">
+          {currentUser?.role === 'super_admin' 
+            ? 'Manage all users across all companies' 
+            : 'Manage guard and admin accounts'}
+        </p>
       </div>
 
       <Alert>
@@ -203,72 +283,65 @@ export default function UserManagement() {
         </AlertDescription>
       </Alert>
 
-      <div className="grid gap-4">
-        {users.map((user) => (
-          <Card key={user.id} data-testid={`card-user-${user.id}`}>
-            <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-2">
-              <div className="flex items-center gap-4">
-                <Avatar>
-                  <AvatarImage src={user.profileImageUrl || undefined} />
-                  <AvatarFallback>
-                    {user.firstName?.[0]}{user.lastName?.[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <CardTitle className="text-lg">
-                    {user.firstName} {user.lastName}
-                  </CardTitle>
-                  <CardDescription>{user.email}</CardDescription>
-                </div>
+      {/* For Super Admin: Group users by company */}
+      {currentUser?.role === 'super_admin' ? (
+        <div className="space-y-8">
+          {/* Users with companies */}
+          {Object.keys(usersByCompany.grouped).length > 0 && (
+            <>
+              {Object.entries(usersByCompany.grouped).map(([companyId, companyUsers]) => {
+                const companyName = getCompanyName(companyId) || `Company ${companyId}`;
+                return (
+                  <div key={companyId} className="space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b">
+                      <h3 className="text-xl font-semibold">{companyName}</h3>
+                      <Badge variant="outline">{companyUsers.length} users</Badge>
+                    </div>
+                    <div className="grid gap-4">
+                      {companyUsers.map((user) => renderUserCard(user, false))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+          
+          {/* Users without company */}
+          {usersByCompany.noCompany.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b">
+                <h3 className="text-xl font-semibold">No Company Assigned</h3>
+                <Badge variant="outline">{usersByCompany.noCompany.length} users</Badge>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={user.role === 'admin' || user.role === 'super_admin' ? 'default' : 'secondary'} data-testid={`badge-role-${user.id}`}>
-                  {user.role === 'admin' || user.role === 'super_admin' ? (
-                    <>
-                      <Shield className="mr-1 h-3 w-3" />
-                      {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                    </>
-                  ) : (
-                    <>
-                      <UserIcon className="mr-1 h-3 w-3" />
-                      {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                    </>
-                  )}
-                </Badge>
-                {getCompanyName(user.companyId) && (
-                  <Badge variant="outline" className="text-xs" data-testid={`badge-company-${user.id}`}>
-                    {getCompanyName(user.companyId)}
-                  </Badge>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleEdit(user)}
-                  data-testid={`button-edit-user-${user.id}`}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDelete(user.id)}
-                  data-testid={`button-delete-user-${user.id}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <div className="grid gap-4">
+                {usersByCompany.noCompany.map((user) => renderUserCard(user, true))}
               </div>
-            </CardHeader>
-          </Card>
-        ))}
-        {users.length === 0 && (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <UserIcon className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No users have logged in yet. Share the app URL with your guards so they can sign up.</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            </div>
+          )}
+          
+          {users.length === 0 && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <UserIcon className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No users have logged in yet. Share the app URL with your guards so they can sign up.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      ) : (
+        /* For regular admins: Show flat list */
+        <div className="grid gap-4">
+          {users.map((user) => renderUserCard(user, true))}
+          {users.length === 0 && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <UserIcon className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No users have logged in yet. Share the app URL with your guards so they can sign up.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent data-testid="dialog-edit-user">

@@ -2300,6 +2300,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invitedBy: req.user.id,
       });
       
+      // Check if there's already a trial invitation for this email
+      const existingInvitation = await storage.getTrialInvitationByEmail(validatedData.email);
+      if (existingInvitation && (existingInvitation.status === 'pending' || existingInvitation.status === 'accepted')) {
+        return res.status(400).json({ 
+          message: `A trial invitation already exists for ${validatedData.email}. Super Admin authorization required for additional trials.` 
+        });
+      }
+      
+      // Check if a company with this name already exists and has trial status
+      if (validatedData.companyName) {
+        const existingCompany = await storage.findCompanyByNameOrEmail(validatedData.companyName);
+        if (existingCompany && existingCompany.trialStatus === 'trial') {
+          return res.status(400).json({ 
+            message: `A trial already exists for company "${validatedData.companyName}". Super Admin authorization required for additional trials.` 
+          });
+        }
+      }
+      
       // Generate unique token
       const token = randomBytes(32).toString("hex");
       

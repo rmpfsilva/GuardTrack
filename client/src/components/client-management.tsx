@@ -248,18 +248,20 @@ export default function ClientManagement() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedClient(client);
-                        setIsTrialDialogOpen(true);
-                      }}
-                      data-testid={`button-manage-trial-${client.id}`}
-                    >
-                      <Clock className="h-4 w-4 mr-2" />
-                      Manage Trial
-                    </Button>
+                    {client.trialStatus !== 'full' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedClient(client);
+                          setIsTrialDialogOpen(true);
+                        }}
+                        data-testid={`button-manage-trial-${client.id}`}
+                      >
+                        <Clock className="h-4 w-4 mr-2" />
+                        Manage Trial
+                      </Button>
+                    )}
                     {client.trialStatus === 'trial' && (
                       <Button
                         variant="outline"
@@ -418,18 +420,6 @@ export default function ClientManagement() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedClient(client);
-                        setIsTrialDialogOpen(true);
-                      }}
-                      data-testid={`button-manage-trial-${client.id}`}
-                    >
-                      <Clock className="h-4 w-4 mr-2" />
-                      Set Trial
-                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
