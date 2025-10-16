@@ -1045,7 +1045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/scheduled-shifts/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.patch('/api/scheduled-shifts/:id', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
     try {
       const admin = req.user;
       const { id } = req.params;
@@ -1056,7 +1056,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!existingShift) {
           return res.status(404).json({ message: "Scheduled shift not found" });
         }
-        if (existingShift.user.companyId !== admin.companyId) {
+        
+        // Get user to check company
+        const shiftUser = await storage.getUserById(existingShift.userId);
+        if (!shiftUser || shiftUser.companyId !== admin.companyId) {
           return res.status(403).json({ message: "Cannot update shifts from other companies" });
         }
         
