@@ -925,6 +925,7 @@ export type UserWithCheckIns = User & {
 export type ScheduledShiftWithDetails = ScheduledShift & {
   user: User;
   site: Site;
+  checkIn?: CheckIn | null; // Actual check-in data for this shift (if exists)
 };
 
 export type LeaveRequestWithDetails = LeaveRequest & {

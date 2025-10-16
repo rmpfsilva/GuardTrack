@@ -789,13 +789,41 @@ export class DatabaseStorage implements IStorage {
       .where(whereConditions)
       .orderBy(scheduledShifts.startTime);
 
-    return results
+    const shiftsWithDetails = results
       .filter((r) => r.users && r.sites)
       .map((r) => ({
         ...r.scheduled_shifts,
         user: r.users!,
         site: r.sites!,
+        checkIn: null as CheckIn | null,
       }));
+
+    // Get matching check-ins for these shifts
+    for (const shift of shiftsWithDetails) {
+      // Find check-in that matches this shift (same user, same site, same day)
+      const shiftDate = new Date(shift.startTime);
+      const dayStart = new Date(shiftDate.setHours(0, 0, 0, 0));
+      const dayEnd = new Date(shiftDate.setHours(23, 59, 59, 999));
+      
+      const [matchingCheckIn] = await db
+        .select()
+        .from(checkIns)
+        .where(
+          and(
+            eq(checkIns.userId, shift.userId),
+            eq(checkIns.siteId, shift.siteId),
+            gte(checkIns.checkInTime, dayStart),
+            lte(checkIns.checkInTime, dayEnd)
+          )
+        )
+        .limit(1);
+      
+      if (matchingCheckIn) {
+        shift.checkIn = matchingCheckIn;
+      }
+    }
+
+    return shiftsWithDetails;
   }
 
   async getScheduledShift(id: string): Promise<ScheduledShift | undefined> {
@@ -836,13 +864,41 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(scheduledShifts.startTime);
 
-    return results
+    const shiftsWithDetails = results
       .filter((r) => r.users && r.sites)
       .map((r) => ({
         ...r.scheduled_shifts,
         user: r.users!,
         site: r.sites!,
+        checkIn: null as CheckIn | null,
       }));
+
+    // Get matching check-ins for these shifts
+    for (const shift of shiftsWithDetails) {
+      // Find check-in that matches this shift (same user, same site, same day)
+      const shiftDate = new Date(shift.startTime);
+      const dayStart = new Date(shiftDate.setHours(0, 0, 0, 0));
+      const dayEnd = new Date(shiftDate.setHours(23, 59, 59, 999));
+      
+      const [matchingCheckIn] = await db
+        .select()
+        .from(checkIns)
+        .where(
+          and(
+            eq(checkIns.userId, shift.userId),
+            eq(checkIns.siteId, shift.siteId),
+            gte(checkIns.checkInTime, dayStart),
+            lte(checkIns.checkInTime, dayEnd)
+          )
+        )
+        .limit(1);
+      
+      if (matchingCheckIn) {
+        shift.checkIn = matchingCheckIn;
+      }
+    }
+
+    return shiftsWithDetails;
   }
 
   // Billing operations
