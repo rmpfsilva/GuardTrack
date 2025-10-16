@@ -96,7 +96,7 @@ export default function AdvancedReports() {
           </TabsTrigger>
           <TabsTrigger value="anomalies" data-testid="tab-anomalies">
             <AlertTriangle className="h-4 w-4 mr-2" />
-            Anomalies
+            E-statistics
           </TabsTrigger>
           <TabsTrigger value="detailed" data-testid="tab-detailed">
             <FileText className="h-4 w-4 mr-2" />
