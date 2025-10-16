@@ -740,7 +740,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const admin = req.user;
       const { userId, siteId, workingRole } = req.body;
       
+      console.log('[MANUAL CHECK-IN] Request:', { userId, siteId, workingRole, adminId: admin.id });
+      
       if (!userId || !siteId || !workingRole) {
+        console.log('[MANUAL CHECK-IN] Missing required fields');
         return res.status(400).json({ message: "userId, siteId, and workingRole are required" });
       }
 
@@ -749,10 +752,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const user = await storage.getUserById(userId);
         const site = await storage.getSite(siteId);
         
+        console.log('[MANUAL CHECK-IN] Validation:', { 
+          userId, 
+          userFound: !!user, 
+          userCompany: user?.companyId,
+          siteFound: !!site, 
+          siteCompany: site?.companyId,
+          adminCompany: admin.companyId 
+        });
+        
         if (!user || user.companyId !== admin.companyId) {
+          console.log('[MANUAL CHECK-IN] User validation failed');
           return res.status(403).json({ message: "Cannot check in users from other companies" });
         }
         if (!site || site.companyId !== admin.companyId) {
+          console.log('[MANUAL CHECK-IN] Site validation failed');
           return res.status(403).json({ message: "Cannot check in to sites from other companies" });
         }
       }
@@ -760,6 +774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if user already has an active check-in
       const activeCheckIn = await storage.getActiveCheckInForUser(userId);
       if (activeCheckIn) {
+        console.log('[MANUAL CHECK-IN] User already has active check-in:', activeCheckIn.id);
         return res.status(400).json({ message: "User already has an active check-in. Please check out first." });
       }
 
@@ -769,10 +784,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         latitude: null,
         longitude: null,
         workingRole,
-        status: 'active',
+        status: 'active' as const,
       };
 
+      console.log('[MANUAL CHECK-IN] Creating check-in with data:', validatedData);
       const checkIn = await storage.createCheckIn(validatedData);
+      console.log('[MANUAL CHECK-IN] Check-in created successfully:', checkIn.id);
       
       // Fetch full details for Google Sheets sync
       const checkInWithDetails = await storage.getActiveCheckInForUser(userId);
@@ -784,7 +801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json(checkIn);
     } catch (error: any) {
-      console.error("Error creating manual check-in:", error);
+      console.error("[MANUAL CHECK-IN ERROR]", error);
       res.status(400).json({ message: error.message || "Failed to create check-in" });
     }
   });
@@ -794,24 +811,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const admin = req.user;
       const { checkInId } = req.body;
       
+      console.log('[MANUAL CHECK-OUT] Request:', { checkInId, adminId: admin.id });
+      
       if (!checkInId) {
+        console.log('[MANUAL CHECK-OUT] Missing checkInId');
         return res.status(400).json({ message: "checkInId is required" });
       }
 
       // Get the check-in to verify it exists and is active
       const allActiveCheckIns = await storage.getAllActiveCheckIns();
+      console.log('[MANUAL CHECK-OUT] Total active check-ins:', allActiveCheckIns.length);
+      
       const activeCheckIn = allActiveCheckIns.find(ci => ci.id === checkInId);
       
       if (!activeCheckIn) {
+        console.log('[MANUAL CHECK-OUT] Check-in not found in active check-ins');
         return res.status(404).json({ message: "Active check-in not found" });
       }
 
+      console.log('[MANUAL CHECK-OUT] Found check-in:', { 
+        id: activeCheckIn.id, 
+        userId: activeCheckIn.userId, 
+        userCompany: activeCheckIn.user.companyId,
+        adminCompany: admin.companyId 
+      });
+
       // For regular admins, validate check-in belongs to their company
       if (admin.role !== 'super_admin' && activeCheckIn.user.companyId !== admin.companyId) {
+        console.log('[MANUAL CHECK-OUT] Company mismatch');
         return res.status(403).json({ message: "Cannot check out users from other companies" });
       }
 
+      console.log('[MANUAL CHECK-OUT] Calling storage.checkOut');
       const checkIn = await storage.checkOut(checkInId);
+      console.log('[MANUAL CHECK-OUT] Check-out successful:', checkIn.id);
       
       // Update Google Sheets asynchronously
       const checkInWithDetails = await storage.getUserRecentCheckIns(activeCheckIn.userId, 1);
@@ -823,7 +856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(checkIn);
     } catch (error: any) {
-      console.error("Error checking out:", error);
+      console.error("[MANUAL CHECK-OUT ERROR]", error);
       res.status(400).json({ message: error.message || "Failed to check out" });
     }
   });
