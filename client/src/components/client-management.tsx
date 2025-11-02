@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2 } from "lucide-react";
+import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Company } from "@shared/schema";
 import {
@@ -33,6 +33,18 @@ interface ClientWithStatus extends Company {
   trialStatus: 'trial' | 'full' | 'expired';
   daysRemaining?: number;
   daysSinceJoined?: number;
+}
+
+interface TrialInvitation {
+  id: string;
+  email: string;
+  companyName: string | null;
+  durationDays: string;
+  token: string;
+  status: 'pending' | 'accepted' | 'expired' | 'revoked';
+  expiresAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
 }
 
 export default function ClientManagement() {
@@ -54,6 +66,10 @@ export default function ClientManagement() {
 
   const { data: clients = [], isLoading } = useQuery<ClientWithStatus[]>({
     queryKey: ["/api/super-admin/clients"],
+  });
+
+  const { data: trialInvitations = [], isLoading: isLoadingInvitations } = useQuery<TrialInvitation[]>({
+    queryKey: ["/api/super-admin/trial-invitations"],
   });
 
   const blockClientMutation = useMutation({
@@ -177,6 +193,7 @@ export default function ClientManagement() {
       return await apiRequest("POST", `/api/super-admin/invite-trial`, { email, companyName, durationDays });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/trial-invitations"] });
       setIsInviteTrialDialogOpen(false);
       setInviteEmail("");
       setInviteCompanyName("");
@@ -194,6 +211,31 @@ export default function ClientManagement() {
       });
     },
   });
+
+  const getInvitationStatusBadge = (invitation: TrialInvitation) => {
+    const now = new Date();
+    const expiresAt = new Date(invitation.expiresAt);
+    
+    if (invitation.status === 'accepted') {
+      return <Badge variant="default" className="bg-green-600" data-testid={`badge-invitation-status-${invitation.id}`}>
+        <CheckCircle className="h-3 w-3 mr-1" />
+        Accepted
+      </Badge>;
+    }
+    if (invitation.status === 'expired' || expiresAt < now) {
+      return <Badge variant="destructive" data-testid={`badge-invitation-status-${invitation.id}`}>
+        <XCircle className="h-3 w-3 mr-1" />
+        Expired
+      </Badge>;
+    }
+    if (invitation.status === 'pending') {
+      return <Badge variant="secondary" className="bg-amber-600 text-white" data-testid={`badge-invitation-status-${invitation.id}`}>
+        <AlertCircle className="h-3 w-3 mr-1" />
+        Pending
+      </Badge>;
+    }
+    return <Badge variant="outline" data-testid={`badge-invitation-status-${invitation.id}`}>{invitation.status}</Badge>;
+  };
 
   const getStatusBadge = (client: ClientWithStatus) => {
     if (client.trialStatus === 'expired') {
@@ -248,6 +290,9 @@ export default function ClientManagement() {
           </TabsTrigger>
           <TabsTrigger value="expired" data-testid="tab-expired-clients">
             Expired ({clients.filter(c => c.trialStatus === 'expired').length})
+          </TabsTrigger>
+          <TabsTrigger value="invitations" data-testid="tab-invitations">
+            Invitations ({trialInvitations.length})
           </TabsTrigger>
         </TabsList>
 
@@ -579,6 +624,71 @@ export default function ClientManagement() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        <TabsContent value="invitations" className="mt-6">
+          {isLoadingInvitations ? (
+            <div className="flex items-center justify-center p-8">
+              <p className="text-muted-foreground">Loading invitations...</p>
+            </div>
+          ) : trialInvitations.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center p-8">
+                <Mail className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground text-center">
+                  No trial invitations sent yet. Click "Invite Trial Client" to send your first invitation.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {trialInvitations.map((invitation) => (
+                <Card key={invitation.id} data-testid={`card-invitation-${invitation.id}`}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <CardTitle className="flex items-center gap-2">
+                          <Mail className="h-5 w-5" />
+                          {invitation.email}
+                        </CardTitle>
+                        <CardDescription>
+                          {invitation.companyName || 'Company name not provided'} • {invitation.durationDays} day trial
+                        </CardDescription>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        {getInvitationStatusBadge(invitation)}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        <span>Sent: {format(new Date(invitation.createdAt), 'MMM d, yyyy h:mm a')}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        <span>
+                          {invitation.status === 'accepted' && invitation.acceptedAt
+                            ? `Accepted: ${format(new Date(invitation.acceptedAt), 'MMM d, yyyy h:mm a')}`
+                            : `Expires: ${format(new Date(invitation.expiresAt), 'MMM d, yyyy h:mm a')}`
+                          }
+                        </span>
+                      </div>
+                      {invitation.status === 'pending' && new Date(invitation.expiresAt) > new Date() && (
+                        <div className="flex items-center gap-2 text-amber-600">
+                          <AlertCircle className="h-4 w-4" />
+                          <span>
+                            Expires {formatDistanceToNow(new Date(invitation.expiresAt), { addSuffix: true })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

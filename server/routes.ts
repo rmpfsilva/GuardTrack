@@ -2589,6 +2589,17 @@ GuardTrack Team`;
     }
   });
 
+  // Get all trial invitations (Super Admin only)
+  app.get('/api/super-admin/trial-invitations', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const invitations = await storage.getAllTrialInvitations();
+      res.json(invitations);
+    } catch (error: any) {
+      console.error("Error fetching trial invitations:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch trial invitations" });
+    }
+  });
+
   // Support Message Routes
   app.post('/api/support/send', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
