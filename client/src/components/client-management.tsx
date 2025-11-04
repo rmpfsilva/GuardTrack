@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle, Shield, Check, X } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Company } from "@shared/schema";
 import {
@@ -55,6 +55,7 @@ export default function ClientManagement() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
   const [isInviteTrialDialogOpen, setIsInviteTrialDialogOpen] = useState(false);
+  const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
@@ -392,6 +393,18 @@ export default function ClientManagement() {
                     >
                       <Mail className="h-4 w-4 mr-2" />
                       Send Message
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsPermissionsDialogOpen(true);
+                      }}
+                      data-testid={`button-view-permissions-${client.id}`}
+                    >
+                      <Shield className="h-4 w-4 mr-2" />
+                      View Permissions
                     </Button>
                   </div>
                 </CardContent>
@@ -980,6 +993,191 @@ export default function ClientManagement() {
               data-testid="button-send-invite"
             >
               {inviteTrialMutation.isPending ? "Sending..." : "Send Invitation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Trial Permissions Dialog */}
+      <Dialog open={isPermissionsDialogOpen} onOpenChange={setIsPermissionsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto" data-testid="dialog-trial-permissions">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Trial Access & Permissions
+            </DialogTitle>
+            <DialogDescription>
+              {selectedClient?.trialStatus === 'trial' 
+                ? `Trial users for ${selectedClient?.name} have access to the following features during their trial period` 
+                : selectedClient?.trialStatus === 'expired'
+                ? `Trial has expired for ${selectedClient?.name}. Limited features available until upgrade.`
+                : `Full access granted to ${selectedClient?.name}`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Full Access Section */}
+            {selectedClient?.trialStatus === 'full' && (
+              <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <Check className="h-5 w-5 text-green-600" />
+                  <h3 className="font-semibold text-green-900 dark:text-green-100">Full Version Access</h3>
+                </div>
+                <p className="text-sm text-green-800 dark:text-green-200">
+                  This client has full access to all GuardTrack features with no restrictions.
+                </p>
+              </div>
+            )}
+
+            {/* Available Features */}
+            <div>
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <Check className="h-4 w-4 text-green-600" />
+                {selectedClient?.trialStatus === 'expired' ? 'Limited Features (View Only)' : 'Available Features'}
+              </h3>
+              <div className="grid gap-2">
+                <div className="flex items-start gap-2 text-sm">
+                  <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <strong>User Management:</strong> View and manage guard profiles and roles
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 text-sm">
+                  <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <strong>Dashboard Access:</strong> View analytics and key metrics
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 text-sm">
+                  <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <strong>Reports Viewing:</strong> Access to basic attendance and shift reports
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 text-sm">
+                  <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <strong>Settings:</strong> Configure company information and preferences
+                  </div>
+                </div>
+                {selectedClient?.trialStatus !== 'expired' && (
+                  <>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>Check-in/Check-out:</strong> Guards can log their shifts with geolocation
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>Shift Scheduling:</strong> Create and manage guard shift schedules
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>Site Management:</strong> Configure security sites and locations
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>Break Tracking:</strong> Monitor and approve guard break times
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>Overtime Management:</strong> Track and approve overtime requests
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>Leave Requests:</strong> Submit and manage time-off requests
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>Notice Board:</strong> Post and view company announcements
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>Push Notifications:</strong> Real-time alerts for important events
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Restricted Features for Expired Trials */}
+            {selectedClient?.trialStatus === 'expired' && (
+              <div className="p-4 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+                <h3 className="font-semibold mb-3 flex items-center gap-2 text-red-900 dark:text-red-100">
+                  <X className="h-4 w-4" />
+                  Restricted Features (Upgrade Required)
+                </h3>
+                <div className="grid gap-2">
+                  <div className="flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
+                    <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div><strong>Check-in/Check-out:</strong> Shift logging is disabled</div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
+                    <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div><strong>Shift Management:</strong> Cannot create or edit shifts</div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
+                    <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div><strong>Site Management:</strong> Cannot add or modify sites</div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
+                    <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div><strong>Company Partnerships:</strong> Cannot request or manage partnerships</div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
+                    <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div><strong>Job Sharing:</strong> Cannot share or receive job requests</div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
+                    <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div><strong>Notices:</strong> Cannot post announcements</div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
+                    <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div><strong>Leave Requests:</strong> Cannot submit new leave requests</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Trial Information */}
+            {selectedClient?.trialStatus !== 'full' && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h3 className="font-semibold mb-2 text-blue-900 dark:text-blue-100">Trial Information</h3>
+                <div className="space-y-1 text-sm text-blue-800 dark:text-blue-200">
+                  <p><strong>Status:</strong> {selectedClient?.trialStatus === 'trial' ? `Active (${selectedClient?.daysRemaining} days remaining)` : 'Expired'}</p>
+                  <p><strong>Access Level:</strong> {selectedClient?.trialStatus === 'trial' ? 'Full features during trial' : 'Limited to view-only'}</p>
+                  {selectedClient?.trialStatus === 'expired' && (
+                    <p className="mt-2 font-medium">Users from this company are blocked from logging in until the trial is extended or upgraded to full version.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsPermissionsDialogOpen(false)}
+              data-testid="button-close-permissions"
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

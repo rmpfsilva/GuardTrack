@@ -2301,20 +2301,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/companies/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      
-      // Delete the company and all associated data (cascades handled by DB)
-      await storage.deleteCompany(id);
-      
-      res.json({ message: "Company deleted successfully" });
-    } catch (error: any) {
-      console.error("Error deleting company:", error);
-      res.status(400).json({ message: error.message || "Failed to delete company" });
-    }
-  });
-
   app.post('/api/super-admin/send-message', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
       const { clientId, subject, body } = req.body;
