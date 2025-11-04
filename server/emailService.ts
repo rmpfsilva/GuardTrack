@@ -102,7 +102,11 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
 
 export async function sendTrialInvitationEmail(toEmail: string, subject: string, body: string): Promise<void> {
   try {
+    const bodyPreview = body.length > 100 ? body.substring(0, 100) + '...' : body;
     console.log(`[Email] Starting trial invitation email to: ${toEmail}`);
+    console.log(`[Email] Subject: ${subject}`);
+    console.log(`[Email] Body preview: ${bodyPreview}`);
+    
     const gmail = await getUncachableGmailClient();
     console.log('[Email] Gmail client obtained successfully');
     
@@ -166,6 +170,10 @@ export async function sendTrialInvitationEmail(toEmail: string, subject: string,
       console.error('[Email] Response status:', error.response.status);
       console.error('[Email] Response data:', JSON.stringify(error.response.data, null, 2));
     }
-    throw new Error(`Failed to send trial invitation email: ${error.message}`);
+    if (error.stack) {
+      console.error('[Email] Stack trace:', error.stack);
+    }
+    // Preserve original error for stack trace
+    throw error;
   }
 }
