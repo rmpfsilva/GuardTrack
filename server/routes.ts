@@ -2444,9 +2444,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresAt,
       });
       
-      // Send email with registration link
-      const registrationLink = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/register-trial?token=${token}`;
-      const emailBody = `Hello,
+      // Send email with registration link (catch errors to not fail the whole request)
+      let emailSent = false;
+      let emailError = null;
+      try {
+        const registrationLink = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/register-trial?token=${token}`;
+        const emailBody = `Hello,
 
 You've been invited to try GuardTrack for ${validatedData.durationDays} days!
 
@@ -2459,21 +2462,30 @@ This invitation will expire in 7 days.
 
 Best regards,
 GuardTrack Team`;
-      
-      await sendTrialInvitationEmail(
-        validatedData.email,
-        `Invitation to Try GuardTrack - ${validatedData.durationDays} Day Trial`,
-        emailBody
-      );
+        
+        await sendTrialInvitationEmail(
+          validatedData.email,
+          `Invitation to Try GuardTrack - ${validatedData.durationDays} Day Trial`,
+          emailBody
+        );
+        emailSent = true;
+      } catch (error: any) {
+        console.error("Error sending trial invitation email:", error);
+        emailError = error.message || "Failed to send email";
+      }
       
       res.json({ 
-        message: "Trial invitation sent successfully", 
+        message: emailSent 
+          ? "Trial invitation sent successfully" 
+          : `Trial invitation created but email delivery failed: ${emailError}. You can resend the invitation link manually.`,
+        emailSent,
         invitation: {
           id: invitation.id,
           email: invitation.email,
           companyName: invitation.companyName,
           durationDays: invitation.durationDays,
           expiresAt: invitation.expiresAt,
+          registrationLink: `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/register-trial?token=${token}`,
         }
       });
     } catch (error: any) {

@@ -192,16 +192,25 @@ export default function ClientManagement() {
     mutationFn: async ({ email, companyName, durationDays }: { email: string; companyName: string; durationDays: string }) => {
       return await apiRequest("POST", `/api/super-admin/invite-trial`, { email, companyName, durationDays });
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/trial-invitations"] });
       setIsInviteTrialDialogOpen(false);
       setInviteEmail("");
       setInviteCompanyName("");
       setInviteDuration("14");
-      toast({
-        title: "Trial invitation sent",
-        description: "The trial invitation has been sent successfully.",
-      });
+      
+      if (data.emailSent) {
+        toast({
+          title: "Trial invitation sent",
+          description: "The trial invitation email has been sent successfully.",
+        });
+      } else {
+        toast({
+          title: "Invitation created",
+          description: data.message || "Invitation created but email delivery failed. The invitation appears in the Invitations tab.",
+          variant: "default",
+        });
+      }
     },
     onError: (error: any) => {
       toast({
