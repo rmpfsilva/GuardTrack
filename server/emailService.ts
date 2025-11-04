@@ -102,7 +102,19 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
 
 export async function sendTrialInvitationEmail(toEmail: string, subject: string, body: string): Promise<void> {
   try {
+    console.log(`[Email] Starting trial invitation email to: ${toEmail}`);
     const gmail = await getUncachableGmailClient();
+    console.log('[Email] Gmail client obtained successfully');
+    
+    // First, get the authenticated user's email to use as sender
+    let senderEmail = 'noreply@guardtrack.com';
+    try {
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      senderEmail = profile.data.emailAddress || senderEmail;
+      console.log(`[Email] Using authenticated sender email: ${senderEmail}`);
+    } catch (profileError) {
+      console.warn('[Email] Could not fetch user profile, using default sender');
+    }
     
     const htmlBody = `
 <!DOCTYPE html>
@@ -123,9 +135,6 @@ export async function sendTrialInvitationEmail(toEmail: string, subject: string,
 </body>
 </html>`;
 
-    // Get sender email from environment or use default
-    const senderEmail = process.env.GMAIL_USER || 'noreply@guardtrack.com';
-    
     const message = [
       `From: GuardTrack <${senderEmail}>`,
       `To: ${toEmail}`,
@@ -142,16 +151,21 @@ export async function sendTrialInvitationEmail(toEmail: string, subject: string,
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    await gmail.users.messages.send({
+    console.log('[Email] Sending email via Gmail API...');
+    const result = await gmail.users.messages.send({
       userId: 'me',
       requestBody: {
         raw: encodedMessage,
       },
     });
 
-    console.log(`Trial invitation email sent successfully to ${toEmail}`);
-  } catch (error) {
-    console.error('Error sending trial invitation email:', error);
-    throw new Error('Failed to send trial invitation email');
+    console.log(`✅ [Email] Trial invitation email sent successfully to ${toEmail}, Message ID: ${result.data.id}`);
+  } catch (error: any) {
+    console.error('❌ [Email] Error sending trial invitation email:', error.message);
+    if (error.response) {
+      console.error('[Email] Response status:', error.response.status);
+      console.error('[Email] Response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    throw new Error(`Failed to send trial invitation email: ${error.message}`);
   }
 }
