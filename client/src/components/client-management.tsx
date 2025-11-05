@@ -56,6 +56,8 @@ export default function ClientManagement() {
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
   const [isInviteTrialDialogOpen, setIsInviteTrialDialogOpen] = useState(false);
   const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
+  const [isDeleteInvitationDialogOpen, setIsDeleteInvitationDialogOpen] = useState(false);
+  const [selectedInvitation, setSelectedInvitation] = useState<TrialInvitation | null>(null);
   const [trialDays, setTrialDays] = useState<number>(14);
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
@@ -228,6 +230,8 @@ export default function ClientManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/trial-invitations"] });
+      setIsDeleteInvitationDialogOpen(false);
+      setSelectedInvitation(null);
       toast({
         title: "Invitation deleted",
         description: "The trial invitation has been deleted successfully.",
@@ -732,15 +736,13 @@ export default function ClientManagement() {
                           variant="destructive"
                           size="sm"
                           onClick={() => {
-                            if (confirm(`Are you sure you want to delete this invitation for ${invitation.email}?`)) {
-                              deleteInvitationMutation.mutate(invitation.id);
-                            }
+                            setSelectedInvitation(invitation);
+                            setIsDeleteInvitationDialogOpen(true);
                           }}
-                          disabled={deleteInvitationMutation.isPending}
                           data-testid={`button-delete-invitation-${invitation.id}`}
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
-                          {deleteInvitationMutation.isPending ? "Deleting..." : "Delete"}
+                          Delete
                         </Button>
                       </div>
                     </div>
@@ -892,6 +894,43 @@ export default function ClientManagement() {
               data-testid="button-confirm-delete"
             >
               {deleteClientMutation.isPending ? "Deleting..." : "Permanently Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Trial Invitation Dialog */}
+      <Dialog open={isDeleteInvitationDialogOpen} onOpenChange={setIsDeleteInvitationDialogOpen}>
+        <DialogContent data-testid="dialog-delete-invitation">
+          <DialogHeader>
+            <DialogTitle>Delete Trial Invitation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the trial invitation for <strong>{selectedInvitation?.email}</strong>?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteInvitationDialogOpen(false);
+                setSelectedInvitation(null);
+              }}
+              data-testid="button-cancel-delete-invitation"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (selectedInvitation) {
+                  deleteInvitationMutation.mutate(selectedInvitation.id);
+                }
+              }}
+              disabled={deleteInvitationMutation.isPending}
+              data-testid="button-confirm-delete-invitation"
+            >
+              {deleteInvitationMutation.isPending ? "Deleting..." : "Delete Invitation"}
             </Button>
           </DialogFooter>
         </DialogContent>
