@@ -222,6 +222,26 @@ export default function ClientManagement() {
     },
   });
 
+  const deleteInvitationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/super-admin/trial-invitations/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/trial-invitations"] });
+      toast({
+        title: "Invitation deleted",
+        description: "The trial invitation has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete invitation",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getInvitationStatusBadge = (invitation: TrialInvitation) => {
     const now = new Date();
     const expiresAt = new Date(invitation.expiresAt);
@@ -683,28 +703,46 @@ export default function ClientManagement() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        <span>Sent: {format(new Date(invitation.createdAt), 'MMM d, yyyy h:mm a')}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        <span>
-                          {invitation.status === 'accepted' && invitation.acceptedAt
-                            ? `Accepted: ${format(new Date(invitation.acceptedAt), 'MMM d, yyyy h:mm a')}`
-                            : `Expires: ${format(new Date(invitation.expiresAt), 'MMM d, yyyy h:mm a')}`
-                          }
-                        </span>
-                      </div>
-                      {invitation.status === 'pending' && new Date(invitation.expiresAt) > new Date() && (
-                        <div className="flex items-center gap-2 text-amber-600">
-                          <AlertCircle className="h-4 w-4" />
+                    <div className="space-y-3">
+                      <div className="space-y-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          <span>Sent: {format(new Date(invitation.createdAt), 'MMM d, yyyy h:mm a')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
                           <span>
-                            Expires {formatDistanceToNow(new Date(invitation.expiresAt), { addSuffix: true })}
+                            {invitation.status === 'accepted' && invitation.acceptedAt
+                              ? `Accepted: ${format(new Date(invitation.acceptedAt), 'MMM d, yyyy h:mm a')}`
+                              : `Expires: ${format(new Date(invitation.expiresAt), 'MMM d, yyyy h:mm a')}`
+                            }
                           </span>
                         </div>
-                      )}
+                        {invitation.status === 'pending' && new Date(invitation.expiresAt) > new Date() && (
+                          <div className="flex items-center gap-2 text-amber-600">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>
+                              Expires {formatDistanceToNow(new Date(invitation.expiresAt), { addSuffix: true })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2 pt-2 border-t">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to delete this invitation for ${invitation.email}?`)) {
+                              deleteInvitationMutation.mutate(invitation.id);
+                            }
+                          }}
+                          disabled={deleteInvitationMutation.isPending}
+                          data-testid={`button-delete-invitation-${invitation.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {deleteInvitationMutation.isPending ? "Deleting..." : "Delete"}
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

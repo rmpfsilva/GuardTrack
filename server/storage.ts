@@ -169,6 +169,7 @@ export interface IStorage {
   getAllTrialInvitations(): Promise<TrialInvitation[]>;
   markTrialInvitationAccepted(token: string): Promise<TrialInvitation>;
   expireTrialInvitation(id: string): Promise<TrialInvitation>;
+  deleteTrialInvitation(id: string): Promise<void>;
 
   // User login tracking operations
   createUserLogin(login: InsertUserLogin): Promise<UserLogin>;
@@ -1696,6 +1697,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(trialInvitations.id, id))
       .returning();
     return invitation;
+  }
+
+  async deleteTrialInvitation(id: string): Promise<void> {
+    await db.delete(trialInvitations).where(eq(trialInvitations.id, id));
   }
 
   // User login tracking operations

@@ -2598,6 +2598,18 @@ GuardTrack Team`;
     }
   });
 
+  // Delete trial invitation (Super Admin only)
+  app.delete('/api/super-admin/trial-invitations/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteTrialInvitation(id);
+      res.json({ message: "Trial invitation deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting trial invitation:", error);
+      res.status(500).json({ message: error.message || "Failed to delete trial invitation" });
+    }
+  });
+
   // Support Message Routes
   app.post('/api/support/send', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
