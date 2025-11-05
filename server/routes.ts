@@ -2460,7 +2460,7 @@ GuardTrack Team`;
         emailError = error.message || "Failed to send email";
       }
       
-      res.json({ 
+      const response = { 
         message: emailSent 
           ? "Trial invitation sent successfully" 
           : `Trial invitation created but email delivery failed: ${emailError}. You can resend the invitation link manually.`,
@@ -2473,7 +2473,10 @@ GuardTrack Team`;
           expiresAt: invitation.expiresAt,
           registrationLink: `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/register-trial?token=${token}`,
         }
-      });
+      };
+      
+      console.log('[Trial Invitation] Sending response:', JSON.stringify({ message: response.message, emailSent: response.emailSent }));
+      res.json(response);
     } catch (error: any) {
       console.error("Error sending trial invitation:", error);
       if (error.name === 'ZodError') {
