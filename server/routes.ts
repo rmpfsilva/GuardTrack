@@ -2431,10 +2431,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Send email with registration link (catch errors to not fail the whole request)
+      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+        : 'http://localhost:5000';
       let emailSent = false;
       let emailError = null;
       try {
-        const registrationLink = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/register-trial?token=${token}`;
+        const registrationLink = `${baseUrl}/register-trial?token=${token}`;
         const emailBody = `Hello,
 
 You've been invited to try GuardTrack for ${validatedData.durationDays} days!
@@ -2471,7 +2474,7 @@ GuardTrack Team`;
           companyName: invitation.companyName,
           durationDays: invitation.durationDays,
           expiresAt: invitation.expiresAt,
-          registrationLink: `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/register-trial?token=${token}`,
+          registrationLink: `${baseUrl}/register-trial?token=${token}`,
         }
       });
     } catch (error: any) {
