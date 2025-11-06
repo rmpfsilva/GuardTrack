@@ -100,9 +100,7 @@ export default function ClientManagement() {
 
   const deleteClientMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/companies/${id}`, {
-        method: 'DELETE',
-      });
+      return await apiRequest("DELETE", `/api/companies/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/clients"] });
