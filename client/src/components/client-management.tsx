@@ -193,7 +193,8 @@ export default function ClientManagement() {
 
   const inviteTrialMutation = useMutation({
     mutationFn: async ({ email, companyName, durationDays }: { email: string; companyName: string; durationDays: string }) => {
-      return await apiRequest("POST", `/api/super-admin/invite-trial`, { email, companyName, durationDays });
+      const response = await apiRequest("POST", `/api/super-admin/invite-trial`, { email, companyName, durationDays });
+      return await response.json();
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/trial-invitations"] });
