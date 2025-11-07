@@ -2431,9 +2431,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Send email with registration link (catch errors to not fail the whole request)
-      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
-        : 'http://localhost:5000';
+      // Determine the correct base URL based on environment
+      let baseUrl: string;
+      if (process.env.REPLIT_DEPLOYMENT === '1' && process.env.REPLIT_DOMAINS) {
+        // Production deployment - use the first domain from REPLIT_DOMAINS (the .replit.app URL)
+        const domains = process.env.REPLIT_DOMAINS.split(',');
+        baseUrl = `https://${domains[0]}`;
+      } else if (process.env.REPLIT_DEV_DOMAIN) {
+        // Development environment
+        baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}`;
+      } else {
+        // Local development
+        baseUrl = 'http://localhost:5000';
+      }
+      
       let emailSent = false;
       let emailError = null;
       try {
