@@ -257,11 +257,26 @@ export default function AdminDashboard() {
             <TabsList className="inline-flex min-w-min bg-muted">
               {user.role === 'super_admin' ? (
                 <>
-                  {/* Super Admin Tabs - Platform Management */}
+                  {/* Super Admin Tabs - Platform Management + All Company Admin Tabs for Troubleshooting */}
                   <TabsTrigger value="clients" data-testid="tab-clients" className="text-xs sm:text-sm whitespace-nowrap">Clients</TabsTrigger>
-                  <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">All Users</TabsTrigger>
-                  <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
                   <TabsTrigger value="messages" data-testid="tab-messages" className="text-xs sm:text-sm whitespace-nowrap">Messages</TabsTrigger>
+                  <TabsTrigger value="usage-reports" data-testid="tab-usage-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
+                  {/* Company Admin tabs for troubleshooting/support */}
+                  <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>
+                  <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
+                  <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>
+                  <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>
+                  <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Guards</TabsTrigger>
+                  <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
+                  <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>
+                  <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>
+                  <TabsTrigger value="sites" data-testid="tab-sites" className="text-xs sm:text-sm whitespace-nowrap">Sites</TabsTrigger>
+                  <TabsTrigger value="leave" data-testid="tab-leave" className="text-xs sm:text-sm whitespace-nowrap">Leave</TabsTrigger>
+                  <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm whitespace-nowrap">Approvals</TabsTrigger>
+                  <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>
+                  <TabsTrigger value="partnerships" data-testid="tab-partnerships" className="text-xs sm:text-sm whitespace-nowrap">Partnerships</TabsTrigger>
+                  <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className="text-xs sm:text-sm whitespace-nowrap">Job Sharing</TabsTrigger>
+                  <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>
                 </>
               ) : (
                 <>
@@ -402,12 +417,9 @@ export default function AdminDashboard() {
             <BillingReports />
           </TabsContent>
 
-          {/* Operational reports only for company admins, not super admin */}
-          {user.role !== 'super_admin' && (
-            <TabsContent value="reports">
-              <AdvancedReports />
-            </TabsContent>
-          )}
+          <TabsContent value="reports">
+            <AdvancedReports />
+          </TabsContent>
 
           <TabsContent value="schedule">
             <ScheduleManagement />
@@ -459,7 +471,7 @@ export default function AdminDashboard() {
                 <ClientManagement />
               </TabsContent>
               
-              <TabsContent value="reports">
+              <TabsContent value="usage-reports">
                 <ClientUsageReports />
               </TabsContent>
 
