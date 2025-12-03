@@ -1135,9 +1135,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/leave-requests', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/leave-requests', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const requests = await storage.getAllLeaveRequests();
+      const user = req.user;
+      let requests = await storage.getAllLeaveRequests();
+      
+      // SECURITY: Filter by company for regular admins
+      if (user.role !== 'super_admin' && user.companyId) {
+        requests = requests.filter((r: any) => r.user?.companyId === user.companyId);
+      }
+      
       res.json(requests);
     } catch (error) {
       console.error("Error fetching all leave requests:", error);
@@ -1145,9 +1152,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/leave-requests/pending', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/leave-requests/pending', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const requests = await storage.getPendingLeaveRequests();
+      const user = req.user;
+      let requests = await storage.getPendingLeaveRequests();
+      
+      // SECURITY: Filter by company for regular admins
+      if (user.role !== 'super_admin' && user.companyId) {
+        requests = requests.filter((r: any) => r.user?.companyId === user.companyId);
+      }
+      
       res.json(requests);
     } catch (error) {
       console.error("Error fetching pending leave requests:", error);
@@ -1155,10 +1169,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/leave-requests/upcoming', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/leave-requests/upcoming', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const user = req.user;
       const daysAhead = parseInt(req.query.days as string) || 30;
-      const requests = await storage.getUpcomingLeaveRequests(daysAhead);
+      let requests = await storage.getUpcomingLeaveRequests(daysAhead);
+      
+      // SECURITY: Filter by company for regular admins
+      if (user.role !== 'super_admin' && user.companyId) {
+        requests = requests.filter((r: any) => r.user?.companyId === user.companyId);
+      }
+      
       res.json(requests);
     } catch (error) {
       console.error("Error fetching upcoming leave requests:", error);
@@ -1319,8 +1340,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Break and overtime approval routes (admin only)
-  app.get('/api/admin/approvals/breaks', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/approvals/breaks', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
+      const user = req.user;
       const results = await db
         .select()
         .from(breaks)
@@ -1330,12 +1352,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(breaks.approvalStatus, 'pending'))
         .orderBy(desc(breaks.breakEndTime));
 
-      const pendingBreaks = results.map(r => ({
+      let pendingBreaks = results.map(r => ({
         ...r.breaks,
         user: r.users,
         checkIn: r.check_ins,
         site: r.sites,
       }));
+
+      // SECURITY: Filter by company for regular admins
+      if (user.role !== 'super_admin' && user.companyId) {
+        pendingBreaks = pendingBreaks.filter(b => b.user?.companyId === user.companyId);
+      }
 
       res.json(pendingBreaks);
     } catch (error) {
@@ -1347,15 +1374,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/approvals/breaks/:id/approve', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const adminId = req.user.id;
+      const admin = req.user;
 
-      const breakRecord = await storage.updateBreak(id, {
+      // SECURITY: Verify break belongs to admin's company
+      const breakRecord = await storage.getBreakById(id);
+      if (!breakRecord) {
+        return res.status(404).json({ message: "Break not found" });
+      }
+      
+      if (admin.role !== 'super_admin') {
+        const breakUser = await storage.getUserById(breakRecord.userId);
+        if (!breakUser || breakUser.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot approve breaks from other companies" });
+        }
+      }
+
+      const updatedBreak = await storage.updateBreak(id, {
         approvalStatus: 'approved',
-        reviewedBy: adminId,
+        reviewedBy: admin.id,
         reviewedAt: new Date(),
       });
 
-      res.json(breakRecord);
+      res.json(updatedBreak);
     } catch (error: any) {
       console.error("Error approving break:", error);
       res.status(400).json({ message: error.message || "Failed to approve break" });
@@ -1365,24 +1405,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/approvals/breaks/:id/reject', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const adminId = req.user.id;
+      const admin = req.user;
 
-      const breakRecord = await storage.updateBreak(id, {
+      // SECURITY: Verify break belongs to admin's company
+      const breakRecord = await storage.getBreakById(id);
+      if (!breakRecord) {
+        return res.status(404).json({ message: "Break not found" });
+      }
+      
+      if (admin.role !== 'super_admin') {
+        const breakUser = await storage.getUserById(breakRecord.userId);
+        if (!breakUser || breakUser.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot reject breaks from other companies" });
+        }
+      }
+
+      const updatedBreak = await storage.updateBreak(id, {
         approvalStatus: 'rejected',
-        reviewedBy: adminId,
+        reviewedBy: admin.id,
         reviewedAt: new Date(),
       });
 
-      res.json(breakRecord);
+      res.json(updatedBreak);
     } catch (error: any) {
       console.error("Error rejecting break:", error);
       res.status(400).json({ message: error.message || "Failed to reject break" });
     }
   });
 
-  app.get('/api/admin/approvals/overtime', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/approvals/overtime', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const overtimeRequests = await storage.getPendingOvertimeRequests();
+      const user = req.user;
+      let overtimeRequests = await storage.getPendingOvertimeRequests();
+      
+      // SECURITY: Filter by company for regular admins
+      if (user.role !== 'super_admin' && user.companyId) {
+        overtimeRequests = overtimeRequests.filter((ot: any) => ot.user?.companyId === user.companyId);
+      }
+      
       res.json(overtimeRequests);
     } catch (error) {
       console.error("Error fetching pending overtime:", error);
@@ -1394,9 +1454,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { notes } = req.body;
-      const adminId = req.user.id;
+      const admin = req.user;
 
-      const overtimeRequest = await storage.approveOvertimeRequest(id, adminId, notes);
+      // SECURITY: Verify overtime belongs to admin's company
+      const overtime = await storage.getOvertimeRequest(id);
+      if (!overtime) {
+        return res.status(404).json({ message: "Overtime request not found" });
+      }
+      
+      if (admin.role !== 'super_admin') {
+        const otUser = await storage.getUserById(overtime.userId);
+        if (!otUser || otUser.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot approve overtime from other companies" });
+        }
+      }
+
+      const overtimeRequest = await storage.approveOvertimeRequest(id, admin.id, notes);
       res.json(overtimeRequest);
     } catch (error: any) {
       console.error("Error approving overtime:", error);
@@ -1408,9 +1481,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { notes } = req.body;
-      const adminId = req.user.id;
+      const admin = req.user;
 
-      const overtimeRequest = await storage.rejectOvertimeRequest(id, adminId, notes);
+      // SECURITY: Verify overtime belongs to admin's company
+      const overtime = await storage.getOvertimeRequest(id);
+      if (!overtime) {
+        return res.status(404).json({ message: "Overtime request not found" });
+      }
+      
+      if (admin.role !== 'super_admin') {
+        const otUser = await storage.getUserById(overtime.userId);
+        if (!otUser || otUser.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot reject overtime from other companies" });
+        }
+      }
+
+      const overtimeRequest = await storage.rejectOvertimeRequest(id, admin.id, notes);
       res.json(overtimeRequest);
     } catch (error: any) {
       console.error("Error rejecting overtime:", error);
@@ -1419,9 +1505,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Invitation routes (admin only)
-  app.get('/api/admin/invitations', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/admin/invitations', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const invitations = await storage.getAllInvitations();
+      const user = req.user;
+      let invitations = await storage.getAllInvitations();
+      
+      // SECURITY: Filter by company for regular admins
+      if (user.role !== 'super_admin' && user.companyId) {
+        invitations = invitations.filter(inv => inv.companyId === user.companyId);
+      }
+      
       res.json(invitations);
     } catch (error) {
       console.error("Error fetching invitations:", error);
@@ -1431,10 +1524,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/admin/invitations', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const adminId = req.user.id;
+      const admin = req.user;
       
       // Get admin user details for sending email
-      const adminUser = await storage.getUserById(adminId);
+      const adminUser = await storage.getUserById(admin.id);
       if (!adminUser) {
         return res.status(400).json({ message: "Admin user not found" });
       }
@@ -1442,11 +1535,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate a unique token
       const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
       
-      const validatedData = insertInvitationSchema.parse({
+      // SECURITY: Set companyId from admin's company for regular admins
+      const invitationData = {
         ...req.body,
         token,
-        invitedBy: adminId,
-      });
+        invitedBy: admin.id,
+        companyId: admin.role === 'super_admin' ? req.body.companyId : admin.companyId,
+      };
+      
+      const validatedData = insertInvitationSchema.parse(invitationData);
       
       const invitation = await storage.createInvitation(validatedData);
       
@@ -1479,20 +1576,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/admin/invitations/:id/revoke', isAuthenticated, isAdmin, async (req, res) => {
+  app.patch('/api/admin/invitations/:id/revoke', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const invitation = await storage.revokeInvitation(id);
-      res.json(invitation);
+      const admin = req.user;
+      
+      // SECURITY: Verify invitation belongs to admin's company
+      const invitation = await storage.getInvitationById(id);
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found" });
+      }
+      
+      if (admin.role !== 'super_admin' && invitation.companyId !== admin.companyId) {
+        return res.status(403).json({ message: "Cannot revoke invitations from other companies" });
+      }
+      
+      const revokedInvitation = await storage.revokeInvitation(id);
+      res.json(revokedInvitation);
     } catch (error: any) {
       console.error("Error revoking invitation:", error);
       res.status(400).json({ message: error.message || "Failed to revoke invitation" });
     }
   });
 
-  app.delete('/api/admin/invitations/:id', isAuthenticated, isAdmin, async (req, res) => {
+  app.delete('/api/admin/invitations/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const admin = req.user;
+      
+      // SECURITY: Verify invitation belongs to admin's company
+      const invitation = await storage.getInvitationById(id);
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found" });
+      }
+      
+      if (admin.role !== 'super_admin' && invitation.companyId !== admin.companyId) {
+        return res.status(403).json({ message: "Cannot delete invitations from other companies" });
+      }
+      
       await storage.deleteInvitation(id);
       res.status(204).send();
     } catch (error: any) {
@@ -1553,9 +1674,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/notices/all', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/notices/all', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const notices = await storage.getAllNotices();
+      const user = req.user;
+      let notices = await storage.getAllNotices();
+      
+      // SECURITY: Filter by company for regular admins
+      if (user.role !== 'super_admin' && user.companyId) {
+        notices = notices.filter((n: any) => n.postedByUser?.companyId === user.companyId);
+      }
+      
       res.json(notices);
     } catch (error) {
       console.error("Error fetching all notices:", error);

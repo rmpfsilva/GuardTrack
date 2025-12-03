@@ -157,6 +157,7 @@ export interface IStorage {
   createInvitation(invitation: InsertInvitation): Promise<Invitation>;
   getInvitationByToken(token: string): Promise<Invitation | undefined>;
   getInvitationByEmail(email: string): Promise<Invitation | undefined>;
+  getInvitationById(id: string): Promise<Invitation | undefined>;
   getAllInvitations(): Promise<Invitation[]>;
   acceptInvitation(token: string): Promise<Invitation>;
   revokeInvitation(id: string): Promise<Invitation>;
@@ -1607,6 +1608,11 @@ export class DatabaseStorage implements IStorage {
 
   async getInvitationByEmail(email: string): Promise<Invitation | undefined> {
     const [invitation] = await db.select().from(invitations).where(eq(invitations.email, email));
+    return invitation;
+  }
+
+  async getInvitationById(id: string): Promise<Invitation | undefined> {
+    const [invitation] = await db.select().from(invitations).where(eq(invitations.id, id));
     return invitation;
   }
 
