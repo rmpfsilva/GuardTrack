@@ -1,25 +1,31 @@
 {
   "name": "GuardTrack - Security Guard App",
   "short_name": "GuardTrack",
-  "description": "Security Guard Shift Check-in & Schedule App",
+  "description": "Security Guard Shift Check-in, Schedule & Attendance Tracking App",
   "start_url": "/guard/app",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#1e3a5f",
   "theme_color": "#2563eb",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/guardtrack-icon.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/guardtrack-icon.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/guardtrack-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "categories": ["business", "productivity"],
@@ -29,14 +35,14 @@
       "short_name": "Check In",
       "description": "Go to check-in screen",
       "url": "/guard/app",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/guardtrack-icon.png", "sizes": "192x192" }]
     },
     {
       "name": "My Schedule",
       "short_name": "Schedule",
       "description": "View your shift schedule",
       "url": "/guard/app?tab=schedule",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/guardtrack-icon.png", "sizes": "192x192" }]
     }
   ]
 }

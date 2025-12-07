@@ -273,19 +273,51 @@ export default function GuardApp() {
   // Show login page when not authenticated
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background flex flex-col">
+      <div className="min-h-screen bg-gradient-to-b from-[#1e3a5f] via-[#2d4a6f] to-background flex flex-col">
         {/* Header */}
-        <header className="bg-primary text-primary-foreground px-4 py-4 shadow-md">
-          <div className="flex items-center justify-center gap-3">
-            <img src={guardTrackLogo} alt="GuardTrack" className="h-10 w-10" />
+        <header className="bg-primary text-primary-foreground px-4 py-6 shadow-lg">
+          <div className="flex flex-col items-center gap-3">
+            <img src={guardTrackLogo} alt="GuardTrack" className="h-16 w-16" />
             <div className="text-center">
-              <h1 className="text-xl font-bold">GuardTrack</h1>
-              <p className="text-xs opacity-80">Security Guard App</p>
+              <h1 className="text-2xl font-bold">GuardTrack</h1>
+              <p className="text-sm opacity-90">Security Guard Management</p>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 flex flex-col items-center justify-center p-4">
+        <main className="flex-1 flex flex-col items-center p-4 overflow-auto">
+          {/* App Info Section */}
+          <div className="w-full max-w-sm mb-6 text-center text-white/90">
+            <p className="text-sm leading-relaxed">
+              The complete mobile app for security guards to manage shifts, 
+              track attendance, and stay connected with your team.
+            </p>
+          </div>
+
+          {/* Feature Highlights */}
+          <div className="w-full max-w-sm mb-6 grid grid-cols-2 gap-3">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center">
+              <Clock className="h-6 w-6 mx-auto mb-2 text-white" />
+              <p className="text-xs font-medium text-white">Check In/Out</p>
+              <p className="text-xs text-white/70">GPS verified attendance</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center">
+              <Calendar className="h-6 w-6 mx-auto mb-2 text-white" />
+              <p className="text-xs font-medium text-white">View Schedule</p>
+              <p className="text-xs text-white/70">See your shifts & rota</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center">
+              <FileText className="h-6 w-6 mx-auto mb-2 text-white" />
+              <p className="text-xs font-medium text-white">Leave Requests</p>
+              <p className="text-xs text-white/70">Request time off easily</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center">
+              <Bell className="h-6 w-6 mx-auto mb-2 text-white" />
+              <p className="text-xs font-medium text-white">Notifications</p>
+              <p className="text-xs text-white/70">Stay updated on notices</p>
+            </div>
+          </div>
+
           {/* PWA Install Section */}
           {isInstallable && !isInstalled && (
             <Card className="w-full max-w-sm mb-6 border-primary/30 bg-primary/5">
