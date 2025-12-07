@@ -9,18 +9,20 @@ import { format } from "date-fns";
 import { 
   Clock, MapPin, LogIn, LogOut, Calendar, Bell, User, 
   Home, Coffee, FileText, ChevronRight, Loader2, AlertCircle,
-  CheckCircle2, XCircle, Download, X
+  CheckCircle2, XCircle, Download, X, Share, Smartphone
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
 import GuardNoticeBoard from "@/components/guard-notice-board";
@@ -29,9 +31,9 @@ import type { Site, CheckInWithDetails, Break, LeaveRequest } from "@shared/sche
 type TabType = "home" | "schedule" | "leave" | "notices";
 
 export default function GuardApp() {
-  const { user, isLoading: authLoading, logoutMutation } = useAuth();
+  const { user, isLoading: authLoading, logoutMutation, loginMutation } = useAuth();
   const { toast } = useToast();
-  const { isInstallable, isInstalled, installApp } = useInstallPWA();
+  const { isInstallable, isInstalled, isIOS, isAndroid, installApp } = useInstallPWA();
   const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
@@ -39,19 +41,11 @@ export default function GuardApp() {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [locationStatus, setLocationStatus] = useState<"pending" | "granted" | "denied" | "unavailable">("pending");
   const [showInstallBanner, setShowInstallBanner] = useState(true);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      toast({
-        title: "Session Expired",
-        description: "Please log in again.",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/auth";
-      }, 500);
-    }
-  }, [user, authLoading, toast]);
+  
+  // Login form state
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showIOSInstructions, setShowIOSInstructions] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -263,6 +257,11 @@ export default function GuardApp() {
     logoutMutation.mutate();
   };
 
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    loginMutation.mutate({ username: loginUsername, password: loginPassword });
+  };
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -271,7 +270,161 @@ export default function GuardApp() {
     );
   }
 
-  if (!user) return null;
+  // Show login page when not authenticated
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background flex flex-col">
+        {/* Header */}
+        <header className="bg-primary text-primary-foreground px-4 py-4 shadow-md">
+          <div className="flex items-center justify-center gap-3">
+            <img src={guardTrackLogo} alt="GuardTrack" className="h-10 w-10" />
+            <div className="text-center">
+              <h1 className="text-xl font-bold">GuardTrack</h1>
+              <p className="text-xs opacity-80">Security Guard App</p>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center p-4">
+          {/* PWA Install Section */}
+          {isInstallable && !isInstalled && (
+            <Card className="w-full max-w-sm mb-6 border-primary/30 bg-primary/5">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <Smartphone className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">Install GuardTrack App</p>
+                    <p className="text-xs text-muted-foreground">
+                      {isIOS ? "Add to your home screen for quick access" : "Install for offline access & notifications"}
+                    </p>
+                  </div>
+                </div>
+                
+                {isIOS ? (
+                  <div className="mt-4">
+                    <Button 
+                      className="w-full" 
+                      onClick={() => setShowIOSInstructions(!showIOSInstructions)}
+                      data-testid="button-ios-install-instructions"
+                    >
+                      <Share className="h-4 w-4 mr-2" />
+                      How to Install
+                    </Button>
+                    
+                    {showIOSInstructions && (
+                      <div className="mt-4 p-4 bg-background rounded-lg border">
+                        <p className="font-medium text-sm mb-3">To install on iPhone/iPad:</p>
+                        <ol className="text-sm space-y-2 text-muted-foreground">
+                          <li className="flex items-start gap-2">
+                            <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">1</span>
+                            <span>Tap the <Share className="h-4 w-4 inline" /> Share button in Safari</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">2</span>
+                            <span>Scroll down and tap "Add to Home Screen"</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">3</span>
+                            <span>Tap "Add" to install the app</span>
+                          </li>
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Button 
+                    className="w-full mt-4" 
+                    onClick={installApp}
+                    data-testid="button-install-pwa-login"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Install App
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Already installed badge */}
+          {isInstalled && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>App installed on your device</span>
+            </div>
+          )}
+
+          {/* Login Form */}
+          <Card className="w-full max-w-sm">
+            <CardHeader className="space-y-1 pb-4">
+              <CardTitle className="text-xl text-center">Sign In</CardTitle>
+              <CardDescription className="text-center">
+                Enter your credentials to access your shifts
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    placeholder="Enter your username"
+                    required
+                    data-testid="input-guard-username"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    required
+                    data-testid="input-guard-password"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loginMutation.isPending}
+                  data-testid="button-guard-login"
+                >
+                  {loginMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Signing In...
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="h-4 w-4 mr-2" />
+                      Sign In
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              <p className="text-xs text-center text-muted-foreground mt-4">
+                Contact your administrator if you need an account
+              </p>
+            </CardContent>
+          </Card>
+        </main>
+
+        {/* Footer */}
+        <footer className="p-4 text-center text-xs text-muted-foreground">
+          GuardTrack Security Management System
+        </footer>
+      </div>
+    );
+  }
 
   const userInitials = `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || 'G';
 
