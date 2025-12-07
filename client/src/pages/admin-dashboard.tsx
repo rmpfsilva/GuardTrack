@@ -199,14 +199,14 @@ export default function AdminDashboard() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button 
-                className="gap-3 px-5 py-6 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                size="sm"
+                variant="outline"
+                className="gap-2"
                 data-testid="button-guard-app-menu"
               >
-                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <Smartphone className="h-4 w-4" />
-                </div>
-                <span className="font-medium">Guard Mobile App</span>
-                <ChevronDown className="h-4 w-4 ml-1" />
+                <Smartphone className="h-4 w-4" />
+                <span>Guard Mobile App</span>
+                <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
