@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, endOfWeek } from "date-fns";
-import { Users, MapPin, Clock, Activity, Calendar, Settings, Smartphone, Copy, ExternalLink } from "lucide-react";
+import { Users, MapPin, Clock, Activity, Calendar, Settings, Smartphone, Copy, ExternalLink, Mail, ChevronDown } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationSettingsButton } from "@/components/notification-settings-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LocationDisplay } from "@/components/location-display";
 import type { Site, CheckInWithDetails, User, Company } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
@@ -195,46 +196,57 @@ export default function AdminDashboard() {
             </p>
           </div>
           
-          <Card className="w-full md:w-auto">
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Smartphone className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm">Guard Mobile App</p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/guard/app` : '/guard/app'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => {
-                    const url = `${window.location.origin}/guard/app`;
-                    navigator.clipboard.writeText(url);
-                    toast({
-                      title: "Link Copied",
-                      description: "Guard app link copied to clipboard",
-                    });
-                  }}
-                  data-testid="button-copy-guard-app-link"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => {
-                    window.open('/guard/app', '_blank');
-                  }}
-                  data-testid="button-open-guard-app"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                className="gap-3 px-5 py-6 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                data-testid="button-guard-app-menu"
+              >
+                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <Smartphone className="h-4 w-4" />
+                </div>
+                <span className="font-medium">Guard Mobile App</span>
+                <ChevronDown className="h-4 w-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem
+                onClick={() => {
+                  const url = `${window.location.origin}/guard/app`;
+                  const subject = encodeURIComponent("Download GuardTrack Mobile App");
+                  const body = encodeURIComponent(`Hi,\n\nPlease use the following link to access the GuardTrack Mobile App:\n\n${url}\n\nYou can install it on your phone for easy access to check-ins, schedules, and more.\n\nBest regards`);
+                  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                }}
+                data-testid="menu-item-invite"
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Invite via Email
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  window.open('/guard/app', '_blank');
+                }}
+                data-testid="menu-item-open"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open App
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  const url = `${window.location.origin}/guard/app`;
+                  navigator.clipboard.writeText(url);
+                  toast({
+                    title: "Link Copied",
+                    description: "Guard app link copied to clipboard",
+                  });
+                }}
+                data-testid="menu-item-copy-link"
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copy Link
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Stats Cards - Hidden for super admin */}
