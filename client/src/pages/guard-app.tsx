@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useInstallPWA } from "@/hooks/use-install-pwa";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { 
   Clock, MapPin, LogIn, LogOut, Calendar, Bell, User, 
   Home, Coffee, FileText, ChevronRight, Loader2, AlertCircle,
-  CheckCircle2, XCircle
+  CheckCircle2, XCircle, Download, X
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -30,12 +31,14 @@ type TabType = "home" | "schedule" | "leave" | "notices";
 export default function GuardApp() {
   const { user, isLoading: authLoading, logoutMutation } = useAuth();
   const { toast } = useToast();
+  const { isInstallable, isInstalled, installApp } = useInstallPWA();
   const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("guard");
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [locationStatus, setLocationStatus] = useState<"pending" | "granted" | "denied" | "unavailable">("pending");
+  const [showInstallBanner, setShowInstallBanner] = useState(true);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -292,6 +295,40 @@ export default function GuardApp() {
           </div>
         </div>
       </header>
+
+      {isInstallable && !isInstalled && showInstallBanner && (
+        <div className="bg-primary/10 border-b border-primary/20 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <Download className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium text-sm">Install GuardTrack</p>
+                <p className="text-xs text-muted-foreground">Quick access from home screen</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                size="sm" 
+                onClick={installApp}
+                data-testid="button-install-pwa"
+              >
+                Install
+              </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                className="h-8 w-8"
+                onClick={() => setShowInstallBanner(false)}
+                data-testid="button-dismiss-install"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="flex flex-col h-full">
