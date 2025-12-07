@@ -15,6 +15,7 @@ import RegisterPage from "@/pages/register-page";
 import TrialRegistrationPage from "@/pages/trial-registration";
 import GuardDashboard from "@/pages/guard-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
+import GuardApp from "@/pages/guard-app";
 import SettingsPage from "@/pages/settings-page";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
@@ -33,6 +34,8 @@ function Router() {
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <ProtectedRoute path="/settings" component={SettingsPage} />
+        <ProtectedRoute path="/guard/app" component={GuardApp} />
+        <ProtectedRoute path="/guard-dashboard" component={GuardDashboard} />
         {user && (user.role === 'admin' || user.role === 'super_admin') ? (
           <ProtectedRoute path="/" component={AdminDashboard} />
         ) : user ? (

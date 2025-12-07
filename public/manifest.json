@@ -1,8 +1,8 @@
 {
-  "name": "GuardTrack - ProForce Security",
+  "name": "GuardTrack - Security Guard App",
   "short_name": "GuardTrack",
-  "description": "Security Guard Shift Scheduling & Check-in System",
-  "start_url": "/",
+  "description": "Security Guard Shift Check-in & Schedule App",
+  "start_url": "/guard/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -22,5 +22,21 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "productivity"]
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Check In",
+      "short_name": "Check In",
+      "description": "Go to check-in screen",
+      "url": "/guard/app",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Schedule",
+      "short_name": "Schedule",
+      "description": "View your shift schedule",
+      "url": "/guard/app?tab=schedule",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }
