@@ -29,6 +29,15 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Approval System**: Admin interface for approving extended breaks and overtime requests, impacting payable hours.
 - **Leave Management**: System for requesting, approving, and canceling leave with a yearly calendar view.
 - **Mobile Responsiveness**: Fully responsive design with Progressive Web App (PWA) functionality and installation prompts.
+- **Dedicated Guard PWA** (`/guard/app`): Mobile-first PWA interface specifically designed for security guards with:
+  - Fixed bottom tab navigation (Home, Schedule, Leave, Notices)
+  - Large touch-friendly check-in/check-out buttons with geolocation
+  - Break start/end tracking with location capture
+  - Schedule/rota viewing using MySchedule component
+  - Leave request submission and status tracking
+  - Notice board access for overtime opportunities and announcements
+  - PWA install prompt banner for easy home screen installation
+  - Optimized manifest.json with guard app branding and shortcuts
 - **Email Invitation System**: Admins can invite new users via email using Gmail integration.
 - **Password Management**: User password changes and secure token-based password recovery. Super admins can reset any user's password.
 - **Notice Board**: Admins can post overtime opportunities and events, with push notifications to subscribed users. Guards can apply to notices.
