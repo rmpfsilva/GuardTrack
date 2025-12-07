@@ -330,10 +330,9 @@ export default function GuardApp() {
         </div>
       )}
 
-      <main className="flex-1 overflow-hidden">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="flex flex-col h-full">
-          <ScrollArea className="flex-1">
-            <div className="p-4 pb-20">
+      <main className="flex-1 overflow-auto pb-20">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="h-full">
+          <div className="p-4">
               <TabsContent value="home" className="mt-0 space-y-4">
                 <div className="text-center mb-4">
                   <p className="text-muted-foreground">Hello,</p>
@@ -590,7 +589,6 @@ export default function GuardApp() {
                 <GuardNoticeBoard />
               </TabsContent>
             </div>
-          </ScrollArea>
 
           <TabsList className="fixed bottom-0 left-0 right-0 h-16 grid grid-cols-4 rounded-none border-t bg-background shadow-lg z-50">
             <TabsTrigger 
