@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek, endOfWeek } from "date-fns";
-import { Users, MapPin, Clock, Activity, Calendar, Settings } from "lucide-react";
+import { Users, MapPin, Clock, Activity, Calendar, Settings, Smartphone, Copy, ExternalLink } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -186,12 +186,55 @@ export default function AdminDashboard() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Current Time */}
-        <div className="text-center mb-8">
-          <p className="text-sm text-muted-foreground mb-1">System Time</p>
-          <p className="text-2xl font-mono font-semibold">
-            {format(currentTime, "HH:mm:ss - EEEE, MMMM d, yyyy")}
-          </p>
+        {/* Current Time and Guard App Link */}
+        <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-8">
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground mb-1">System Time</p>
+            <p className="text-2xl font-mono font-semibold">
+              {format(currentTime, "HH:mm:ss - EEEE, MMMM d, yyyy")}
+            </p>
+          </div>
+          
+          <Card className="w-full md:w-auto">
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Smartphone className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm">Guard Mobile App</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {typeof window !== 'undefined' ? `${window.location.origin}/guard/app` : '/guard/app'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => {
+                    const url = `${window.location.origin}/guard/app`;
+                    navigator.clipboard.writeText(url);
+                    toast({
+                      title: "Link Copied",
+                      description: "Guard app link copied to clipboard",
+                    });
+                  }}
+                  data-testid="button-copy-guard-app-link"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => {
+                    window.open('/guard/app', '_blank');
+                  }}
+                  data-testid="button-open-guard-app"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Stats Cards - Hidden for super admin */}
