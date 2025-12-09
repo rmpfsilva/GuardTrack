@@ -73,23 +73,8 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  passport.use(
-    new LocalStrategy(async (username, password, done) => {
-      const user = await storage.getUserByUsername(username);
-      
-      if (!user) {
-        return done(null, false);
-      }
-      
-      const passwordMatch = await comparePasswords(password, user.password);
-      
-      if (!passwordMatch) {
-        return done(null, false);
-      }
-      
-      return done(null, user);
-    }),
-  );
+  // Custom authentication function for company-scoped login
+  // Passport LocalStrategy doesn't support additional fields, so we handle auth manually in the login route
 
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: string, done) => {
@@ -126,12 +111,13 @@ export function setupAuth(app: Express) {
         return res.status(400).send("This invitation has expired");
       }
 
-      const existingUser = await storage.getUserByUsername(username);
+      // Check username uniqueness within the company
+      const existingUser = await storage.getUserByUsername(username, invitation.companyId);
       if (existingUser) {
-        return res.status(400).send("Username already exists");
+        return res.status(400).send("Username already exists in this company");
       }
 
-      // Create user with role from invitation
+      // Create user with role from invitation and company assignment
       const user = await storage.createUser({
         username,
         password: await hashPassword(password),
@@ -139,6 +125,7 @@ export function setupAuth(app: Express) {
         lastName,
         role: invitation.role as 'guard' | 'steward' | 'supervisor' | 'admin',
         email: invitation.email,
+        companyId: invitation.companyId, // Assign user to the company from invitation
       });
 
       // Mark invitation as accepted
@@ -154,12 +141,31 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", async (req, res, next) => {
-    passport.authenticate("local", async (err: any, user: SelectUser | false, info: any) => {
-      if (err) {
-        return next(err);
+    try {
+      const { username, password, companyId } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).send("Username and password are required");
+      }
+      
+      let user: SelectUser | undefined;
+      
+      // If companyId is provided, look up user within that company
+      // If companyId is null/undefined, try super admin login (null companyId)
+      if (companyId) {
+        user = await storage.getUserByUsername(username, companyId);
+      } else {
+        // Try to find super admin (users with null companyId)
+        user = await storage.getSuperAdminByUsername(username);
       }
       
       if (!user) {
+        return res.status(401).send("Invalid credentials");
+      }
+      
+      const passwordMatch = await comparePasswords(password, user.password);
+      
+      if (!passwordMatch) {
         return res.status(401).send("Invalid credentials");
       }
       
@@ -198,8 +204,8 @@ export function setupAuth(app: Express) {
         // Track user login for analytics
         try {
           await storage.createUserLogin({
-            userId: user.id,
-            companyId: user.companyId || null,
+            userId: user!.id,
+            companyId: user!.companyId || null,
           });
         } catch (trackingError) {
           console.error('Error tracking user login:', trackingError);
@@ -208,7 +214,10 @@ export function setupAuth(app: Express) {
         
         return res.status(200).json(sanitizeUser(user as SelectUser));
       });
-    })(req, res, next);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      return res.status(500).send("Login failed");
+    }
   });
 
   app.post("/api/logout", (req, res, next) => {
@@ -322,19 +331,35 @@ export function setupAuth(app: Express) {
   });
 
   // Request password reset - generates a reset token
+  // Now requires username + companyId (since usernames are unique per company)
+  // Or email (which can identify users across companies)
   app.post("/api/auth/request-password-reset", async (req, res) => {
     try {
-      const { username } = req.body;
+      const { username, companyId, email } = req.body;
 
-      if (!username) {
-        return res.status(400).send("Username is required");
+      let user: SelectUser | undefined;
+
+      // Option 1: Look up by email (works across all companies)
+      if (email) {
+        const allUsers = await storage.getAllUsers();
+        user = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      }
+      // Option 2: Look up by username + companyId
+      else if (username && companyId) {
+        user = await storage.getUserByUsername(username, companyId);
+      }
+      // Option 3: Look up super admin by username (no company)
+      else if (username) {
+        user = await storage.getSuperAdminByUsername(username);
+      }
+      else {
+        return res.status(400).send("Email or username with company selection is required");
       }
 
-      const user = await storage.getUserByUsername(username);
       if (!user) {
         // Don't reveal if user exists for security
         return res.status(200).json({ 
-          message: "If a user with that username exists, a password reset link will be sent to the admin for manual processing." 
+          message: "If an account with those details exists, a password reset link will be sent to the admin for manual processing." 
         });
       }
 
@@ -350,7 +375,7 @@ export function setupAuth(app: Express) {
 
       // TODO: Send email with reset link
       // For now, log the token server-side only (admin can share it manually)
-      console.log(`🔐 Password reset requested for user: ${username}`);
+      console.log(`🔐 Password reset requested for user: ${user.username}`);
       console.log(`📧 Reset token: ${token}`);
       console.log(`🔗 Reset link: ${req.protocol}://${req.get('host')}/reset-password?token=${token}`);
       console.log(`⚠️  Admins: Share this reset link with the user securely`);

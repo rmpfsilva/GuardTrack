@@ -74,18 +74,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware - sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
 
-  // Initialize admin user with proper hashed password if needed
+  // Initialize super admin user with proper hashed password if needed
   try {
-    const adminUser = await storage.getUserByUsername('admin');
-    if (adminUser && adminUser.password === 'password') {
-      // Admin user has plain text password, update it to hashed "admin123"
-      await storage.updateUser(adminUser.id, {
+    const superAdmin = await storage.getSuperAdminByUsername('admin');
+    if (superAdmin && superAdmin.password === 'password') {
+      // Super admin has plain text password, update it to hashed "admin123"
+      await storage.updateUser(superAdmin.id, {
         password: await hashPassword('admin123')
       });
-      console.log('Admin password initialized successfully');
+      console.log('Super admin password initialized successfully');
     }
   } catch (error) {
-    console.error('Error initializing admin user:', error);
+    console.error('Error initializing super admin user:', error);
   }
 
   // Company management routes
@@ -2662,11 +2662,8 @@ GuardTrack Team`;
         return res.status(404).json({ message: "Invitation not found or expired" });
       }
       
-      // Check if username already exists
-      const existingUser = await storage.getUserByUsername(username);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
+      // Note: Username uniqueness is per-company, and we're creating a new company,
+      // so no need to check for existing username in the new company
       
       // Import hash password function
       const { hashPassword } = await import("./auth");
