@@ -99,7 +99,8 @@ export interface IStorage {
   // User operations (required for authentication)
   getUser(id: string): Promise<User | undefined>;
   getUserById(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByUsername(username: string, companyId: string | null): Promise<User | undefined>;
+  getSuperAdminByUsername(username: string): Promise<User | undefined>; // For super admins who have null companyId
   createUser(user: InsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
@@ -384,8 +385,30 @@ export class DatabaseStorage implements IStorage {
     return this.getUser(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+  async getUserByUsername(username: string, companyId: string | null): Promise<User | undefined> {
+    // For company users, look up by username + companyId
+    if (companyId) {
+      const [user] = await db.select().from(users).where(
+        and(eq(users.username, username), eq(users.companyId, companyId))
+      );
+      return user;
+    }
+    // For null companyId (super admins), look up by username where companyId is null
+    const [user] = await db.select().from(users).where(
+      and(eq(users.username, username), sql`${users.companyId} IS NULL`)
+    );
+    return user;
+  }
+
+  async getSuperAdminByUsername(username: string): Promise<User | undefined> {
+    // Look up super admin users (companyId is null and role is super_admin)
+    const [user] = await db.select().from(users).where(
+      and(
+        eq(users.username, username),
+        sql`${users.companyId} IS NULL`,
+        eq(users.role, 'super_admin')
+      )
+    );
     return user;
   }
 
