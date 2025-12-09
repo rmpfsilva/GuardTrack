@@ -79,22 +79,24 @@ export default function AdminDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch dashboard stats
+  const isCompanyAdmin = isAdmin && user?.role !== 'super_admin';
+  
+  // Fetch dashboard stats (company admins only)
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/admin/stats"],
-    enabled: !!user && isAdmin,
+    enabled: !!user && isCompanyAdmin,
   });
 
-  // Fetch recent activity
+  // Fetch recent activity (company admins only)
   const { data: recentActivity = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/admin/recent-activity"],
-    enabled: !!user && isAdmin,
+    enabled: !!user && isCompanyAdmin,
   });
 
-  // Fetch active check-ins
+  // Fetch active check-ins (company admins only)
   const { data: activeCheckIns = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/admin/active-check-ins"],
-    enabled: !!user && isAdmin,
+    enabled: !!user && isCompanyAdmin,
   });
 
   // Fetch user's company information (regular admins only)
@@ -196,57 +198,59 @@ export default function AdminDashboard() {
             </p>
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                size="sm"
-                variant="outline"
-                className="gap-2"
-                data-testid="button-guard-app-menu"
-              >
-                <Smartphone className="h-4 w-4" />
-                <span>Guard Mobile App</span>
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() => {
-                  const url = `${window.location.origin}/guard/app`;
-                  const subject = encodeURIComponent("Download GuardTrack Mobile App");
-                  const body = encodeURIComponent(`Hi,\n\nPlease use the following link to access the GuardTrack Mobile App:\n\n${url}\n\nYou can install it on your phone for easy access to check-ins, schedules, and more.\n\nBest regards`);
-                  window.location.href = `mailto:?subject=${subject}&body=${body}`;
-                }}
-                data-testid="menu-item-invite"
-              >
-                <Mail className="h-4 w-4 mr-2" />
-                Invite via Email
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  window.open('/guard/app', '_blank');
-                }}
-                data-testid="menu-item-open"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open App
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  const url = `${window.location.origin}/guard/app`;
-                  navigator.clipboard.writeText(url);
-                  toast({
-                    title: "Link Copied",
-                    description: "Guard app link copied to clipboard",
-                  });
-                }}
-                data-testid="menu-item-copy-link"
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Link
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {user.role !== 'super_admin' && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  data-testid="button-guard-app-menu"
+                >
+                  <Smartphone className="h-4 w-4" />
+                  <span>Guard Mobile App</span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => {
+                    const url = `${window.location.origin}/guard/app`;
+                    const subject = encodeURIComponent("Download GuardTrack Mobile App");
+                    const body = encodeURIComponent(`Hi,\n\nPlease use the following link to access the GuardTrack Mobile App:\n\n${url}\n\nYou can install it on your phone for easy access to check-ins, schedules, and more.\n\nBest regards`);
+                    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                  }}
+                  data-testid="menu-item-invite"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Invite via Email
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    window.open('/guard/app', '_blank');
+                  }}
+                  data-testid="menu-item-open"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open App
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const url = `${window.location.origin}/guard/app`;
+                    navigator.clipboard.writeText(url);
+                    toast({
+                      title: "Link Copied",
+                      description: "Guard app link copied to clipboard",
+                    });
+                  }}
+                  data-testid="menu-item-copy-link"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Link
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Stats Cards - Hidden for super admin */}
@@ -312,26 +316,10 @@ export default function AdminDashboard() {
             <TabsList className="inline-flex min-w-min bg-muted">
               {user.role === 'super_admin' ? (
                 <>
-                  {/* Super Admin Tabs - Platform Management + All Company Admin Tabs for Troubleshooting */}
+                  {/* Super Admin Tabs - Platform Management Only */}
                   <TabsTrigger value="clients" data-testid="tab-clients" className="text-xs sm:text-sm whitespace-nowrap">Clients</TabsTrigger>
                   <TabsTrigger value="messages" data-testid="tab-messages" className="text-xs sm:text-sm whitespace-nowrap">Messages</TabsTrigger>
                   <TabsTrigger value="usage-reports" data-testid="tab-usage-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
-                  {/* Company Admin tabs for troubleshooting/support */}
-                  <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>
-                  <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
-                  <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>
-                  <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>
-                  <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Guards</TabsTrigger>
-                  <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
-                  <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>
-                  <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>
-                  <TabsTrigger value="sites" data-testid="tab-sites" className="text-xs sm:text-sm whitespace-nowrap">Sites</TabsTrigger>
-                  <TabsTrigger value="leave" data-testid="tab-leave" className="text-xs sm:text-sm whitespace-nowrap">Leave</TabsTrigger>
-                  <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm whitespace-nowrap">Approvals</TabsTrigger>
-                  <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>
-                  <TabsTrigger value="partnerships" data-testid="tab-partnerships" className="text-xs sm:text-sm whitespace-nowrap">Partnerships</TabsTrigger>
-                  <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className="text-xs sm:text-sm whitespace-nowrap">Job Sharing</TabsTrigger>
-                  <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>
                 </>
               ) : (
                 <>
