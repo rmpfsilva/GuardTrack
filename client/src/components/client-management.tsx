@@ -664,6 +664,18 @@ export default function ClientManagement() {
                       <Mail className="h-4 w-4 mr-2" />
                       Send Message
                     </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                      data-testid={`button-delete-expired-${client.id}`}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Client
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
