@@ -51,7 +51,7 @@ export const companies = pgTable("companies", {
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").references(() => companies.id, { onDelete: 'cascade' }), // Multi-tenant: user belongs to a company
-  username: varchar("username").unique().notNull(),
+  username: varchar("username").notNull(), // Username is unique per company, not globally
   password: varchar("password").notNull(),
   email: varchar("email"),
   firstName: varchar("first_name"),
@@ -64,7 +64,10 @@ export const users = pgTable("users", {
   stewardIdExpiryDate: timestamp("steward_id_expiry_date"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Username must be unique within a company (or unique among super admins with null companyId)
+  usernameCompanyUnique: uniqueIndex('users_username_company_unique').on(table.username, table.companyId),
+}));
 
 // Sites table - locations where guards can check in
 export const sites = pgTable("sites", {
