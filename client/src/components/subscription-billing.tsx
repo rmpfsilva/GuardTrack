@@ -326,13 +326,13 @@ export default function SubscriptionBilling() {
                 data-testid="input-search-payments"
               />
             </div>
-            <Select value={filterCompanyId} onValueChange={setFilterCompanyId}>
+            <Select value={filterCompanyId || "all"} onValueChange={(val) => setFilterCompanyId(val === "all" ? "" : val)}>
               <SelectTrigger className="w-[200px]" data-testid="select-filter-company">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="All Companies" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Companies</SelectItem>
+                <SelectItem value="all">All Companies</SelectItem>
                 {companies.map((company) => (
                   <SelectItem key={company.id} value={company.id}>
                     {company.name}
