@@ -336,7 +336,6 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(sites).where(eq(sites.companyId, id));
       await tx.delete(companySettings).where(eq(companySettings.companyId, id));
       await tx.delete(supportMessages).where(eq(supportMessages.companyId, id));
-      await tx.delete(trialInvitations).where(eq(trialInvitations.companyId, id));
       
       // Delete partnerships (both as company and as partner)
       await tx.delete(companyPartnerships).where(eq(companyPartnerships.companyId, id));
