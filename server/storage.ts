@@ -19,6 +19,7 @@ import {
   companySettings,
   companyPartnerships,
   jobShares,
+  subscriptionPayments,
   type Company,
   type InsertCompany,
   type UpdateCompany,
@@ -74,6 +75,10 @@ import {
   type InsertJobShare,
   type UpdateJobShare,
   type JobShareWithDetails,
+  type SubscriptionPayment,
+  type InsertSubscriptionPayment,
+  type UpdateSubscriptionPayment,
+  type SubscriptionPaymentWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
@@ -258,6 +263,14 @@ export interface IStorage {
   extendCompanyTrial(companyId: string, additionalDays: number): Promise<Company>;
   checkTrialStatus(companyId: string): Promise<{ isActive: boolean; daysRemaining: number; status: string }>;
   expireTrials(): Promise<void>;
+
+  // Subscription payment operations
+  getAllSubscriptionPayments(): Promise<SubscriptionPaymentWithDetails[]>;
+  getSubscriptionPaymentsByCompany(companyId: string): Promise<SubscriptionPaymentWithDetails[]>;
+  getSubscriptionPayment(id: string): Promise<SubscriptionPaymentWithDetails | undefined>;
+  createSubscriptionPayment(payment: InsertSubscriptionPayment): Promise<SubscriptionPayment>;
+  updateSubscriptionPayment(id: string, updates: UpdateSubscriptionPayment): Promise<SubscriptionPayment>;
+  deleteSubscriptionPayment(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2845,6 +2858,94 @@ export class DatabaseStorage implements IStorage {
           lt(companies.trialEndDate, now)
         )
       );
+  }
+
+  // Subscription Payment operations
+  async getAllSubscriptionPayments(): Promise<SubscriptionPaymentWithDetails[]> {
+    const payments = await db
+      .select()
+      .from(subscriptionPayments)
+      .orderBy(desc(subscriptionPayments.paymentDate));
+    
+    const result: SubscriptionPaymentWithDetails[] = [];
+    for (const payment of payments) {
+      const [company] = await db.select().from(companies).where(eq(companies.id, payment.companyId));
+      const creator = payment.createdBy 
+        ? (await db.select().from(users).where(eq(users.id, payment.createdBy)))[0]
+        : undefined;
+      
+      result.push({
+        ...payment,
+        company,
+        creator,
+      });
+    }
+    return result;
+  }
+
+  async getSubscriptionPaymentsByCompany(companyId: string): Promise<SubscriptionPaymentWithDetails[]> {
+    const payments = await db
+      .select()
+      .from(subscriptionPayments)
+      .where(eq(subscriptionPayments.companyId, companyId))
+      .orderBy(desc(subscriptionPayments.paymentDate));
+    
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+    
+    const result: SubscriptionPaymentWithDetails[] = [];
+    for (const payment of payments) {
+      const creator = payment.createdBy 
+        ? (await db.select().from(users).where(eq(users.id, payment.createdBy)))[0]
+        : undefined;
+      
+      result.push({
+        ...payment,
+        company,
+        creator,
+      });
+    }
+    return result;
+  }
+
+  async getSubscriptionPayment(id: string): Promise<SubscriptionPaymentWithDetails | undefined> {
+    const [payment] = await db
+      .select()
+      .from(subscriptionPayments)
+      .where(eq(subscriptionPayments.id, id));
+    
+    if (!payment) return undefined;
+
+    const [company] = await db.select().from(companies).where(eq(companies.id, payment.companyId));
+    const creator = payment.createdBy 
+      ? (await db.select().from(users).where(eq(users.id, payment.createdBy)))[0]
+      : undefined;
+
+    return {
+      ...payment,
+      company,
+      creator,
+    };
+  }
+
+  async createSubscriptionPayment(payment: InsertSubscriptionPayment): Promise<SubscriptionPayment> {
+    const [newPayment] = await db
+      .insert(subscriptionPayments)
+      .values(payment)
+      .returning();
+    return newPayment;
+  }
+
+  async updateSubscriptionPayment(id: string, updates: UpdateSubscriptionPayment): Promise<SubscriptionPayment> {
+    const [updatedPayment] = await db
+      .update(subscriptionPayments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(subscriptionPayments.id, id))
+      .returning();
+    return updatedPayment;
+  }
+
+  async deleteSubscriptionPayment(id: string): Promise<void> {
+    await db.delete(subscriptionPayments).where(eq(subscriptionPayments.id, id));
   }
 }
 
