@@ -1,9 +1,10 @@
-const CACHE_NAME = 'guardtrack-v1.0.1';
+const CACHE_NAME = 'guardtrack-v1.0.2';
 const urlsToCache = [
   '/',
   '/manifest.json',
   '/icon-192.png',
-  '/icon-512.png'
+  '/icon-512.png',
+  '/guardtrack-icon.png'
 ];
 
 // Install event - cache essential files
