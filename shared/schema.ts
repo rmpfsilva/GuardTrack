@@ -834,6 +834,38 @@ export const updateJobShareSchema = createInsertSchema(jobShares).omit({
   updatedAt: true,
 }).partial();
 
+// Subscription Payments table - tracks billing/subscription payments from companies
+export const subscriptionPayments = pgTable("subscription_payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  planName: varchar("plan_name", { length: 100 }).notNull(), // e.g., "Basic", "Professional", "Enterprise"
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(), // Payment amount
+  currency: varchar("currency", { length: 3 }).notNull().default('GBP'), // Currency code
+  paymentDate: timestamp("payment_date").notNull(), // When payment was made
+  periodStart: timestamp("period_start").notNull(), // Billing period start
+  periodEnd: timestamp("period_end").notNull(), // Billing period end
+  paidBy: varchar("paid_by", { length: 255 }), // Name of person who paid
+  paymentMethod: varchar("payment_method", { length: 50 }), // "bank_transfer", "card", "cheque", etc.
+  transactionId: varchar("transaction_id", { length: 255 }), // External reference/transaction ID
+  status: varchar("status").notNull().default('completed'), // 'pending' | 'completed' | 'failed' | 'refunded'
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id), // Super admin who recorded it
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSubscriptionPaymentSchema = createInsertSchema(subscriptionPayments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateSubscriptionPaymentSchema = createInsertSchema(subscriptionPayments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 // TypeScript types
 export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
@@ -912,6 +944,10 @@ export type JobShare = typeof jobShares.$inferSelect;
 export type InsertJobShare = z.infer<typeof insertJobShareSchema>;
 export type UpdateJobShare = z.infer<typeof updateJobShareSchema>;
 
+export type SubscriptionPayment = typeof subscriptionPayments.$inferSelect;
+export type InsertSubscriptionPayment = z.infer<typeof insertSubscriptionPaymentSchema>;
+export type UpdateSubscriptionPayment = z.infer<typeof updateSubscriptionPaymentSchema>;
+
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
   user: User;
@@ -959,4 +995,9 @@ export type JobShareWithDetails = JobShare & {
   site: Site;
   creator: User;
   reviewer?: User;
+};
+
+export type SubscriptionPaymentWithDetails = SubscriptionPayment & {
+  company: Company;
+  creator?: User;
 };
