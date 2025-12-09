@@ -303,43 +303,51 @@ export class DatabaseStorage implements IStorage {
       const companyUsers = await tx.select().from(users).where(eq(users.companyId, id));
       const userIds = companyUsers.map(u => u.id);
       
+      // Get all sites for this company
+      const companySites = await tx.select().from(sites).where(eq(sites.companyId, id));
+      const siteIds = companySites.map(s => s.id);
+      
       // Delete user-specific data
       if (userIds.length > 0) {
         await tx.delete(pushSubscriptions).where(inArray(pushSubscriptions.userId, userIds));
         await tx.delete(userLogins).where(inArray(userLogins.userId, userIds));
         await tx.delete(passwordResetTokens).where(inArray(passwordResetTokens.userId, userIds));
+        
+        // Get all notices posted by company users
+        const companyNotices = await tx.select().from(notices).where(inArray(notices.postedBy, userIds));
+        const noticeIds = companyNotices.map(n => n.id);
+        
+        if (noticeIds.length > 0) {
+          await tx.delete(noticeApplications).where(inArray(noticeApplications.noticeId, noticeIds));
+        }
+        
+        // Delete notices posted by company users
+        await tx.delete(notices).where(inArray(notices.postedBy, userIds));
+        
+        // Get all check-ins by company users
+        const companyCheckIns = await tx.select().from(checkIns).where(inArray(checkIns.userId, userIds));
+        const checkInIds = companyCheckIns.map(c => c.id);
+        
+        if (checkInIds.length > 0) {
+          await tx.delete(breaks).where(inArray(breaks.checkInId, checkInIds));
+          await tx.delete(overtimeRequests).where(inArray(overtimeRequests.checkInId, checkInIds));
+        }
+        
+        // Delete check-ins, scheduled shifts, and leave requests by company users
+        await tx.delete(checkIns).where(inArray(checkIns.userId, userIds));
+        await tx.delete(scheduledShifts).where(inArray(scheduledShifts.userId, userIds));
+        await tx.delete(leaveRequests).where(inArray(leaveRequests.userId, userIds));
       }
       
-      // Get all notices for this company to delete related applications
-      const companyNotices = await tx.select().from(notices).where(eq(notices.companyId, id));
-      const noticeIds = companyNotices.map(n => n.id);
-      
-      if (noticeIds.length > 0) {
-        await tx.delete(noticeApplications).where(inArray(noticeApplications.noticeId, noticeIds));
-      }
-      
-      // Get all check-ins for this company to delete breaks and overtime
-      const companyCheckIns = await tx.select().from(checkIns).where(eq(checkIns.companyId, id));
-      const checkInIds = companyCheckIns.map(c => c.id);
-      
-      if (checkInIds.length > 0) {
-        await tx.delete(breaks).where(inArray(breaks.checkInId, checkInIds));
-        await tx.delete(overtimeRequests).where(inArray(overtimeRequests.checkInId, checkInIds));
-      }
-      
-      // Delete company-specific data
+      // Delete company-specific data (tables that have companyId directly)
       await tx.delete(invitations).where(eq(invitations.companyId, id));
-      await tx.delete(checkIns).where(eq(checkIns.companyId, id));
-      await tx.delete(scheduledShifts).where(eq(scheduledShifts.companyId, id));
-      await tx.delete(leaveRequests).where(eq(leaveRequests.companyId, id));
-      await tx.delete(notices).where(eq(notices.companyId, id));
       await tx.delete(sites).where(eq(sites.companyId, id));
       await tx.delete(companySettings).where(eq(companySettings.companyId, id));
       await tx.delete(supportMessages).where(eq(supportMessages.companyId, id));
       
-      // Delete partnerships (both as company and as partner)
-      await tx.delete(companyPartnerships).where(eq(companyPartnerships.companyId, id));
-      await tx.delete(companyPartnerships).where(eq(companyPartnerships.partnerCompanyId, id));
+      // Delete partnerships (using correct column names: fromCompanyId and toCompanyId)
+      await tx.delete(companyPartnerships).where(eq(companyPartnerships.fromCompanyId, id));
+      await tx.delete(companyPartnerships).where(eq(companyPartnerships.toCompanyId, id));
       
       // Delete job shares (both as sender and receiver)
       await tx.delete(jobShares).where(eq(jobShares.fromCompanyId, id));
