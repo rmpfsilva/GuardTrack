@@ -2863,6 +2863,81 @@ GuardTrack Team`;
     }
   });
 
+  // Subscription Payment Routes (Super Admin only)
+  app.get('/api/super-admin/subscription-payments', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId } = req.query;
+      let payments;
+      if (companyId) {
+        payments = await storage.getSubscriptionPaymentsByCompany(companyId);
+      } else {
+        payments = await storage.getAllSubscriptionPayments();
+      }
+      res.json(payments);
+    } catch (error: any) {
+      console.error("Error fetching subscription payments:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch subscription payments" });
+    }
+  });
+
+  app.get('/api/super-admin/subscription-payments/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const payment = await storage.getSubscriptionPayment(id);
+      if (!payment) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+      res.json(payment);
+    } catch (error: any) {
+      console.error("Error fetching subscription payment:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch subscription payment" });
+    }
+  });
+
+  app.post('/api/super-admin/subscription-payments', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const paymentData = {
+        ...req.body,
+        createdBy: req.user.id,
+        paymentDate: new Date(req.body.paymentDate),
+        periodStart: new Date(req.body.periodStart),
+        periodEnd: new Date(req.body.periodEnd),
+      };
+      const payment = await storage.createSubscriptionPayment(paymentData);
+      res.status(201).json(payment);
+    } catch (error: any) {
+      console.error("Error creating subscription payment:", error);
+      res.status(500).json({ message: error.message || "Failed to create subscription payment" });
+    }
+  });
+
+  app.patch('/api/super-admin/subscription-payments/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const updates = { ...req.body };
+      if (updates.paymentDate) updates.paymentDate = new Date(updates.paymentDate);
+      if (updates.periodStart) updates.periodStart = new Date(updates.periodStart);
+      if (updates.periodEnd) updates.periodEnd = new Date(updates.periodEnd);
+      
+      const payment = await storage.updateSubscriptionPayment(id, updates);
+      res.json(payment);
+    } catch (error: any) {
+      console.error("Error updating subscription payment:", error);
+      res.status(500).json({ message: error.message || "Failed to update subscription payment" });
+    }
+  });
+
+  app.delete('/api/super-admin/subscription-payments/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSubscriptionPayment(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting subscription payment:", error);
+      res.status(500).json({ message: error.message || "Failed to delete subscription payment" });
+    }
+  });
+
   // Periodic trial expiration check (runs every hour)
   const expireTrialsInterval = setInterval(async () => {
     try {
