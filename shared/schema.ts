@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 import {
   index,
+  uniqueIndex,
   jsonb,
   pgTable,
   timestamp,
@@ -151,7 +152,7 @@ export const scheduledShifts = pgTable("scheduled_shifts", {
 export const invitations = pgTable("invitations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Multi-tenant: invitation is for a specific company
-  email: varchar("email").notNull().unique(),
+  email: varchar("email").notNull(), // Same email can be invited by different companies
   token: varchar("token").notNull().unique(),
   role: varchar("role").notNull().default('guard'), // Initial role: 'guard' | 'steward' | 'supervisor' | 'admin'
   status: varchar("status").notNull().default('pending'), // 'pending' | 'accepted' | 'revoked'
@@ -160,7 +161,9 @@ export const invitations = pgTable("invitations", {
   acceptedAt: timestamp("accepted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  emailCompanyUnique: uniqueIndex('invitations_email_company_unique').on(table.email, table.companyId),
+}));
 
 // Trial invitations table - email invites for potential clients to start trial
 export const trialInvitations = pgTable("trial_invitations", {
