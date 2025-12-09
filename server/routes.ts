@@ -88,6 +88,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error('Error initializing super admin user:', error);
   }
 
+  // Public endpoint to get companies for login dropdown (minimal info only)
+  app.get('/api/companies/for-login', async (req: any, res) => {
+    try {
+      const companies = await storage.getAllCompanies();
+      // Only return active companies with minimal info for login dropdown
+      const loginCompanies = companies
+        .filter(c => c.isActive)
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          companyId: c.companyId, // Human-readable ID like COMP001
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      res.json(loginCompanies);
+    } catch (error) {
+      console.error("Error fetching companies for login:", error);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
   // Company management routes
   app.get('/api/companies', isAuthenticated, isAdmin, async (req: any, res) => {
     try {

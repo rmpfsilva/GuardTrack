@@ -2,13 +2,21 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ShieldCheck } from "lucide-react";
 import { SiAndroid, SiApple } from "react-icons/si";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
+
+type LoginCompany = {
+  id: string;
+  name: string;
+  companyId: string;
+};
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -18,6 +26,13 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // Fetch companies for login dropdown
+  const { data: companies = [], isLoading: companiesLoading } = useQuery<LoginCompany[]>({
+    queryKey: ["/api/companies/for-login"],
+  });
 
   // Redirect if already logged in (using useEffect to avoid setState during render)
   useEffect(() => {
@@ -30,7 +45,12 @@ export default function AuthPage() {
     e.preventDefault();
     
     if (isLogin) {
-      loginMutation.mutate({ username, password });
+      // For super admin login, companyId is null; for company users, it's the selected company
+      loginMutation.mutate({ 
+        username, 
+        password, 
+        companyId: isSuperAdmin ? null : selectedCompanyId || null
+      });
     } else {
       registerMutation.mutate({
         username,
@@ -62,6 +82,48 @@ export default function AuthPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Company Selection - only for login mode */}
+              {isLogin && (
+                <div className="space-y-2">
+                  <Label htmlFor="company">Company</Label>
+                  <Select
+                    value={isSuperAdmin ? "super_admin" : selectedCompanyId}
+                    onValueChange={(value) => {
+                      if (value === "super_admin") {
+                        setIsSuperAdmin(true);
+                        setSelectedCompanyId("");
+                      } else {
+                        setIsSuperAdmin(false);
+                        setSelectedCompanyId(value);
+                      }
+                    }}
+                  >
+                    <SelectTrigger 
+                      id="company"
+                      data-testid="select-company"
+                      className="w-full"
+                    >
+                      <SelectValue placeholder={companiesLoading ? "Loading companies..." : "Select your company"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companies.map((company) => (
+                        <SelectItem key={company.id} value={company.id}>
+                          {company.name} ({company.companyId})
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="super_admin" className="border-t mt-2 pt-2">
+                        Platform Administrator
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {isSuperAdmin 
+                      ? "Logging in as platform administrator" 
+                      : "Select your company to log in"}
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
                 <Input

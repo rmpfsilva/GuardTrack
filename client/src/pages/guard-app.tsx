@@ -45,7 +45,15 @@ export default function GuardApp() {
   // Login form state
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [loginCompanyId, setLoginCompanyId] = useState<string>("");
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
+
+  // Fetch companies for login dropdown
+  type LoginCompany = { id: string; name: string; companyId: string };
+  const { data: loginCompanies = [], isLoading: companiesLoading } = useQuery<LoginCompany[]>({
+    queryKey: ["/api/companies/for-login"],
+    enabled: !user, // Only fetch when not logged in
+  });
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -259,7 +267,12 @@ export default function GuardApp() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    loginMutation.mutate({ username: loginUsername, password: loginPassword });
+    // Guards always login to a company, so companyId is required
+    loginMutation.mutate({ 
+      username: loginUsername, 
+      password: loginPassword, 
+      companyId: loginCompanyId || null 
+    });
   };
 
   if (authLoading) {
@@ -397,6 +410,29 @@ export default function GuardApp() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="company">Your Company</Label>
+                  <Select
+                    value={loginCompanyId}
+                    onValueChange={setLoginCompanyId}
+                  >
+                    <SelectTrigger 
+                      id="company"
+                      data-testid="select-guard-company"
+                      className="w-full"
+                    >
+                      <SelectValue placeholder={companiesLoading ? "Loading..." : "Select your company"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loginCompanies.map((company) => (
+                        <SelectItem key={company.id} value={company.id}>
+                          {company.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="username">Username</Label>
                   <Input
