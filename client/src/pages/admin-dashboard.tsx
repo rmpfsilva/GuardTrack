@@ -34,6 +34,7 @@ import JobSharing from "@/components/job-sharing";
 import ClientManagement from "@/components/client-management";
 import ClientUsageReports from "@/components/client-usage-reports";
 import SupportMessages from "@/components/support-messages";
+import SubscriptionBilling from "@/components/subscription-billing";
 
 interface DashboardStats {
   activeGuards: number;
@@ -319,6 +320,7 @@ export default function AdminDashboard() {
                   {/* Super Admin Tabs - Platform Management Only */}
                   <TabsTrigger value="clients" data-testid="tab-clients" className="text-xs sm:text-sm whitespace-nowrap">Clients</TabsTrigger>
                   <TabsTrigger value="messages" data-testid="tab-messages" className="text-xs sm:text-sm whitespace-nowrap">Messages</TabsTrigger>
+                  <TabsTrigger value="subscription-billing" data-testid="tab-subscription-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
                   <TabsTrigger value="usage-reports" data-testid="tab-usage-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
                 </>
               ) : (
@@ -516,6 +518,10 @@ export default function AdminDashboard() {
               
               <TabsContent value="usage-reports">
                 <ClientUsageReports />
+              </TabsContent>
+
+              <TabsContent value="subscription-billing">
+                <SubscriptionBilling />
               </TabsContent>
 
               <TabsContent value="messages">
