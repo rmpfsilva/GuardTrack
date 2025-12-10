@@ -2955,6 +2955,133 @@ GuardTrack Team`;
     }
   });
 
+  // Error Log Routes (Super Admin only)
+  app.get('/api/super-admin/error-logs', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId, limit } = req.query;
+      let logs;
+      if (companyId) {
+        logs = await storage.getErrorLogsByCompany(companyId, Number(limit) || 100);
+      } else {
+        logs = await storage.getAllErrorLogs(Number(limit) || 100);
+      }
+      res.json(logs);
+    } catch (error: any) {
+      console.error("Error fetching error logs:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch error logs" });
+    }
+  });
+
+  app.get('/api/super-admin/error-logs/count', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const count = await storage.getUnresolvedErrorCount();
+      res.json({ count });
+    } catch (error: any) {
+      console.error("Error fetching error count:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch error count" });
+    }
+  });
+
+  app.get('/api/super-admin/error-logs/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const log = await storage.getErrorLog(id);
+      if (!log) {
+        return res.status(404).json({ message: "Error log not found" });
+      }
+      res.json(log);
+    } catch (error: any) {
+      console.error("Error fetching error log:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch error log" });
+    }
+  });
+
+  app.post('/api/super-admin/error-logs/:id/resolve', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+      const log = await storage.resolveErrorLog(id, req.user.id, notes);
+      res.json(log);
+    } catch (error: any) {
+      console.error("Error resolving error log:", error);
+      res.status(500).json({ message: error.message || "Failed to resolve error log" });
+    }
+  });
+
+  app.delete('/api/super-admin/error-logs/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteErrorLog(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting error log:", error);
+      res.status(500).json({ message: error.message || "Failed to delete error log" });
+    }
+  });
+
+  // Client-side error reporting endpoint (for frontend errors)
+  app.post('/api/error-report', async (req: any, res) => {
+    try {
+      const { message, stack, endpoint, userAgent } = req.body;
+      
+      // Sanitize and capture error
+      const errorLog = await storage.createErrorLog({
+        errorType: 'client_error',
+        severity: 'error',
+        message: message || 'Unknown client error',
+        stack,
+        endpoint: endpoint || req.headers.referer,
+        userAgent: userAgent || req.headers['user-agent'],
+        ipAddress: req.ip,
+        userId: req.user?.id || null,
+        companyId: req.user?.companyId || null,
+      });
+      
+      res.json({ success: true, id: errorLog.id });
+    } catch (error: any) {
+      console.error("Error saving client error report:", error);
+      res.status(500).json({ message: "Failed to save error report" });
+    }
+  });
+
+  // Global error handler to capture API errors
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("API Error:", err);
+    
+    // Don't log certain expected errors
+    const skipLogging = [401, 403].includes(err.status || err.statusCode);
+    
+    if (!skipLogging) {
+      // Sanitize request body (remove passwords and tokens)
+      const sanitizedBody = { ...req.body };
+      delete sanitizedBody.password;
+      delete sanitizedBody.token;
+      delete sanitizedBody.invitationToken;
+      
+      // Log the error asynchronously
+      storage.createErrorLog({
+        errorType: 'api_error',
+        severity: err.status >= 500 ? 'critical' : 'error',
+        message: err.message || 'Unknown API error',
+        stack: err.stack,
+        endpoint: req.originalUrl,
+        method: req.method,
+        statusCode: String(err.status || err.statusCode || 500),
+        requestBody: Object.keys(sanitizedBody).length > 0 ? JSON.stringify(sanitizedBody) : null,
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip,
+        userId: req.user?.id || null,
+        companyId: req.user?.companyId || null,
+      }).catch(logErr => {
+        console.error("Failed to log error:", logErr);
+      });
+    }
+    
+    res.status(err.status || err.statusCode || 500).json({
+      message: err.message || 'Internal server error'
+    });
+  });
+
   // Periodic trial expiration check (runs every hour)
   const expireTrialsInterval = setInterval(async () => {
     try {

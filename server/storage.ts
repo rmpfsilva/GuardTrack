@@ -79,6 +79,11 @@ import {
   type InsertSubscriptionPayment,
   type UpdateSubscriptionPayment,
   type SubscriptionPaymentWithDetails,
+  type ErrorLog,
+  type InsertErrorLog,
+  type UpdateErrorLog,
+  type ErrorLogWithDetails,
+  errorLogs,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
@@ -272,6 +277,16 @@ export interface IStorage {
   createSubscriptionPayment(payment: InsertSubscriptionPayment): Promise<SubscriptionPayment>;
   updateSubscriptionPayment(id: string, updates: UpdateSubscriptionPayment): Promise<SubscriptionPayment>;
   deleteSubscriptionPayment(id: string): Promise<void>;
+
+  // Error log operations (Super Admin monitoring)
+  getAllErrorLogs(limit?: number): Promise<ErrorLogWithDetails[]>;
+  getErrorLogsByCompany(companyId: string, limit?: number): Promise<ErrorLogWithDetails[]>;
+  getErrorLog(id: string): Promise<ErrorLogWithDetails | undefined>;
+  createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog>;
+  updateErrorLog(id: string, updates: UpdateErrorLog): Promise<ErrorLog>;
+  resolveErrorLog(id: string, resolvedBy: string, notes?: string): Promise<ErrorLog>;
+  deleteErrorLog(id: string): Promise<void>;
+  getUnresolvedErrorCount(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2969,6 +2984,134 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSubscriptionPayment(id: string): Promise<void> {
     await db.delete(subscriptionPayments).where(eq(subscriptionPayments.id, id));
+  }
+
+  // Error log operations
+  async getAllErrorLogs(limit: number = 100): Promise<ErrorLogWithDetails[]> {
+    const logs = await db
+      .select()
+      .from(errorLogs)
+      .orderBy(desc(errorLogs.createdAt))
+      .limit(limit);
+    
+    const result: ErrorLogWithDetails[] = [];
+    for (const log of logs) {
+      const company = log.companyId 
+        ? (await db.select().from(companies).where(eq(companies.id, log.companyId)))[0]
+        : undefined;
+      const user = log.userId 
+        ? (await db.select().from(users).where(eq(users.id, log.userId)))[0]
+        : undefined;
+      const resolver = log.resolvedBy 
+        ? (await db.select().from(users).where(eq(users.id, log.resolvedBy)))[0]
+        : undefined;
+      
+      result.push({
+        ...log,
+        company,
+        user,
+        resolver,
+      });
+    }
+    return result;
+  }
+
+  async getErrorLogsByCompany(companyId: string, limit: number = 100): Promise<ErrorLogWithDetails[]> {
+    const logs = await db
+      .select()
+      .from(errorLogs)
+      .where(eq(errorLogs.companyId, companyId))
+      .orderBy(desc(errorLogs.createdAt))
+      .limit(limit);
+    
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+    
+    const result: ErrorLogWithDetails[] = [];
+    for (const log of logs) {
+      const user = log.userId 
+        ? (await db.select().from(users).where(eq(users.id, log.userId)))[0]
+        : undefined;
+      const resolver = log.resolvedBy 
+        ? (await db.select().from(users).where(eq(users.id, log.resolvedBy)))[0]
+        : undefined;
+      
+      result.push({
+        ...log,
+        company,
+        user,
+        resolver,
+      });
+    }
+    return result;
+  }
+
+  async getErrorLog(id: string): Promise<ErrorLogWithDetails | undefined> {
+    const [log] = await db
+      .select()
+      .from(errorLogs)
+      .where(eq(errorLogs.id, id));
+    
+    if (!log) return undefined;
+
+    const company = log.companyId 
+      ? (await db.select().from(companies).where(eq(companies.id, log.companyId)))[0]
+      : undefined;
+    const user = log.userId 
+      ? (await db.select().from(users).where(eq(users.id, log.userId)))[0]
+      : undefined;
+    const resolver = log.resolvedBy 
+      ? (await db.select().from(users).where(eq(users.id, log.resolvedBy)))[0]
+      : undefined;
+
+    return {
+      ...log,
+      company,
+      user,
+      resolver,
+    };
+  }
+
+  async createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog> {
+    const [newLog] = await db
+      .insert(errorLogs)
+      .values(errorLog)
+      .returning();
+    return newLog;
+  }
+
+  async updateErrorLog(id: string, updates: UpdateErrorLog): Promise<ErrorLog> {
+    const [updatedLog] = await db
+      .update(errorLogs)
+      .set(updates)
+      .where(eq(errorLogs.id, id))
+      .returning();
+    return updatedLog;
+  }
+
+  async resolveErrorLog(id: string, resolvedBy: string, notes?: string): Promise<ErrorLog> {
+    const [resolvedLog] = await db
+      .update(errorLogs)
+      .set({
+        isResolved: true,
+        resolvedBy,
+        resolvedAt: new Date(),
+        resolutionNotes: notes,
+      })
+      .where(eq(errorLogs.id, id))
+      .returning();
+    return resolvedLog;
+  }
+
+  async deleteErrorLog(id: string): Promise<void> {
+    await db.delete(errorLogs).where(eq(errorLogs.id, id));
+  }
+
+  async getUnresolvedErrorCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(errorLogs)
+      .where(eq(errorLogs.isResolved, false));
+    return Number(result[0]?.count || 0);
   }
 }
 
