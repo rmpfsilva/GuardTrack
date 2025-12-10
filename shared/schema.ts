@@ -872,6 +872,38 @@ export const updateSubscriptionPaymentSchema = createInsertSchema(subscriptionPa
   updatedAt: true,
 }).partial();
 
+// Error Logs table - tracks application errors for Super Admin monitoring
+export const errorLogs = pgTable("error_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: 'cascade' }), // null for system-wide errors
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'set null' }), // User who triggered the error (if any)
+  errorType: varchar("error_type", { length: 50 }).notNull(), // 'api_error' | 'client_error' | 'auth_error' | 'system_error'
+  severity: varchar("severity", { length: 20 }).notNull().default('error'), // 'warning' | 'error' | 'critical'
+  message: text("message").notNull(),
+  stack: text("stack"), // Stack trace if available
+  endpoint: varchar("endpoint", { length: 500 }), // API endpoint that caused the error
+  method: varchar("method", { length: 10 }), // HTTP method (GET, POST, etc.)
+  statusCode: varchar("status_code", { length: 10 }), // HTTP status code
+  requestBody: text("request_body"), // Sanitized request body (no passwords/tokens)
+  userAgent: text("user_agent"), // Browser/client info
+  ipAddress: varchar("ip_address", { length: 50 }),
+  isResolved: boolean("is_resolved").notNull().default(false),
+  resolvedBy: varchar("resolved_by").references(() => users.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertErrorLogSchema = createInsertSchema(errorLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updateErrorLogSchema = createInsertSchema(errorLogs).omit({
+  id: true,
+  createdAt: true,
+}).partial();
+
 // TypeScript types
 export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
@@ -954,6 +986,10 @@ export type SubscriptionPayment = typeof subscriptionPayments.$inferSelect;
 export type InsertSubscriptionPayment = z.infer<typeof insertSubscriptionPaymentSchema>;
 export type UpdateSubscriptionPayment = z.infer<typeof updateSubscriptionPaymentSchema>;
 
+export type ErrorLog = typeof errorLogs.$inferSelect;
+export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
+export type UpdateErrorLog = z.infer<typeof updateErrorLogSchema>;
+
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
   user: User;
@@ -1006,4 +1042,10 @@ export type JobShareWithDetails = JobShare & {
 export type SubscriptionPaymentWithDetails = SubscriptionPayment & {
   company: Company;
   creator?: User;
+};
+
+export type ErrorLogWithDetails = ErrorLog & {
+  company?: Company;
+  user?: User;
+  resolver?: User;
 };
