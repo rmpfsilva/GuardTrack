@@ -64,9 +64,24 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
   - **Client Management Actions**: Block/unblock clients, send direct messages via email, extend trials, convert to full version, or set custom trial periods.
 - **App Usage Analytics**: Automatic login tracking system records every user login with timestamp for comprehensive usage statistics. Super Admin dashboard displays daily, weekly, and monthly login metrics with visual charts showing trends and user growth comparisons between current and previous periods.
 - **Customer Support Messaging**: Integrated support system enabling company admins to send support queries and view conversation history. Super Admin can view all customer messages organized by company, respond to queries, and track message read status. Chat-style interface with message threading, sender identification, and real-time updates.
+- **Error Monitoring System**: Comprehensive error logging infrastructure for Super Admin to monitor application health. Features include:
+  - Automatic capture of API errors via global error handler middleware
+  - Client-side error reporting endpoint for frontend errors
+  - Error logs with severity levels (critical, error, warn, info)
+  - Company-scoped error tracking with user context
+  - Stack traces, HTTP request details, and user agent information
+  - Resolve/unresolve workflow with resolution notes
+  - Search and filter capabilities across all error logs
+  - Unresolved error count badge for quick visibility
+- **Test Accounts**: Demo Test Company (DEMO999) with pre-created users for testing:
+  - testguard / Test123! (guard role)
+  - teststeward / Test123! (steward role)
+  - testsupervisor / Test123! (supervisor role)
+  - testadmin / Test123! (admin role)
+  - Demo Test Site configured for check-in functionality
 
 ### System Design Choices
-The architecture emphasizes a clear separation of concerns. The database schema supports multi-tenancy with `companies` as the core entity, isolating data for users, sites, and settings. Key tables include `companies`, `users`, `sites`, `check_ins`, `scheduled_shifts`, `breaks`, `overtime_requests`, `leave_requests`, `notices`, `notice_applications`, `push_subscriptions`, `company_settings`, `company_partnerships`, `job_shares`, `trial_invitations`, `user_logins`, `support_messages`, and `subscription_payments`. Multi-tenant architecture ensures data isolation via `companyId` foreign keys across relevant tables. Hours calculation logic incorporates mandatory baseline break deductions and conditional deductions/overtime based on admin approvals. App usage analytics leverage the `user_logins` table for comprehensive login tracking. Customer support messaging utilizes the `support_messages` table with `isAdminReply` flag to distinguish between customer queries and Super Admin responses. Subscription billing uses the `subscription_payments` table to track manual payment records with plan details, amounts, payment dates, and status tracking.
+The architecture emphasizes a clear separation of concerns. The database schema supports multi-tenancy with `companies` as the core entity, isolating data for users, sites, and settings. Key tables include `companies`, `users`, `sites`, `check_ins`, `scheduled_shifts`, `breaks`, `overtime_requests`, `leave_requests`, `notices`, `notice_applications`, `push_subscriptions`, `company_settings`, `company_partnerships`, `job_shares`, `trial_invitations`, `user_logins`, `support_messages`, `subscription_payments`, and `error_logs`. Multi-tenant architecture ensures data isolation via `companyId` foreign keys across relevant tables. Hours calculation logic incorporates mandatory baseline break deductions and conditional deductions/overtime based on admin approvals. App usage analytics leverage the `user_logins` table for comprehensive login tracking. Customer support messaging utilizes the `support_messages` table with `isAdminReply` flag to distinguish between customer queries and Super Admin responses. Subscription billing uses the `subscription_payments` table to track manual payment records with plan details, amounts, payment dates, and status tracking. Error monitoring uses the `error_logs` table with company/user context, severity levels, stack traces, and resolution workflow.
 
 ## External Dependencies
 -   **PostgreSQL**: Primary database, hosted via Neon.
