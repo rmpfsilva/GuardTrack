@@ -73,12 +73,17 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
   - Resolve/unresolve workflow with resolution notes
   - Search and filter capabilities across all error logs
   - Unresolved error count badge for quick visibility
+- **Secure Login Flow**: Login page uses Company ID input instead of company dropdown for security (prevents tenant enumeration). Users enter their Company ID code (e.g., "DEMO999") and the system validates it via API lookup before allowing login. Platform Administrator checkbox allows super admin login without company context.
 - **Test Accounts**: Demo Test Company (DEMO999) with pre-created users for testing:
   - testguard / Test123! (guard role)
   - teststeward / Test123! (steward role)
   - testsupervisor / Test123! (supervisor role)
   - testadmin / Test123! (admin role)
   - Demo Test Site configured for check-in functionality
+- **Super Admin Account**: Platform administrator with full access:
+  - Username: superadmin
+  - Password: SuperAdmin123!
+  - Login: Check "Platform Administrator" checkbox on login page
 
 ### System Design Choices
 The architecture emphasizes a clear separation of concerns. The database schema supports multi-tenancy with `companies` as the core entity, isolating data for users, sites, and settings. Key tables include `companies`, `users`, `sites`, `check_ins`, `scheduled_shifts`, `breaks`, `overtime_requests`, `leave_requests`, `notices`, `notice_applications`, `push_subscriptions`, `company_settings`, `company_partnerships`, `job_shares`, `trial_invitations`, `user_logins`, `support_messages`, `subscription_payments`, and `error_logs`. Multi-tenant architecture ensures data isolation via `companyId` foreign keys across relevant tables. Hours calculation logic incorporates mandatory baseline break deductions and conditional deductions/overtime based on admin approvals. App usage analytics leverage the `user_logins` table for comprehensive login tracking. Customer support messaging utilizes the `support_messages` table with `isAdminReply` flag to distinguish between customer queries and Super Admin responses. Subscription billing uses the `subscription_payments` table to track manual payment records with plan details, amounts, payment dates, and status tracking. Error monitoring uses the `error_logs` table with company/user context, severity levels, stack traces, and resolution workflow.
