@@ -2,17 +2,18 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldCheck } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ShieldCheck, Building2, Loader2 } from "lucide-react";
 import { SiAndroid, SiApple } from "react-icons/si";
+import { useToast } from "@/hooks/use-toast";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 
-type LoginCompany = {
+type CompanyLookup = {
   id: string;
   name: string;
   companyId: string;
@@ -21,18 +22,56 @@ type LoginCompany = {
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [companyCode, setCompanyCode] = useState("");
+  const [resolvedCompany, setResolvedCompany] = useState<CompanyLookup | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  // Fetch companies for login dropdown
-  const { data: companies = [], isLoading: companiesLoading } = useQuery<LoginCompany[]>({
-    queryKey: ["/api/companies/for-login"],
+  // Mutation to lookup company by code
+  const lookupCompanyMutation = useMutation({
+    mutationFn: async (code: string): Promise<CompanyLookup> => {
+      const response = await fetch(`/api/companies/lookup/${encodeURIComponent(code)}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Company not found");
+      }
+      return response.json();
+    },
+    onSuccess: (company) => {
+      setResolvedCompany(company);
+    },
+    onError: (error: Error) => {
+      setResolvedCompany(null);
+      toast({
+        title: "Company not found",
+        description: "Please check your Company ID and try again.",
+        variant: "destructive",
+      });
+    },
   });
+
+  // Lookup company when code changes (with debounce effect)
+  useEffect(() => {
+    if (isSuperAdmin) {
+      setResolvedCompany(null);
+      return;
+    }
+
+    const trimmedCode = companyCode.trim();
+    if (trimmedCode.length >= 3) {
+      const timeoutId = setTimeout(() => {
+        lookupCompanyMutation.mutate(trimmedCode);
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setResolvedCompany(null);
+    }
+  }, [companyCode, isSuperAdmin]);
 
   // Redirect if already logged in (using useEffect to avoid setState during render)
   useEffect(() => {
@@ -45,11 +84,20 @@ export default function AuthPage() {
     e.preventDefault();
     
     if (isLogin) {
-      // For super admin login, companyId is null; for company users, it's the selected company
+      // For super admin login, companyId is null; for company users, use the resolved company
+      if (!isSuperAdmin && !resolvedCompany) {
+        toast({
+          title: "Company required",
+          description: "Please enter a valid Company ID to log in.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       loginMutation.mutate({ 
         username, 
         password, 
-        companyId: isSuperAdmin ? null : selectedCompanyId || null
+        companyId: isSuperAdmin ? null : resolvedCompany?.id || null
       });
     } else {
       registerMutation.mutate({
@@ -57,7 +105,7 @@ export default function AuthPage() {
         password,
         firstName,
         lastName,
-        role: 'guard', // Default role
+        role: 'guard',
       });
     }
   };
@@ -82,45 +130,56 @@ export default function AuthPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Company Selection - only for login mode */}
-              {isLogin && (
+              {/* Company ID Input - only for login mode */}
+              {isLogin && !isSuperAdmin && (
                 <div className="space-y-2">
-                  <Label htmlFor="company">Company</Label>
-                  <Select
-                    value={isSuperAdmin ? "super_admin" : selectedCompanyId}
-                    onValueChange={(value) => {
-                      if (value === "super_admin") {
-                        setIsSuperAdmin(true);
-                        setSelectedCompanyId("");
-                      } else {
-                        setIsSuperAdmin(false);
-                        setSelectedCompanyId(value);
+                  <Label htmlFor="companyCode">Company ID</Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="companyCode"
+                      data-testid="input-company-code"
+                      type="text"
+                      placeholder="e.g., DEMO999"
+                      className="pl-10"
+                      value={companyCode}
+                      onChange={(e) => setCompanyCode(e.target.value.toUpperCase())}
+                    />
+                    {lookupCompanyMutation.isPending && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                  {resolvedCompany ? (
+                    <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3" />
+                      {resolvedCompany.name}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Enter your Company ID to log in
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Super Admin toggle - only for login mode */}
+              {isLogin && (
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="superAdmin"
+                    data-testid="checkbox-super-admin"
+                    checked={isSuperAdmin}
+                    onCheckedChange={(checked) => {
+                      setIsSuperAdmin(checked === true);
+                      if (checked) {
+                        setCompanyCode("");
+                        setResolvedCompany(null);
                       }
                     }}
-                  >
-                    <SelectTrigger 
-                      id="company"
-                      data-testid="select-company"
-                      className="w-full"
-                    >
-                      <SelectValue placeholder={companiesLoading ? "Loading companies..." : "Select your company"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {companies.map((company) => (
-                        <SelectItem key={company.id} value={company.id}>
-                          {company.name} ({company.companyId})
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="super_admin" className="border-t mt-2 pt-2">
-                        Platform Administrator
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {isSuperAdmin 
-                      ? "Logging in as platform administrator" 
-                      : "Select your company to log in"}
-                  </p>
+                  />
+                  <Label htmlFor="superAdmin" className="text-sm text-muted-foreground cursor-pointer">
+                    Platform Administrator
+                  </Label>
                 </div>
               )}
 
@@ -180,9 +239,16 @@ export default function AuthPage() {
                 type="submit"
                 className="w-full"
                 data-testid={isLogin ? "button-login" : "button-register"}
-                disabled={loginMutation.isPending || registerMutation.isPending}
+                disabled={loginMutation.isPending || registerMutation.isPending || (isLogin && !isSuperAdmin && lookupCompanyMutation.isPending)}
               >
-                {isLogin ? "Sign In" : "Create Account"}
+                {(loginMutation.isPending || registerMutation.isPending) ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isLogin ? "Signing in..." : "Creating account..."}
+                  </>
+                ) : (
+                  isLogin ? "Sign In" : "Create Account"
+                )}
               </Button>
 
               {isLogin && (
@@ -222,7 +288,6 @@ export default function AuthPage() {
                 variant="outline"
                 className="flex items-center gap-2"
                 onClick={() => {
-                  // Placeholder - will be replaced with actual store link
                   alert('Android app coming soon! Link will be available after Play Store approval.');
                 }}
                 data-testid="button-download-android"
@@ -237,7 +302,6 @@ export default function AuthPage() {
                 variant="outline"
                 className="flex items-center gap-2"
                 onClick={() => {
-                  // Placeholder - will be replaced with actual store link
                   alert('iOS app coming soon! Link will be available after App Store approval.');
                 }}
                 data-testid="button-download-ios"

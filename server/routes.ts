@@ -88,23 +88,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error('Error initializing super admin user:', error);
   }
 
-  // Public endpoint to get companies for login dropdown (minimal info only)
-  app.get('/api/companies/for-login', async (req: any, res) => {
+  // Public endpoint to lookup company by Company ID code (secure - doesn't expose all companies)
+  app.get('/api/companies/lookup/:companyCode', async (req: any, res) => {
     try {
+      const { companyCode } = req.params;
+      
+      if (!companyCode || companyCode.trim().length === 0) {
+        return res.status(400).json({ message: "Company ID is required" });
+      }
+      
       const companies = await storage.getAllCompanies();
-      // Only return active companies with minimal info for login dropdown
-      const loginCompanies = companies
-        .filter(c => c.isActive)
-        .map(c => ({
-          id: c.id,
-          name: c.name,
-          companyId: c.companyId, // Human-readable ID like COMP001
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      res.json(loginCompanies);
+      // Find company by companyId code (case-insensitive exact match)
+      const company = companies.find(
+        c => c.isActive && c.companyId?.toLowerCase() === companyCode.trim().toLowerCase()
+      );
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Return minimal info for login
+      res.json({
+        id: company.id,
+        name: company.name,
+        companyId: company.companyId,
+      });
     } catch (error) {
-      console.error("Error fetching companies for login:", error);
-      res.status(500).json({ message: "Failed to fetch companies" });
+      console.error("Error looking up company:", error);
+      res.status(500).json({ message: "Failed to lookup company" });
     }
   });
 
