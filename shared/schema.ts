@@ -28,6 +28,35 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// Subscription plans table - defines feature access and limits
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 50 }).notNull().unique(), // 'Starter' | 'Standard' | 'Pro'
+  description: text("description"),
+  monthlyPrice: numeric("monthly_price", { precision: 10, scale: 2 }).notNull(),
+  features: jsonb("features").notNull().$type<{
+    userManagement: boolean;
+    dashboardAccess: boolean;
+    reportsViewing: boolean;
+    checkInOut: boolean;
+    shiftScheduling: boolean;
+    siteManagement: boolean;
+    breakTracking: boolean;
+    overtimeManagement: boolean;
+    leaveRequests: boolean;
+    noticeBoard: boolean;
+    pushNotifications: boolean;
+  }>(),
+  limits: jsonb("limits").notNull().$type<{
+    maxSites: number | null;
+    maxUsers: number | null;
+  }>(),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: numeric("sort_order", { precision: 2, scale: 0 }).default('1'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Companies table - multi-tenant support
 export const companies = pgTable("companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -40,9 +69,15 @@ export const companies = pgTable("companies", {
   registrationNumber: varchar("registration_number"),
   logoUrl: text("logo_url"),
   isActive: boolean("is_active").notNull().default(true),
+  isBlocked: boolean("is_blocked").notNull().default(false),
+  blockReason: text("block_reason"),
+  blockedAt: timestamp("blocked_at"),
   trialStatus: varchar("trial_status").default('full'), // 'trial' | 'expired' | 'full'
   trialEndDate: timestamp("trial_end_date"),
   trialDays: numeric("trial_days", { precision: 3, scale: 0 }), // Number of trial days (3, 7, 14, etc.)
+  planId: varchar("plan_id").references(() => subscriptionPlans.id, { onDelete: 'set null' }), // Reference to subscription plan
+  subscriptionStatus: varchar("subscription_status").default('active'), // 'trial' | 'active' | 'expired' | 'suspended'
+  billingStartDate: timestamp("billing_start_date"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -334,7 +369,15 @@ export const jobShares = pgTable("job_shares", {
 });
 
 // Define relations
-export const companiesRelations = relations(companies, ({ many }) => ({
+export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }) => ({
+  companies: many(companies),
+}));
+
+export const companiesRelations = relations(companies, ({ one, many }) => ({
+  plan: one(subscriptionPlans, {
+    fields: [companies.planId],
+    references: [subscriptionPlans.id],
+  }),
   users: many(users),
   sites: many(sites),
   invitations: many(invitations),
@@ -539,6 +582,54 @@ export const jobSharesRelations = relations(jobShares, ({ one }) => ({
 }));
 
 // Zod schemas for validation
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  features: z.object({
+    userManagement: z.boolean(),
+    dashboardAccess: z.boolean(),
+    reportsViewing: z.boolean(),
+    checkInOut: z.boolean(),
+    shiftScheduling: z.boolean(),
+    siteManagement: z.boolean(),
+    breakTracking: z.boolean(),
+    overtimeManagement: z.boolean(),
+    leaveRequests: z.boolean(),
+    noticeBoard: z.boolean(),
+    pushNotifications: z.boolean(),
+  }),
+  limits: z.object({
+    maxSites: z.number().nullable(),
+    maxUsers: z.number().nullable(),
+  }),
+});
+
+export const updateSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  features: z.object({
+    userManagement: z.boolean(),
+    dashboardAccess: z.boolean(),
+    reportsViewing: z.boolean(),
+    checkInOut: z.boolean(),
+    shiftScheduling: z.boolean(),
+    siteManagement: z.boolean(),
+    breakTracking: z.boolean(),
+    overtimeManagement: z.boolean(),
+    leaveRequests: z.boolean(),
+    noticeBoard: z.boolean(),
+    pushNotifications: z.boolean(),
+  }).optional(),
+  limits: z.object({
+    maxSites: z.number().nullable(),
+    maxUsers: z.number().nullable(),
+  }).optional(),
+}).partial();
+
 export const insertCompanySchema = createInsertSchema(companies).omit({
   id: true,
   createdAt: true,
@@ -905,6 +996,10 @@ export const updateErrorLogSchema = createInsertSchema(errorLogs).omit({
 }).partial();
 
 // TypeScript types
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export type UpdateSubscriptionPlan = z.infer<typeof updateSubscriptionPlanSchema>;
+
 export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;

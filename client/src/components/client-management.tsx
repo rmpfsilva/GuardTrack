@@ -61,6 +61,7 @@ export default function ClientManagement() {
   const [trialDays, setTrialDays] = useState<number>(14);
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
+  const [blockReason, setBlockReason] = useState("");
   
   // Trial invitation form state
   const [inviteEmail, setInviteEmail] = useState("");
@@ -76,14 +77,15 @@ export default function ClientManagement() {
   });
 
   const blockClientMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await apiRequest("POST", `/api/companies/${id}/block`);
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      return await apiRequest("POST", `/api/companies/${id}/block`, { reason });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/clients"] });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
       setIsBlockDialogOpen(false);
       setSelectedClient(null);
+      setBlockReason("");
       toast({
         title: "Client blocked",
         description: "Client has been blocked from accessing the platform.",
@@ -93,6 +95,27 @@ export default function ClientManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to block client",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unblockClientMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("POST", `/api/companies/${id}/unblock`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      toast({
+        title: "Client unblocked",
+        description: "Client access has been restored.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unblock client",
         variant: "destructive",
       });
     },
@@ -271,6 +294,9 @@ export default function ClientManagement() {
   };
 
   const getStatusBadge = (client: ClientWithStatus) => {
+    if (client.isBlocked) {
+      return <Badge variant="destructive" className="bg-red-700" data-testid={`badge-status-${client.id}`}>Blocked</Badge>;
+    }
     if (client.trialStatus === 'expired') {
       return <Badge variant="destructive" data-testid={`badge-status-${client.id}`}>Expired Trial</Badge>;
     }
@@ -381,18 +407,33 @@ export default function ClientManagement() {
                         Convert to Full
                       </Button>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedClient(client);
-                        setIsBlockDialogOpen(true);
-                      }}
-                      data-testid={`button-block-${client.id}`}
-                    >
-                      <Ban className="h-4 w-4 mr-2" />
-                      Block Client
-                    </Button>
+                    {client.isBlocked ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-green-600 text-green-600 hover:bg-green-50"
+                        onClick={() => unblockClientMutation.mutate(client.id)}
+                        disabled={unblockClientMutation.isPending}
+                        data-testid={`button-unblock-${client.id}`}
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        Unblock
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-red-600 text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          setSelectedClient(client);
+                          setIsBlockDialogOpen(true);
+                        }}
+                        data-testid={`button-block-${client.id}`}
+                      >
+                        <Ban className="h-4 w-4 mr-2" />
+                        Block
+                      </Button>
+                    )}
                     <Button
                       variant="destructive"
                       size="sm"
@@ -429,6 +470,11 @@ export default function ClientManagement() {
                       <Shield className="h-4 w-4 mr-2" />
                       View Permissions
                     </Button>
+                    {client.isBlocked && client.blockReason && (
+                      <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+                        Block reason: {client.blockReason}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -493,18 +539,33 @@ export default function ClientManagement() {
                       <CreditCard className="h-4 w-4 mr-2" />
                       Convert to Full
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedClient(client);
-                        setIsBlockDialogOpen(true);
-                      }}
-                      data-testid={`button-block-${client.id}`}
-                    >
-                      <Ban className="h-4 w-4 mr-2" />
-                      Block Client
-                    </Button>
+                    {client.isBlocked ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-green-600 text-green-600 hover:bg-green-50"
+                        onClick={() => unblockClientMutation.mutate(client.id)}
+                        disabled={unblockClientMutation.isPending}
+                        data-testid={`button-unblock-${client.id}`}
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        Unblock
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-red-600 text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          setSelectedClient(client);
+                          setIsBlockDialogOpen(true);
+                        }}
+                        data-testid={`button-block-${client.id}`}
+                      >
+                        <Ban className="h-4 w-4 mr-2" />
+                        Block
+                      </Button>
+                    )}
                     <Button
                       variant="destructive"
                       size="sm"
@@ -529,6 +590,11 @@ export default function ClientManagement() {
                       <Mail className="h-4 w-4 mr-2" />
                       Send Message
                     </Button>
+                    {client.isBlocked && client.blockReason && (
+                      <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+                        Block reason: {client.blockReason}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -560,18 +626,33 @@ export default function ClientManagement() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedClient(client);
-                        setIsBlockDialogOpen(true);
-                      }}
-                      data-testid={`button-block-${client.id}`}
-                    >
-                      <Ban className="h-4 w-4 mr-2" />
-                      Block Client
-                    </Button>
+                    {client.isBlocked ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-green-600 text-green-600 hover:bg-green-50"
+                        onClick={() => unblockClientMutation.mutate(client.id)}
+                        disabled={unblockClientMutation.isPending}
+                        data-testid={`button-unblock-${client.id}`}
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        Unblock
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-red-600 text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          setSelectedClient(client);
+                          setIsBlockDialogOpen(true);
+                        }}
+                        data-testid={`button-block-${client.id}`}
+                      >
+                        <Ban className="h-4 w-4 mr-2" />
+                        Block
+                      </Button>
+                    )}
                     <Button
                       variant="destructive"
                       size="sm"
@@ -596,6 +677,11 @@ export default function ClientManagement() {
                       <Mail className="h-4 w-4 mr-2" />
                       Send Message
                     </Button>
+                    {client.isBlocked && client.blockReason && (
+                      <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+                        Block reason: {client.blockReason}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -833,7 +919,10 @@ export default function ClientManagement() {
       </Dialog>
 
       {/* Block Client Dialog */}
-      <Dialog open={isBlockDialogOpen} onOpenChange={setIsBlockDialogOpen}>
+      <Dialog open={isBlockDialogOpen} onOpenChange={(open) => {
+        setIsBlockDialogOpen(open);
+        if (!open) setBlockReason("");
+      }}>
         <DialogContent data-testid="dialog-block-client">
           <DialogHeader>
             <DialogTitle>Block Client</DialogTitle>
@@ -841,6 +930,18 @@ export default function ClientManagement() {
               Are you sure you want to block {selectedClient?.name}? They will lose access to the platform.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="blockReason">Reason for blocking (optional)</Label>
+              <Textarea
+                id="blockReason"
+                placeholder="Enter the reason for blocking this client..."
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                data-testid="input-block-reason"
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
@@ -853,7 +954,7 @@ export default function ClientManagement() {
               variant="destructive"
               onClick={() => {
                 if (selectedClient) {
-                  blockClientMutation.mutate(selectedClient.id);
+                  blockClientMutation.mutate({ id: selectedClient.id, reason: blockReason || undefined });
                 }
               }}
               disabled={blockClientMutation.isPending}

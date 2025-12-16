@@ -1,0 +1,228 @@
+🎯 GOAL
+
+Add 3 subscription plans with:
+
+Feature-based access control
+
+Platform Admin ability to:
+
+Create / edit plans
+
+Enable / disable features per plan
+
+Assign plans to clients
+
+Upgrade / downgrade clients
+
+Control trial behaviour
+
+🧩 PART 1 — DATA MODEL (PLANS & FEATURES)
+1️⃣ Create a Plans entity/table
+Plan {
+  id: string,
+  name: "Starter" | "Standard" | "Pro",
+  description: string,
+  monthlyPrice: number,
+  features: {
+    userManagement: boolean,
+    dashboardAccess: boolean,
+    reportsViewing: boolean,
+    checkInOut: boolean,
+    shiftScheduling: boolean,
+    siteManagement: boolean,
+    breakTracking: boolean,
+    overtimeManagement: boolean,
+    leaveRequests: boolean,
+    noticeBoard: boolean,
+    pushNotifications: boolean
+  },
+  limits: {
+    maxSites: number | null,
+    maxUsers: number | null
+  },
+  isActive: boolean
+}
+
+2️⃣ Default Plan Definitions (IMPORTANT)
+🟦 Starter Plan
+{
+  "name": "Starter",
+  "monthlyPrice": 19,
+  "features": {
+    "userManagement": true,
+    "dashboardAccess": true,
+    "reportsViewing": true,
+    "checkInOut": true,
+    "shiftScheduling": false,
+    "siteManagement": false,
+    "breakTracking": false,
+    "overtimeManagement": false,
+    "leaveRequests": false,
+    "noticeBoard": false,
+    "pushNotifications": false
+  },
+  "limits": {
+    "maxSites": 1,
+    "maxUsers": 10
+  }
+}
+
+🟩 Standard Plan
+{
+  "name": "Standard",
+  "monthlyPrice": 39,
+  "features": {
+    "userManagement": true,
+    "dashboardAccess": true,
+    "reportsViewing": true,
+    "checkInOut": true,
+    "shiftScheduling": true,
+    "siteManagement": true,
+    "breakTracking": false,
+    "overtimeManagement": false,
+    "leaveRequests": false,
+    "noticeBoard": false,
+    "pushNotifications": true
+  },
+  "limits": {
+    "maxSites": 5,
+    "maxUsers": 50
+  }
+}
+
+🟥 Pro Plan
+{
+  "name": "Pro",
+  "monthlyPrice": 59,
+  "features": {
+    "userManagement": true,
+    "dashboardAccess": true,
+    "reportsViewing": true,
+    "checkInOut": true,
+    "shiftScheduling": true,
+    "siteManagement": true,
+    "breakTracking": true,
+    "overtimeManagement": true,
+    "leaveRequests": true,
+    "noticeBoard": true,
+    "pushNotifications": true
+  },
+  "limits": {
+    "maxSites": null,
+    "maxUsers": null
+  }
+}
+
+🧠 PART 2 — CLIENT SUBSCRIPTIONS
+Add to Client model:
+Client {
+  id: string,
+  companyName: string,
+  planId: string,
+  subscriptionStatus: "trial" | "active" | "expired" | "suspended",
+  trialEndsAt: date | null,
+  billingStartDate: date | null
+}
+
+⚙️ PART 3 — FEATURE ACCESS LOGIC (CORE RULE)
+Global feature guard (used everywhere):
+function hasFeature(client, featureName) {
+  return client.plan.features[featureName] === true;
+}
+
+Example usage:
+
+Hide menu items
+
+Disable buttons
+
+Block API routes
+
+Show 🔒 tooltip
+
+🔒 PART 4 — UI BEHAVIOUR (VERY IMPORTANT)
+If feature is NOT allowed:
+
+Show feature greyed out
+
+Show 🔒 icon
+
+Tooltip text:
+
+“Available on Pro plan”
+
+If hard-blocked (API):
+{
+  "error": "upgrade_required",
+  "message": "This feature is available on the Pro plan"
+}
+
+🛠️ PART 5 — PLATFORM ADMIN CONTROLS
+Add Platform Admin → Plans Management
+Admin can:
+
+✅ Create / Edit plans
+
+✅ Toggle features via checkboxes
+
+✅ Change prices
+
+✅ Set limits (users / sites)
+
+✅ Enable / disable plans
+
+✅ Reorder plans (Starter → Pro)
+
+Platform Admin → Client Management
+
+Add actions:
+
+🔁 Change plan
+
+⏳ Extend trial
+
+🚫 Suspend client
+
+⬆ Upgrade client to Pro
+
+⬇ Downgrade with warning
+
+⏳ PART 6 — TRIAL LOGIC (Matches Your Screenshot)
+Trial Rules:
+
+Trial = Pro features enabled
+
+Duration: 14 days
+
+After expiry:
+
+Lock Pro-only features
+
+Show upgrade modal
+
+Keep data (read-only)
+
+if (client.subscriptionStatus === "trial" && trialExpired) {
+  client.plan = Starter;
+}
+
+🧪 PART 7 — WHAT TO TEST (Give This to the Agent)
+
+Starter user cannot create shifts
+
+Standard user sees break tracking locked
+
+Pro user sees everything
+
+Trial user sees everything
+
+Expired trial → downgrade
+
+Admin can change plan live
+
+✅ FINAL INSTRUCTION TO YOUR AI AGENT (COPY THIS)
+
+Implement a subscription plan system with Starter, Standard, and Pro plans using feature flags.
+Add platform admin controls to manage plans, pricing, limits, and client subscriptions.
+Enforce feature access at UI and API level.
+Support 14-day Pro trials that downgrade automatically if not converted.

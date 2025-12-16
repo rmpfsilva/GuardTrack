@@ -84,6 +84,10 @@ import {
   type UpdateErrorLog,
   type ErrorLogWithDetails,
   errorLogs,
+  subscriptionPlans,
+  type SubscriptionPlan,
+  type InsertSubscriptionPlan,
+  type UpdateSubscriptionPlan,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
@@ -287,6 +291,13 @@ export interface IStorage {
   resolveErrorLog(id: string, resolvedBy: string, notes?: string): Promise<ErrorLog>;
   deleteErrorLog(id: string): Promise<void>;
   getUnresolvedErrorCount(): Promise<number>;
+
+  // Subscription plan operations
+  getAllSubscriptionPlans(): Promise<SubscriptionPlan[]>;
+  getSubscriptionPlan(id: string): Promise<SubscriptionPlan | undefined>;
+  createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
+  updateSubscriptionPlan(id: string, updates: UpdateSubscriptionPlan): Promise<SubscriptionPlan>;
+  deleteSubscriptionPlan(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3112,6 +3123,34 @@ export class DatabaseStorage implements IStorage {
       .from(errorLogs)
       .where(eq(errorLogs.isResolved, false));
     return Number(result[0]?.count || 0);
+  }
+
+  // Subscription plan operations
+  async getAllSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+    return await db.select().from(subscriptionPlans).orderBy(subscriptionPlans.sortOrder);
+  }
+
+  async getSubscriptionPlan(id: string): Promise<SubscriptionPlan | undefined> {
+    const [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, id));
+    return plan;
+  }
+
+  async createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
+    const [newPlan] = await db.insert(subscriptionPlans).values(plan).returning();
+    return newPlan;
+  }
+
+  async updateSubscriptionPlan(id: string, updates: UpdateSubscriptionPlan): Promise<SubscriptionPlan> {
+    const [updatedPlan] = await db
+      .update(subscriptionPlans)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(subscriptionPlans.id, id))
+      .returning();
+    return updatedPlan;
+  }
+
+  async deleteSubscriptionPlan(id: string): Promise<void> {
+    await db.delete(subscriptionPlans).where(eq(subscriptionPlans.id, id));
   }
 }
 

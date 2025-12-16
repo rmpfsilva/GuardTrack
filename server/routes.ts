@@ -219,6 +219,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Subscription Plan Routes (Super Admin only)
+  app.get('/api/subscription-plans', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const plans = await storage.getAllSubscriptionPlans();
+      res.json(plans);
+    } catch (error: any) {
+      console.error("Error fetching subscription plans:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch subscription plans" });
+    }
+  });
+
+  app.get('/api/subscription-plans/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const plan = await storage.getSubscriptionPlan(id);
+      if (!plan) {
+        return res.status(404).json({ message: "Subscription plan not found" });
+      }
+      res.json(plan);
+    } catch (error: any) {
+      console.error("Error fetching subscription plan:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch subscription plan" });
+    }
+  });
+
+  app.post('/api/subscription-plans', isAuthenticated, isSuperAdmin, async (req, res) => {
+    try {
+      const { insertSubscriptionPlanSchema } = await import("@shared/schema");
+      const validatedData = insertSubscriptionPlanSchema.parse(req.body);
+      const plan = await storage.createSubscriptionPlan(validatedData);
+      res.status(201).json(plan);
+    } catch (error: any) {
+      console.error("Error creating subscription plan:", error);
+      res.status(400).json({ message: error.message || "Failed to create subscription plan" });
+    }
+  });
+
+  app.patch('/api/subscription-plans/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { updateSubscriptionPlanSchema } = await import("@shared/schema");
+      const validatedData = updateSubscriptionPlanSchema.parse(req.body);
+      const plan = await storage.updateSubscriptionPlan(id, validatedData);
+      res.json(plan);
+    } catch (error: any) {
+      console.error("Error updating subscription plan:", error);
+      res.status(400).json({ message: error.message || "Failed to update subscription plan" });
+    }
+  });
+
+  app.delete('/api/subscription-plans/:id', isAuthenticated, isSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSubscriptionPlan(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting subscription plan:", error);
+      res.status(400).json({ message: error.message || "Failed to delete subscription plan" });
+    }
+  });
+
+  // Assign plan to company
+  app.post('/api/companies/:id/assign-plan', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { z } = await import("zod");
+      const { id } = req.params;
+      
+      const assignPlanSchema = z.object({
+        planId: z.string().nullable(),
+        subscriptionStatus: z.enum(['trial', 'active', 'expired', 'suspended']).optional(),
+        billingStartDate: z.string().optional(),
+      });
+      
+      const validatedData = assignPlanSchema.parse(req.body);
+      
+      // Validate plan exists if planId is provided
+      if (validatedData.planId) {
+        const plan = await storage.getSubscriptionPlan(validatedData.planId);
+        if (!plan) {
+          return res.status(400).json({ message: "Subscription plan not found" });
+        }
+      }
+      
+      const company = await storage.updateCompany(id, {
+        planId: validatedData.planId,
+        subscriptionStatus: validatedData.subscriptionStatus || 'active',
+        billingStartDate: validatedData.billingStartDate ? new Date(validatedData.billingStartDate) : new Date(),
+      });
+      
+      res.json(company);
+    } catch (error: any) {
+      console.error("Error assigning plan to company:", error);
+      res.status(400).json({ message: error.message || "Failed to assign plan" });
+    }
+  });
+
   // User management routes (admin only)
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
@@ -2442,12 +2538,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/companies/:id/block', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const { reason } = req.body;
       
-      // Set company to inactive
+      // Set company to blocked
       const [company] = await db
         .update(companies)
         .set({
-          isActive: false,
+          isBlocked: true,
+          blockReason: reason || null,
+          blockedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(companies.id, id))
@@ -2460,8 +2559,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/companies/:id/unblock', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Unblock company
+      const [company] = await db
+        .update(companies)
+        .set({
+          isBlocked: false,
+          blockReason: null,
+          blockedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(companies.id, id))
+        .returning();
+      
+      res.json(company);
+    } catch (error: any) {
+      console.error("Error unblocking company:", error);
+      res.status(400).json({ message: error.message || "Failed to unblock company" });
+    }
+  });
+
   app.post('/api/super-admin/send-message', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
+      const { sendTrialInvitationEmail } = await import('./emailService');
       const { clientId, subject, body } = req.body;
       
       if (!clientId || !subject || !body) {
@@ -2475,7 +2598,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Send email using the email service
-      await sendInvitationEmail(company.email, subject, body);
+      await sendTrialInvitationEmail(company.email, subject, body);
       
       res.json({ message: "Message sent successfully" });
     } catch (error: any) {
