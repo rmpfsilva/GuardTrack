@@ -2695,6 +2695,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .set({
           trialStatus: 'full',
           trialEndDate: null,
+          subscriptionStatus: 'active', // Activate subscription when converting to full
+          billingStartDate: new Date(), // Reset billing start date
           updatedAt: new Date(),
         })
         .where(eq(companies.id, id))

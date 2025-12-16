@@ -90,7 +90,7 @@ import {
   type UpdateSubscriptionPlan,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
 import session from "express-session";
 
 // Interface for storage operations
@@ -272,7 +272,7 @@ export interface IStorage {
   setCompanyTrial(companyId: string, trialDays: number): Promise<Company>;
   extendCompanyTrial(companyId: string, additionalDays: number): Promise<Company>;
   checkTrialStatus(companyId: string): Promise<{ isActive: boolean; daysRemaining: number; status: string }>;
-  expireTrials(): Promise<void>;
+  expireTrials(): Promise<number>;
 
   // Subscription payment operations
   getAllSubscriptionPayments(): Promise<SubscriptionPaymentWithDetails[]>;
@@ -2803,9 +2803,87 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Trial management operations
+  async getSubscriptionPlanByName(name: string): Promise<SubscriptionPlan | undefined> {
+    // First try exact match (case-insensitive)
+    let [plan] = await db
+      .select()
+      .from(subscriptionPlans)
+      .where(sql`LOWER(${subscriptionPlans.name}) = LOWER(${name})`);
+    
+    // If no exact match, try partial match with the name starting with the search term
+    if (!plan) {
+      [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(sql`LOWER(${subscriptionPlans.name}) LIKE LOWER(${`${name}%`})`)
+        .limit(1);
+    }
+    
+    return plan;
+  }
+  
+  async getProTrialPlan(): Promise<SubscriptionPlan | undefined> {
+    // Try to find the highest tier plan by checking common names (in priority order)
+    const planNames = ['Professional', 'Pro', 'Enterprise', 'Premium'];
+    for (const name of planNames) {
+      const plan = await this.getSubscriptionPlanByName(name);
+      if (plan && plan.isActive) {
+        console.log(`[Plan Lookup] Found Pro trial plan: ${plan.name} ($${plan.monthlyPrice}/mo)`);
+        return plan;
+      }
+    }
+    
+    // Fallback: get the most expensive active plan
+    const [plan] = await db
+      .select()
+      .from(subscriptionPlans)
+      .where(eq(subscriptionPlans.isActive, true))
+      .orderBy(desc(subscriptionPlans.monthlyPrice))
+      .limit(1);
+    
+    if (plan) {
+      console.log(`[Plan Lookup] Using fallback Pro plan (most expensive): ${plan.name} ($${plan.monthlyPrice}/mo)`);
+    } else {
+      console.warn(`[Plan Lookup] WARNING: No active subscription plans found for trials. Create plans with names like 'Professional' or 'Pro' for trial users.`);
+    }
+    
+    return plan;
+  }
+  
+  async getStarterPlan(): Promise<SubscriptionPlan | undefined> {
+    // Try to find the lowest tier plan by checking common names (in priority order)
+    const planNames = ['Starter', 'Basic', 'Free'];
+    for (const name of planNames) {
+      const plan = await this.getSubscriptionPlanByName(name);
+      if (plan && plan.isActive) {
+        console.log(`[Plan Lookup] Found Starter plan for downgrades: ${plan.name} ($${plan.monthlyPrice}/mo)`);
+        return plan;
+      }
+    }
+    
+    // Fallback: get the cheapest active plan
+    const [plan] = await db
+      .select()
+      .from(subscriptionPlans)
+      .where(eq(subscriptionPlans.isActive, true))
+      .orderBy(asc(subscriptionPlans.monthlyPrice))
+      .limit(1);
+    
+    if (plan) {
+      console.log(`[Plan Lookup] Using fallback Starter plan (cheapest): ${plan.name} ($${plan.monthlyPrice}/mo)`);
+    } else {
+      console.warn(`[Plan Lookup] WARNING: No active subscription plans found for downgrades. Expired trials will have no plan.`);
+    }
+    
+    return plan;
+  }
+
   async setCompanyTrial(companyId: string, trialDays: number): Promise<Company> {
     const trialEndDate = new Date();
     trialEndDate.setDate(trialEndDate.getDate() + trialDays);
+
+    // Find the Pro/Enterprise plan to assign during trial (highest tier)
+    const proPlan = await this.getProTrialPlan();
 
     const [company] = await db
       .update(companies)
@@ -2813,10 +2891,19 @@ export class DatabaseStorage implements IStorage {
         trialStatus: 'trial',
         trialEndDate: trialEndDate,
         trialDays: String(trialDays),
+        subscriptionStatus: 'trial',
+        planId: proPlan?.id || null, // Assign Pro plan during trial
+        billingStartDate: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(companies.id, companyId))
       .returning();
+    
+    if (proPlan) {
+      console.log(`[Trial Setup] Assigned ${proPlan.name} plan to company ${companyId} for ${trialDays} day trial`);
+    } else {
+      console.log(`[Trial Setup] No Pro plan found, company ${companyId} starts trial without a plan`);
+    }
     
     return company;
   }
@@ -2893,12 +2980,34 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async expireTrials(): Promise<void> {
+  async expireTrials(): Promise<number> {
     const now = new Date();
+    
+    // Find the Starter/Basic plan to downgrade expired trials to
+    const starterPlan = await this.getStarterPlan();
+    
+    // Find companies with expired trials
+    const expiredCompanies = await db
+      .select({ id: companies.id, name: companies.name })
+      .from(companies)
+      .where(
+        and(
+          eq(companies.trialStatus, 'trial'),
+          lt(companies.trialEndDate, now)
+        )
+      );
+    
+    if (expiredCompanies.length === 0) {
+      return 0;
+    }
+    
+    // Update all expired trial companies
     await db
       .update(companies)
       .set({
         trialStatus: 'expired',
+        subscriptionStatus: 'expired',
+        planId: starterPlan?.id || null, // Downgrade to Starter plan
         updatedAt: now,
       })
       .where(
@@ -2907,6 +3016,11 @@ export class DatabaseStorage implements IStorage {
           lt(companies.trialEndDate, now)
         )
       );
+    
+    const companyNames = expiredCompanies.map(c => c.name).join(', ');
+    console.log(`[Trial Expiry] Expired ${expiredCompanies.length} trial(s): ${companyNames}. Downgraded to ${starterPlan?.name || 'no plan'}`);
+    
+    return expiredCompanies.length;
   }
 
   // Subscription Payment operations
