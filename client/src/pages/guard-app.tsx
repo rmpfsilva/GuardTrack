@@ -33,7 +33,7 @@ type TabType = "home" | "schedule" | "leave" | "notices";
 export default function GuardApp() {
   const { user, isLoading: authLoading, logoutMutation, loginMutation } = useAuth();
   const { toast } = useToast();
-  const { isInstallable, isInstalled, isIOS, isAndroid, installApp } = useInstallPWA();
+  const { isInstallable, isInstalled, isIOS, isAndroid, installApp, hasPrompt, promptShown } = useInstallPWA();
   const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
@@ -41,6 +41,15 @@ export default function GuardApp() {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [locationStatus, setLocationStatus] = useState<"pending" | "granted" | "denied" | "unavailable">("pending");
   const [showInstallBanner, setShowInstallBanner] = useState(true);
+  const [showInstallOverlay, setShowInstallOverlay] = useState(true);
+  const [installDismissed, setInstallDismissed] = useState(false);
+
+  // Check sessionStorage after mount to avoid SSR issues
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setInstallDismissed(sessionStorage.getItem('pwa-install-dismissed') === 'true');
+    }
+  }, []);
   
   // Login form state
   const [loginUsername, setLoginUsername] = useState("");
@@ -48,12 +57,61 @@ export default function GuardApp() {
   const [loginCompanyId, setLoginCompanyId] = useState<string>("");
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
 
-  // Fetch companies for login dropdown
-  type LoginCompany = { id: string; name: string; companyId: string };
-  const { data: loginCompanies = [], isLoading: companiesLoading } = useQuery<LoginCompany[]>({
-    queryKey: ["/api/companies/for-login"],
-    enabled: !user, // Only fetch when not logged in
-  });
+  const handleInstallClick = async () => {
+    if (isIOS) {
+      setShowIOSInstructions(true);
+    } else if (hasPrompt) {
+      const installed = await installApp();
+      if (installed) {
+        setShowInstallOverlay(false);
+      }
+    }
+  };
+
+  const handleDismissInstall = () => {
+    setShowInstallOverlay(false);
+    setInstallDismissed(true);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('pwa-install-dismissed', 'true');
+    }
+  };
+
+  const shouldShowInstallOverlay = isInstallable && !isInstalled && showInstallOverlay && !installDismissed;
+
+  // Company lookup state
+  const [companyCode, setCompanyCode] = useState("");
+  const [resolvedCompany, setResolvedCompany] = useState<{ id: string; name: string; companyId: string } | null>(null);
+  const [lookupPending, setLookupPending] = useState(false);
+
+  // Lookup company when code changes
+  useEffect(() => {
+    const trimmedCode = companyCode.trim();
+    if (trimmedCode.length >= 3) {
+      setLookupPending(true);
+      const timeoutId = setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/companies/lookup/${encodeURIComponent(trimmedCode)}`);
+          if (response.ok) {
+            const company = await response.json();
+            setResolvedCompany(company);
+            setLoginCompanyId(company.id);
+          } else {
+            setResolvedCompany(null);
+            setLoginCompanyId("");
+          }
+        } catch {
+          setResolvedCompany(null);
+          setLoginCompanyId("");
+        } finally {
+          setLookupPending(false);
+        }
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setResolvedCompany(null);
+      setLoginCompanyId("");
+    }
+  }, [companyCode]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -287,6 +345,104 @@ export default function GuardApp() {
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#1e3a5f] via-[#2d4a6f] to-background flex flex-col">
+        {/* Full-screen Install Overlay */}
+        {shouldShowInstallOverlay && (
+          <div 
+            className="fixed inset-0 z-50 bg-gradient-to-b from-primary via-primary/95 to-primary/90 flex flex-col items-center justify-center p-6"
+            data-testid="overlay-install-pwa"
+          >
+            <div className="max-w-sm w-full text-center text-white space-y-6">
+              <div className="animate-pulse">
+                <div className="h-24 w-24 mx-auto rounded-2xl bg-white/20 flex items-center justify-center shadow-lg">
+                  <img src={guardTrackLogo} alt="GuardTrack" className="h-16 w-16" />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold">Install GuardTrack</h1>
+                <p className="text-lg text-white/90">
+                  Get the best experience with the mobile app
+                </p>
+              </div>
+
+              <div className="space-y-3 text-left bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm">Quick check-in & check-out</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <Bell className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm">Push notifications for updates</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <Smartphone className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm">Works offline</span>
+                </div>
+              </div>
+
+              {isIOS ? (
+                <div className="space-y-4">
+                  <Button 
+                    size="lg"
+                    variant="secondary"
+                    className="w-full text-lg py-6"
+                    onClick={() => setShowIOSInstructions(true)}
+                    data-testid="button-install-overlay"
+                  >
+                    <Share className="h-5 w-5 mr-2" />
+                    How to Install
+                  </Button>
+                  
+                  {showIOSInstructions && (
+                    <div className="bg-white text-foreground rounded-xl p-4 text-left">
+                      <p className="font-semibold mb-3">To install on iPhone/iPad:</p>
+                      <ol className="text-sm space-y-2">
+                        <li className="flex items-start gap-2">
+                          <span className="bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">1</span>
+                          <span>Tap the <Share className="h-4 w-4 inline" /> Share button</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">2</span>
+                          <span>Tap "Add to Home Screen"</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">3</span>
+                          <span>Tap "Add" to install</span>
+                        </li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Button 
+                  size="lg"
+                  variant="secondary"
+                  className="w-full text-lg py-6"
+                  onClick={handleInstallClick}
+                  data-testid="button-install-overlay"
+                >
+                  <Download className="h-5 w-5 mr-2" />
+                  Install App
+                </Button>
+              )}
+
+              <button
+                onClick={handleDismissInstall}
+                className="text-white/70 text-sm hover:text-white underline"
+                data-testid="button-skip-install"
+              >
+                Continue to web version
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <header className="bg-primary text-primary-foreground px-4 py-6 shadow-lg">
           <div className="flex flex-col items-center gap-3">
@@ -411,26 +567,30 @@ export default function GuardApp() {
             <CardContent>
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="company">Your Company</Label>
-                  <Select
-                    value={loginCompanyId}
-                    onValueChange={setLoginCompanyId}
-                  >
-                    <SelectTrigger 
-                      id="company"
-                      data-testid="select-guard-company"
-                      className="w-full"
-                    >
-                      <SelectValue placeholder={companiesLoading ? "Loading..." : "Select your company"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {loginCompanies.map((company) => (
-                        <SelectItem key={company.id} value={company.id}>
-                          {company.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="companyCode">Company ID</Label>
+                  <div className="relative">
+                    <Input
+                      id="companyCode"
+                      type="text"
+                      placeholder="e.g., DEMO999"
+                      value={companyCode}
+                      onChange={(e) => setCompanyCode(e.target.value.toUpperCase())}
+                      data-testid="input-guard-company-code"
+                    />
+                    {lookupPending && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                  {resolvedCompany ? (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {resolvedCompany.name}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Enter your Company ID to sign in
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">

@@ -36,7 +36,10 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
   - Schedule/rota viewing using MySchedule component
   - Leave request submission and status tracking
   - Notice board access for overtime opportunities and announcements
-  - PWA install prompt banner for easy home screen installation
+  - Full-screen PWA install overlay on first visit (prompts users to install the app)
+  - Install button triggers browser's native install prompt
+  - "Continue to web version" option for users who prefer browser access
+  - Company ID input for secure login (no company list exposure)
   - Optimized manifest.json with guard app branding and shortcuts
 - **Email Invitation System**: Admins can invite new users via email using Gmail integration.
 - **Password Management**: User password changes and secure token-based password recovery. Super admins can reset any user's password.
