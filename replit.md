@@ -87,6 +87,13 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
   - Username: superadmin
   - Password: SuperAdmin123!
   - Login: Check "Platform Administrator" checkbox on login page
+- **Sales Demo Account**: SecureForce Ltd (SECURE01) - A trial company with realistic demo data:
+  - Company Admin: secureforce.admin / Test123! (full admin access)
+  - Supervisor: secureforce.super / Test123! (supervisor view)
+  - Guards: david.wilson, emily.brown, james.taylor, olivia.martinez / Test123!
+  - Features: 4 London sites (Canary Wharf, Westfield Stratford, The Shard, O2 Arena), scheduled shifts, check-in history, active notices, leave requests
+  - Trial Status: 10 days remaining with Pro plan features
+  - Guard PWA: Access via /guard/app for mobile demo
 
 ### System Design Choices
 The architecture emphasizes a clear separation of concerns. The database schema supports multi-tenancy with `companies` as the core entity, isolating data for users, sites, and settings. Key tables include `companies`, `users`, `sites`, `check_ins`, `scheduled_shifts`, `breaks`, `overtime_requests`, `leave_requests`, `notices`, `notice_applications`, `push_subscriptions`, `company_settings`, `company_partnerships`, `job_shares`, `trial_invitations`, `user_logins`, `support_messages`, `subscription_payments`, and `error_logs`. Multi-tenant architecture ensures data isolation via `companyId` foreign keys across relevant tables. Hours calculation logic incorporates mandatory baseline break deductions and conditional deductions/overtime based on admin approvals. App usage analytics leverage the `user_logins` table for comprehensive login tracking. Customer support messaging utilizes the `support_messages` table with `isAdminReply` flag to distinguish between customer queries and Super Admin responses. Subscription billing uses the `subscription_payments` table to track manual payment records with plan details, amounts, payment dates, and status tracking. Error monitoring uses the `error_logs` table with company/user context, severity levels, stack traces, and resolution workflow.
