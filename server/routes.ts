@@ -38,6 +38,117 @@ function isSuperAdmin(req: Request, res: Response, next: NextFunction) {
   res.status(403).json({ message: "Forbidden - Super Admin access required" });
 }
 
+// Feature access types
+type FeatureName = 'userManagement' | 'dashboardAccess' | 'reportsViewing' | 'checkInOut' | 
+  'shiftScheduling' | 'siteManagement' | 'breakTracking' | 'overtimeManagement' | 
+  'leaveRequests' | 'noticeBoard' | 'pushNotifications';
+
+// Middleware factory to check if company has access to a specific feature
+function requireFeature(featureName: FeatureName) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const user = req.user as any;
+    
+    // Super admin always has access to all features
+    if (user && user.role === 'super_admin') {
+      return next();
+    }
+    
+    // Check if user has a company
+    if (!user || !user.companyId) {
+      return res.status(403).json({ message: "No company associated with user" });
+    }
+    
+    try {
+      const company = await storage.getCompany(user.companyId);
+      if (!company) {
+        return res.status(403).json({ message: "Company not found" });
+      }
+      
+      // Check if company is blocked
+      if (company.isBlocked) {
+        return res.status(403).json({ 
+          message: "Company access has been blocked. Please contact support.",
+          blocked: true
+        });
+      }
+      
+      // If no plan assigned, check trial status and allow basic features
+      if (!company.planId) {
+        // Companies without a plan get basic features during trial
+        const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut'];
+        if (basicFeatures.includes(featureName)) {
+          return next();
+        }
+        return res.status(403).json({ 
+          message: `Feature '${featureName}' requires a subscription plan.`,
+          featureRestricted: true,
+          feature: featureName
+        });
+      }
+      
+      // Get the company's subscription plan
+      const plan = await storage.getSubscriptionPlan(company.planId);
+      if (!plan) {
+        return res.status(403).json({ message: "Subscription plan not found" });
+      }
+      
+      // Check if plan is active
+      if (!plan.isActive) {
+        return res.status(403).json({ 
+          message: "Subscription plan is no longer active. Please contact support.",
+          planInactive: true
+        });
+      }
+      
+      // Check feature access
+      const features = plan.features as Record<string, boolean>;
+      if (!features[featureName]) {
+        return res.status(403).json({ 
+          message: `Feature '${featureName}' is not included in your current plan. Please upgrade.`,
+          featureRestricted: true,
+          feature: featureName,
+          currentPlan: plan.name
+        });
+      }
+      
+      next();
+    } catch (error) {
+      console.error('Error checking feature access:', error);
+      res.status(500).json({ message: "Failed to check feature access" });
+    }
+  };
+}
+
+// Helper function to check company feature access (for use in route handlers)
+async function checkCompanyFeatureAccess(companyId: string, featureName: FeatureName): Promise<{ hasAccess: boolean; reason?: string }> {
+  try {
+    const company = await storage.getCompany(companyId);
+    if (!company) {
+      return { hasAccess: false, reason: "Company not found" };
+    }
+    
+    if (company.isBlocked) {
+      return { hasAccess: false, reason: "Company access blocked" };
+    }
+    
+    if (!company.planId) {
+      const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut'];
+      return { hasAccess: basicFeatures.includes(featureName) };
+    }
+    
+    const plan = await storage.getSubscriptionPlan(company.planId);
+    if (!plan || !plan.isActive) {
+      return { hasAccess: false, reason: "Plan not found or inactive" };
+    }
+    
+    const features = plan.features as Record<string, boolean>;
+    return { hasAccess: !!features[featureName] };
+  } catch (error) {
+    console.error('Error checking feature access:', error);
+    return { hasAccess: false, reason: "Error checking access" };
+  }
+}
+
 // Middleware to check if company trial is active (allows super admin to bypass)
 async function requireActiveTrial(req: Request, res: Response, next: NextFunction) {
   const user = req.user as any;
@@ -315,6 +426,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Feature access check endpoint
+  app.get('/api/feature-access', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      
+      // Super admin has access to all features
+      if (user.role === 'super_admin') {
+        return res.json({
+          hasFullAccess: true,
+          features: {
+            userManagement: true,
+            dashboardAccess: true,
+            reportsViewing: true,
+            checkInOut: true,
+            shiftScheduling: true,
+            siteManagement: true,
+            breakTracking: true,
+            overtimeManagement: true,
+            leaveRequests: true,
+            noticeBoard: true,
+            pushNotifications: true,
+          },
+          limits: { maxSites: null, maxUsers: null },
+          planName: 'Super Admin',
+          isBlocked: false,
+        });
+      }
+      
+      if (!user.companyId) {
+        return res.status(400).json({ message: "No company associated with user" });
+      }
+      
+      const company = await storage.getCompany(user.companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Check if blocked
+      if (company.isBlocked) {
+        return res.json({
+          hasFullAccess: false,
+          isBlocked: true,
+          blockReason: company.blockReason,
+          features: {},
+          limits: { maxSites: 0, maxUsers: 0 },
+          planName: null,
+        });
+      }
+      
+      // No plan assigned - return basic features
+      if (!company.planId) {
+        return res.json({
+          hasFullAccess: false,
+          features: {
+            userManagement: true,
+            dashboardAccess: true,
+            reportsViewing: false,
+            checkInOut: true,
+            shiftScheduling: false,
+            siteManagement: false,
+            breakTracking: false,
+            overtimeManagement: false,
+            leaveRequests: false,
+            noticeBoard: false,
+            pushNotifications: false,
+          },
+          limits: { maxSites: 1, maxUsers: 5 },
+          planName: 'Basic (No Plan)',
+          isBlocked: false,
+        });
+      }
+      
+      const plan = await storage.getSubscriptionPlan(company.planId);
+      if (!plan) {
+        return res.status(404).json({ message: "Subscription plan not found" });
+      }
+      
+      res.json({
+        hasFullAccess: false,
+        features: plan.features,
+        limits: plan.limits,
+        planName: plan.name,
+        planId: plan.id,
+        isBlocked: false,
+        isPlanActive: plan.isActive,
+      });
+    } catch (error: any) {
+      console.error("Error checking feature access:", error);
+      res.status(500).json({ message: error.message || "Failed to check feature access" });
+    }
+  });
+
   // User management routes (admin only)
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
@@ -416,7 +619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/sites', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
+  app.post('/api/sites', isAuthenticated, isAdmin, requireActiveTrial, requireFeature('siteManagement'), async (req: any, res) => {
     try {
       const user = req.user;
       const validatedData = insertSiteSchema.parse(req.body);
@@ -440,7 +643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/sites/:id', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
+  app.patch('/api/sites/:id', isAuthenticated, isAdmin, requireActiveTrial, requireFeature('siteManagement'), async (req: any, res) => {
     try {
       const { id } = req.params;
       const user = req.user;
@@ -642,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/breaks/start', isAuthenticated, async (req: any, res) => {
+  app.post('/api/breaks/start', isAuthenticated, requireFeature('breakTracking'), async (req: any, res) => {
     try {
       const userId = req.user.id;
       
@@ -675,7 +878,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/breaks/:id/end', isAuthenticated, async (req: any, res) => {
+  app.patch('/api/breaks/:id/end', isAuthenticated, requireFeature('breakTracking'), async (req: any, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -1125,7 +1328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
+  app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, requireActiveTrial, requireFeature('shiftScheduling'), async (req: any, res) => {
     try {
       const admin = req.user;
       
@@ -1238,7 +1441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Leave request routes
-  app.post('/api/leave-requests', isAuthenticated, requireActiveTrial, async (req: any, res) => {
+  app.post('/api/leave-requests', isAuthenticated, requireActiveTrial, requireFeature('leaveRequests'), async (req: any, res) => {
     try {
       const validatedData = insertLeaveRequestSchema.parse({
         ...req.body,
@@ -1750,7 +1953,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Notice routes
-  app.post('/api/notices', isAuthenticated, isAdmin, requireActiveTrial, async (req: any, res) => {
+  app.post('/api/notices', isAuthenticated, isAdmin, requireActiveTrial, requireFeature('noticeBoard'), async (req: any, res) => {
     try {
       console.log('Received notice creation request:', JSON.stringify(req.body, null, 2));
       const validatedData = insertNoticeSchema.parse(req.body);

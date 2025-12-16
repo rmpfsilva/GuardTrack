@@ -28,6 +28,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Crown } from "lucide-react";
 
 interface ClientWithStatus extends Company {
   trialStatus: 'trial' | 'full' | 'expired';
@@ -45,6 +53,16 @@ interface TrialInvitation {
   expiresAt: string;
   acceptedAt: string | null;
   createdAt: string;
+}
+
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string | null;
+  monthlyPrice: string;
+  features: Record<string, boolean>;
+  limits: { maxSites: number | null; maxUsers: number | null };
+  isActive: boolean;
 }
 
 export default function ClientManagement() {
@@ -67,6 +85,10 @@ export default function ClientManagement() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteCompanyName, setInviteCompanyName] = useState("");
   const [inviteDuration, setInviteDuration] = useState<"3" | "7" | "14">("14");
+  
+  // Plan assignment state
+  const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
   const { data: clients = [], isLoading } = useQuery<ClientWithStatus[]>({
     queryKey: ["/api/super-admin/clients"],
@@ -74,6 +96,10 @@ export default function ClientManagement() {
 
   const { data: trialInvitations = [], isLoading: isLoadingInvitations } = useQuery<TrialInvitation[]>({
     queryKey: ["/api/super-admin/trial-invitations"],
+  });
+  
+  const { data: subscriptionPlans = [] } = useQuery<SubscriptionPlan[]>({
+    queryKey: ["/api/subscription-plans"],
   });
 
   const blockClientMutation = useMutation({
@@ -116,6 +142,33 @@ export default function ClientManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to unblock client",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const assignPlanMutation = useMutation({
+    mutationFn: async ({ companyId, planId }: { companyId: string; planId: string | null }) => {
+      return await apiRequest("POST", `/api/companies/${companyId}/assign-plan`, {
+        planId,
+        subscriptionStatus: planId ? 'active' : 'trial',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      setIsPlanDialogOpen(false);
+      setSelectedClient(null);
+      setSelectedPlanId(null);
+      toast({
+        title: "Plan assigned",
+        description: "Subscription plan has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign plan",
         variant: "destructive",
       });
     },
@@ -469,6 +522,19 @@ export default function ClientManagement() {
                     >
                       <Shield className="h-4 w-4 mr-2" />
                       View Permissions
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setSelectedPlanId(client.planId || null);
+                        setIsPlanDialogOpen(true);
+                      }}
+                      data-testid={`button-assign-plan-${client.id}`}
+                    >
+                      <Crown className="h-4 w-4 mr-2" />
+                      Assign Plan
                     </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
@@ -961,6 +1027,101 @@ export default function ClientManagement() {
               data-testid="button-confirm-block"
             >
               {blockClientMutation.isPending ? "Blocking..." : "Block Client"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Plan Assignment Dialog */}
+      <Dialog open={isPlanDialogOpen} onOpenChange={(open) => {
+        setIsPlanDialogOpen(open);
+        if (!open) {
+          setSelectedPlanId(null);
+        }
+      }}>
+        <DialogContent data-testid="dialog-assign-plan">
+          <DialogHeader>
+            <DialogTitle>Assign Subscription Plan</DialogTitle>
+            <DialogDescription>
+              Select a subscription plan for {selectedClient?.name}. This will determine which features they can access.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="plan-select">Subscription Plan</Label>
+              <Select
+                value={selectedPlanId || "none"}
+                onValueChange={(value) => setSelectedPlanId(value === "none" ? null : value)}
+              >
+                <SelectTrigger data-testid="select-plan">
+                  <SelectValue placeholder="Select a plan..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Plan (Basic Access)</SelectItem>
+                  {subscriptionPlans.filter(p => p.isActive).map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} - ${plan.monthlyPrice}/mo
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedPlanId && (() => {
+              const plan = subscriptionPlans.find(p => p.id === selectedPlanId);
+              if (!plan) return null;
+              return (
+                <div className="p-4 bg-muted rounded-lg space-y-3">
+                  <div>
+                    <span className="font-semibold">{plan.name}</span>
+                    <span className="text-muted-foreground ml-2">${plan.monthlyPrice}/month</span>
+                  </div>
+                  {plan.description && (
+                    <p className="text-sm text-muted-foreground">{plan.description}</p>
+                  )}
+                  <div className="text-sm">
+                    <div className="font-medium mb-1">Limits:</div>
+                    <div className="flex gap-4">
+                      <span>Sites: {plan.limits.maxSites ?? 'Unlimited'}</span>
+                      <span>Users: {plan.limits.maxUsers ?? 'Unlimited'}</span>
+                    </div>
+                  </div>
+                  <div className="text-sm">
+                    <div className="font-medium mb-1">Features:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(plan.features)
+                        .filter(([_, enabled]) => enabled)
+                        .map(([feature]) => (
+                          <Badge key={feature} variant="secondary" className="text-xs">
+                            {feature.replace(/([A-Z])/g, ' $1').trim()}
+                          </Badge>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsPlanDialogOpen(false)}
+              data-testid="button-cancel-plan"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedClient) {
+                  assignPlanMutation.mutate({ 
+                    companyId: selectedClient.id, 
+                    planId: selectedPlanId 
+                  });
+                }
+              }}
+              disabled={assignPlanMutation.isPending}
+              data-testid="button-confirm-plan"
+            >
+              {assignPlanMutation.isPending ? "Assigning..." : "Assign Plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
