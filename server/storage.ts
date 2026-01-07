@@ -2,6 +2,7 @@
 import {
   companies,
   users,
+  userRoles,
   sites,
   checkIns,
   breaks,
@@ -120,6 +121,14 @@ export interface IStorage {
   updateUser(id: string, userData: Partial<UpsertUser>): Promise<User>;
   deleteUser(id: string): Promise<void>;
   
+  // User roles operations (multi-role support)
+  getUserRoles(userId: string): Promise<string[]>;
+  setUserRoles(userId: string, roles: string[], assignedBy?: string): Promise<void>;
+  addUserRole(userId: string, role: string, assignedBy?: string): Promise<void>;
+  removeUserRole(userId: string, role: string): Promise<void>;
+  getUsersWithRole(role: string, companyId?: string): Promise<User[]>;
+  migrateUserToRoles(userId: string): Promise<void>; // Migrate single role to roles table
+
   // Site operations
   getAllSites(): Promise<Site[]>;
   getSite(id: string): Promise<Site | undefined>;
@@ -521,6 +530,96 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: string): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // User roles operations (multi-role support)
+  async getUserRoles(userId: string): Promise<string[]> {
+    const roles = await db
+      .select({ role: userRoles.role })
+      .from(userRoles)
+      .where(eq(userRoles.userId, userId));
+    
+    if (roles.length === 0) {
+      // Fallback to the primary role if no roles in table yet
+      const user = await this.getUser(userId);
+      return user?.role ? [user.role] : [];
+    }
+    
+    return roles.map(r => r.role);
+  }
+
+  async setUserRoles(userId: string, roles: string[], assignedBy?: string): Promise<void> {
+    // Delete existing roles
+    await db.delete(userRoles).where(eq(userRoles.userId, userId));
+    
+    // Insert new roles
+    if (roles.length > 0) {
+      await db.insert(userRoles).values(
+        roles.map(role => ({
+          userId,
+          role,
+          assignedBy: assignedBy || null,
+        }))
+      );
+    }
+    
+    // Update the primary role on the user to the first role
+    if (roles.length > 0) {
+      await db.update(users)
+        .set({ role: roles[0], updatedAt: new Date() })
+        .where(eq(users.id, userId));
+    }
+  }
+
+  async addUserRole(userId: string, role: string, assignedBy?: string): Promise<void> {
+    await db.insert(userRoles)
+      .values({
+        userId,
+        role,
+        assignedBy: assignedBy || null,
+      })
+      .onConflictDoNothing(); // Ignore if role already exists
+  }
+
+  async removeUserRole(userId: string, role: string): Promise<void> {
+    await db.delete(userRoles)
+      .where(and(eq(userRoles.userId, userId), eq(userRoles.role, role)));
+  }
+
+  async getUsersWithRole(role: string, companyId?: string): Promise<User[]> {
+    if (companyId) {
+      const result = await db
+        .select({ user: users })
+        .from(users)
+        .innerJoin(userRoles, eq(users.id, userRoles.userId))
+        .where(and(eq(userRoles.role, role), eq(users.companyId, companyId)));
+      return result.map(r => r.user);
+    }
+    const result = await db
+      .select({ user: users })
+      .from(users)
+      .innerJoin(userRoles, eq(users.id, userRoles.userId))
+      .where(eq(userRoles.role, role));
+    return result.map(r => r.user);
+  }
+
+  async migrateUserToRoles(userId: string): Promise<void> {
+    const user = await this.getUser(userId);
+    if (!user) return;
+    
+    // Check if roles already exist for this user
+    const existingRoles = await db
+      .select()
+      .from(userRoles)
+      .where(eq(userRoles.userId, userId));
+    
+    if (existingRoles.length === 0 && user.role) {
+      // Migrate the primary role to the roles table
+      await db.insert(userRoles).values({
+        userId,
+        role: user.role,
+      });
+    }
   }
 
   // Site operations

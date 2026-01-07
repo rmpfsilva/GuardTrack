@@ -601,6 +601,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User Roles routes (multi-role support)
+  app.get('/api/admin/users/:id/roles', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const roles = await storage.getUserRoles(id);
+      res.json({ userId: id, roles });
+    } catch (error: any) {
+      console.error("Error fetching user roles:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch user roles" });
+    }
+  });
+
+  app.put('/api/admin/users/:id/roles', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { roles } = req.body;
+      const adminUser = req.user;
+      
+      if (!roles || !Array.isArray(roles) || roles.length === 0) {
+        return res.status(400).json({ message: "User must have at least one role" });
+      }
+      
+      // Validate all roles
+      const validRoles = ['guard', 'steward', 'supervisor', 'admin', 'super_admin'];
+      const invalidRoles = roles.filter((r: string) => !validRoles.includes(r));
+      if (invalidRoles.length > 0) {
+        return res.status(400).json({ message: `Invalid roles: ${invalidRoles.join(', ')}` });
+      }
+      
+      // Non-super admins cannot assign super_admin role
+      if (adminUser.role !== 'super_admin' && roles.includes('super_admin')) {
+        return res.status(403).json({ message: "Only super admins can assign super_admin role" });
+      }
+      
+      await storage.setUserRoles(id, roles, adminUser.id);
+      
+      // Also migrate to roles table if not already done
+      await storage.migrateUserToRoles(id);
+      
+      const updatedRoles = await storage.getUserRoles(id);
+      res.json({ userId: id, roles: updatedRoles });
+    } catch (error: any) {
+      console.error("Error updating user roles:", error);
+      res.status(400).json({ message: error.message || "Failed to update user roles" });
+    }
+  });
+
+  // Get current user's roles
+  app.get('/api/user/roles', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const roles = await storage.getUserRoles(userId);
+      res.json({ userId, roles });
+    } catch (error: any) {
+      console.error("Error fetching user roles:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch user roles" });
+    }
+  });
+
   // Sites routes
   app.get('/api/sites', isAuthenticated, async (req: any, res) => {
     try {

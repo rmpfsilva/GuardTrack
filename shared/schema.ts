@@ -104,6 +104,22 @@ export const users = pgTable("users", {
   usernameCompanyUnique: uniqueIndex('users_username_company_unique').on(table.username, table.companyId),
 }));
 
+// Valid role types for the system
+export const VALID_ROLES = ['guard', 'steward', 'supervisor', 'admin', 'super_admin'] as const;
+export type RoleType = typeof VALID_ROLES[number];
+
+// User roles table - supports multiple roles per user
+export const userRoles = pgTable("user_roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: varchar("role", { length: 50 }).notNull(), // 'guard' | 'steward' | 'supervisor' | 'admin' | 'super_admin'
+  assignedBy: varchar("assigned_by").references(() => users.id, { onDelete: 'set null' }), // Admin who assigned this role
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  // A user can only have each role once
+  userRoleUnique: uniqueIndex('user_roles_user_role_unique').on(table.userId, table.role),
+}));
+
 // Sites table - locations where guards can check in
 export const sites = pgTable("sites", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -655,6 +671,19 @@ export const upsertUserSchema = createInsertSchema(users).omit({
   updatedAt: true,
 });
 
+// User roles schemas
+export const insertUserRoleSchema = createInsertSchema(userRoles).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  role: z.enum(VALID_ROLES),
+});
+
+export const updateUserRolesSchema = z.object({
+  userId: z.string(),
+  roles: z.array(z.enum(VALID_ROLES)).min(1, "User must have at least one role"),
+});
+
 export const insertSiteSchema = createInsertSchema(sites).omit({
   id: true,
   createdAt: true,
@@ -1007,6 +1036,16 @@ export type UpdateCompany = z.infer<typeof updateCompanySchema>;
 export type User = typeof users.$inferSelect;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type UserRole = typeof userRoles.$inferSelect;
+export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
+export type UpdateUserRoles = z.infer<typeof updateUserRolesSchema>;
+
+// Extended user type with multiple roles
+export type UserWithRoles = User & {
+  roles: RoleType[];
+  activeRole?: RoleType; // Currently selected role for the session
+};
 
 export type Site = typeof sites.$inferSelect;
 export type InsertSite = z.infer<typeof insertSiteSchema>;
