@@ -75,7 +75,7 @@ function requireFeature(featureName: FeatureName) {
       // If no plan assigned, check trial status and allow basic features
       if (!company.planId) {
         // Companies without a plan get basic features during trial
-        const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut', 'siteManagement', 'scheduling', 'leaveManagement'];
+        const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut', 'siteManagement', 'shiftScheduling', 'leaveRequests'];
         if (basicFeatures.includes(featureName)) {
           return next();
         }
@@ -132,7 +132,7 @@ async function checkCompanyFeatureAccess(companyId: string, featureName: Feature
     }
     
     if (!company.planId) {
-      const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut'];
+      const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut', 'siteManagement', 'shiftScheduling', 'leaveRequests'];
       return { hasAccess: basicFeatures.includes(featureName) };
     }
     

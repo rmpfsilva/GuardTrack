@@ -412,7 +412,7 @@ export default function GuardDashboard() {
               ) : (
                 <>
                   <p className="text-3xl font-bold" data-testid="text-monthly-hours">
-                    {monthlyHours?.hours.toFixed(1) || '0.0'}
+                    {(monthlyHours?.hours ?? 0).toFixed(1)}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     hours in {monthlyHours ? getMonthName(monthlyHours.month) : getMonthName(currentTime.getMonth() + 1)}
