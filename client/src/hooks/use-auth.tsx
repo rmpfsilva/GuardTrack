@@ -19,10 +19,23 @@ type AuthContextType = {
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
 };
 
+export type CompanyOption = {
+  companyId: string;
+  companyName: string;
+  companyCode: string;
+};
+
 type LoginData = {
   username: string;
   password: string;
-  companyId?: string | null; // Required for company users, null/undefined for super admin
+  companyId?: string | null; // Only needed if multiple companies have same username
+  isSuperAdmin?: boolean; // For platform admin login
+};
+
+type LoginResponse = SelectUser | {
+  requiresCompanySelection: boolean;
+  companies: CompanyOption[];
+  message: string;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -38,12 +51,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+    mutationFn: async (credentials: LoginData): Promise<LoginResponse> => {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+        credentials: "include",
+      });
+      
+      const data = await res.json();
+      
+      // Handle multi-company conflict (status 300)
+      if (res.status === 300 && data.requiresCompanySelection) {
+        return data as LoginResponse;
+      }
+      
+      if (!res.ok) {
+        throw new Error(typeof data === 'string' ? data : data.message || "Login failed");
+      }
+      
+      return data as SelectUser;
     },
-    onSuccess: (user: SelectUser) => {
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: (result: LoginResponse) => {
+      // Only set user data if it's an actual user (not a conflict response)
+      if ('id' in result) {
+        queryClient.setQueryData(["/api/user"], result);
+      }
+      // If requiresCompanySelection, the UI will handle it
     },
     onError: (error: Error) => {
       toast({

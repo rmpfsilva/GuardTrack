@@ -142,7 +142,7 @@ export function setupAuth(app: Express) {
 
   app.post("/api/login", async (req, res, next) => {
     try {
-      const { username, password, companyId } = req.body;
+      const { username, password, companyId, isSuperAdmin } = req.body;
       
       if (!username || !password) {
         return res.status(400).send("Username and password are required");
@@ -150,23 +150,75 @@ export function setupAuth(app: Express) {
       
       let user: SelectUser | undefined;
       
-      // If companyId is provided, look up user within that company
-      // If companyId is null/undefined, try super admin login (null companyId)
-      if (companyId) {
-        user = await storage.getUserByUsername(username, companyId);
-      } else {
-        // Try to find super admin (users with null companyId)
+      // If super admin login is explicitly requested
+      if (isSuperAdmin) {
         user = await storage.getSuperAdminByUsername(username);
+        if (!user) {
+          return res.status(401).send("Invalid credentials");
+        }
+        const passwordMatch = await comparePasswords(password, user.password);
+        if (!passwordMatch) {
+          return res.status(401).send("Invalid credentials");
+        }
       }
-      
-      if (!user) {
-        return res.status(401).send("Invalid credentials");
+      // If companyId is explicitly provided (user selected from conflict resolution)
+      else if (companyId) {
+        user = await storage.getUserByUsername(username, companyId);
+        if (!user) {
+          return res.status(401).send("Invalid credentials");
+        }
+        const passwordMatch = await comparePasswords(password, user.password);
+        if (!passwordMatch) {
+          return res.status(401).send("Invalid credentials");
+        }
       }
-      
-      const passwordMatch = await comparePasswords(password, user.password);
-      
-      if (!passwordMatch) {
-        return res.status(401).send("Invalid credentials");
+      // Normal login - look up by username only
+      else {
+        const matchingUsers = await storage.getUsersByUsername(username);
+        
+        if (matchingUsers.length === 0) {
+          return res.status(401).send("Invalid credentials");
+        }
+        
+        // Filter to users whose password matches
+        const validUsers: SelectUser[] = [];
+        for (const u of matchingUsers) {
+          const passwordMatch = await comparePasswords(password, u.password);
+          if (passwordMatch) {
+            validUsers.push(u);
+          }
+        }
+        
+        if (validUsers.length === 0) {
+          return res.status(401).send("Invalid credentials");
+        }
+        
+        // If multiple valid users (same username+password in different companies), ask for company selection
+        if (validUsers.length > 1) {
+          // Get company info for each matching user
+          const companyOptions = await Promise.all(
+            validUsers.map(async (u) => {
+              if (u.companyId) {
+                const company = await storage.getCompany(u.companyId);
+                return {
+                  companyId: u.companyId,
+                  companyName: company?.name || 'Unknown Company',
+                  companyCode: company?.companyCode || '',
+                };
+              }
+              return null;
+            })
+          );
+          
+          return res.status(300).json({
+            message: "Multiple companies found. Please select your company.",
+            requiresCompanySelection: true,
+            companies: companyOptions.filter(Boolean),
+          });
+        }
+        
+        // Exactly one match - use that user
+        user = validUsers[0];
       }
       
       // Check trial status for non-super-admin users with companies
