@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { usePlanFeatures, AdminTab } from "@/hooks/use-plan-features";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { Users, MapPin, Clock, Activity, Calendar, Settings, Smartphone, Copy, ExternalLink, Mail, ChevronDown } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -50,6 +51,7 @@ interface DashboardStats {
 export default function AdminDashboard() {
   const { user, isLoading: authLoading, isAdmin, logoutMutation } = useAuth();
   const { toast } = useToast();
+  const { hasTabAccess, getAccessibleTabs, planTier, isLoading: planLoading } = usePlanFeatures();
   const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [editingCheckIn, setEditingCheckIn] = useState<CheckInWithDetails | null>(null);
@@ -332,22 +334,22 @@ export default function AdminDashboard() {
                 </>
               ) : (
                 <>
-                  {/* Regular Admin Tabs - Company Operations */}
-                  <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>
-                  <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
-                  <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>
-                  <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>
-                  <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Guards</TabsTrigger>
-                  <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
-                  <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>
-                  <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>
-                  <TabsTrigger value="sites" data-testid="tab-sites" className="text-xs sm:text-sm whitespace-nowrap">Sites</TabsTrigger>
-                  <TabsTrigger value="leave" data-testid="tab-leave" className="text-xs sm:text-sm whitespace-nowrap">Leave</TabsTrigger>
-                  <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm whitespace-nowrap">Approvals</TabsTrigger>
-                  <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>
-                  <TabsTrigger value="partnerships" data-testid="tab-partnerships" className="text-xs sm:text-sm whitespace-nowrap">Partnerships</TabsTrigger>
-                  <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className="text-xs sm:text-sm whitespace-nowrap">Job Sharing</TabsTrigger>
-                  <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>
+                  {/* Regular Admin Tabs - Filtered by Plan */}
+                  {hasTabAccess('overview') && <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>}
+                  {hasTabAccess('guards') && <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Guards</TabsTrigger>}
+                  {hasTabAccess('reports') && <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>}
+                  {hasTabAccess('users') && <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>}
+                  {hasTabAccess('schedule') && <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>}
+                  {hasTabAccess('sites') && <TabsTrigger value="sites" data-testid="tab-sites" className="text-xs sm:text-sm whitespace-nowrap">Sites</TabsTrigger>}
+                  {hasTabAccess('leave') && <TabsTrigger value="leave" data-testid="tab-leave" className="text-xs sm:text-sm whitespace-nowrap">Leave</TabsTrigger>}
+                  {hasTabAccess('invitations') && <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>}
+                  {hasTabAccess('manual') && <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>}
+                  {hasTabAccess('approvals') && <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm whitespace-nowrap">Approvals</TabsTrigger>}
+                  {hasTabAccess('notices') && <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>}
+                  {hasTabAccess('partnerships') && <TabsTrigger value="partnerships" data-testid="tab-partnerships" className="text-xs sm:text-sm whitespace-nowrap">Partnerships</TabsTrigger>}
+                  {hasTabAccess('job-sharing') && <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className="text-xs sm:text-sm whitespace-nowrap">Job Sharing</TabsTrigger>}
+                  {hasTabAccess('billing') && <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>}
+                  {hasTabAccess('activity') && <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>}
                 </>
               )}
             </TabsList>

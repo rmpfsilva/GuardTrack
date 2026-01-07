@@ -2386,6 +2386,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Company plan visibility routes (admin view)
+  app.get('/api/company/plan', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      
+      if (!user.companyId) {
+        return res.json({ plan: null, planName: null });
+      }
+      
+      const company = await storage.getCompany(user.companyId);
+      if (!company) {
+        return res.json({ plan: null, planName: null });
+      }
+      
+      let plan = null;
+      if (company.planId) {
+        plan = await storage.getSubscriptionPlan(company.planId);
+      }
+      
+      res.json({
+        plan,
+        planName: plan?.name || null,
+      });
+    } catch (error: any) {
+      console.error("Error fetching company plan:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch company plan" });
+    }
+  });
+
   app.get('/api/company/plan-summary', isAuthenticated, async (req: any, res) => {
     try {
       const user = req.user;
