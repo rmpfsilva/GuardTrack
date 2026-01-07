@@ -227,16 +227,12 @@
     min-height: 100vh;
   }
   
-  /* Dark overlay for readability */
+  /* Dark overlay for readability - uses --bg-overlay-opacity CSS variable */
   .guardtrack-bg::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, 
-      rgba(0, 0, 0, 0.3) 0%, 
-      rgba(0, 0, 0, 0.4) 50%, 
-      rgba(0, 0, 0, 0.5) 100%
-    );
+    background: rgba(0, 0, 0, var(--bg-overlay-opacity, 0.5));
     pointer-events: none;
     z-index: 0;
   }
@@ -263,11 +259,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, 
-      rgba(255, 255, 255, 0.5) 0%, 
-      rgba(255, 255, 255, 0.4) 50%, 
-      rgba(255, 255, 255, 0.3) 100%
-    );
+    background: rgba(255, 255, 255, var(--bg-overlay-opacity, 0.4));
     pointer-events: none;
     z-index: 0;
   }
@@ -291,11 +283,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, 
-      rgba(0, 0, 0, 0.4) 0%, 
-      rgba(0, 0, 0, 0.5) 50%, 
-      rgba(0, 0, 0, 0.6) 100%
-    );
+    background: rgba(0, 0, 0, var(--bg-overlay-opacity, 0.5));
     pointer-events: none;
     z-index: 0;
   }
@@ -307,11 +295,7 @@
 
   /* Light mode custom background overlay */
   .custom-bg-image-light::before {
-    background: linear-gradient(180deg, 
-      rgba(255, 255, 255, 0.6) 0%, 
-      rgba(255, 255, 255, 0.5) 50%, 
-      rgba(255, 255, 255, 0.4) 100%
-    );
+    background: rgba(255, 255, 255, var(--bg-overlay-opacity, 0.5));
   }
 }
 

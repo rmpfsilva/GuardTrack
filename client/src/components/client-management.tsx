@@ -370,10 +370,13 @@ export default function ClientManagement() {
     if (!planName) {
       return <Badge variant="outline" className="text-xs" data-testid={`badge-plan-${client.id}`}>No Plan</Badge>;
     }
-    const colorClass = planName === 'Pro' ? 'bg-purple-600 text-white' 
-      : planName === 'Standard' ? 'bg-blue-600 text-white' 
-      : 'bg-gray-500 text-white';
-    return <Badge className={colorClass} data-testid={`badge-plan-${client.id}`}>{planName}</Badge>;
+    if (planName === 'Pro') {
+      return <Badge variant="default" className="font-semibold" data-testid={`badge-plan-${client.id}`}><Crown className="w-3 h-3 mr-1" />{planName}</Badge>;
+    }
+    if (planName === 'Standard') {
+      return <Badge variant="secondary" data-testid={`badge-plan-${client.id}`}>{planName}</Badge>;
+    }
+    return <Badge variant="outline" data-testid={`badge-plan-${client.id}`}>{planName}</Badge>;
   };
 
   const getDurationInfo = (client: ClientWithStatus) => {
