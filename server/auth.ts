@@ -83,6 +83,42 @@ export function setupAuth(app: Express) {
     done(null, user ? sanitizeUser(user) : null);
   });
 
+  // Validate invitation token and return company info (for registration page)
+  app.get("/api/invitation/validate/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      const invitation = await storage.getInvitationByToken(token);
+      
+      if (!invitation) {
+        return res.status(404).json({ valid: false, error: "Invalid invitation token" });
+      }
+      
+      if (invitation.status !== 'pending') {
+        return res.status(400).json({ valid: false, error: "This invitation has already been used" });
+      }
+      
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        return res.status(400).json({ valid: false, error: "This invitation has expired" });
+      }
+      
+      // Get company details
+      const company = await storage.getCompanyById(invitation.companyId);
+      
+      res.json({
+        valid: true,
+        email: invitation.email,
+        role: invitation.role,
+        companyName: company?.name,
+        companyCode: company?.companyCode,
+        expiresAt: invitation.expiresAt,
+      });
+    } catch (error: any) {
+      console.error("Error validating invitation:", error);
+      res.status(500).json({ valid: false, error: "Failed to validate invitation" });
+    }
+  });
+
   app.post("/api/register", async (req, res, next) => {
     try {
       // Validate input

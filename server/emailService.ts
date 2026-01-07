@@ -7,6 +7,8 @@ interface InvitationEmailData {
   inviteToken: string;
   role: string;
   expiresAt?: Date;
+  companyName?: string;
+  companyCode?: string;
 }
 
 export async function sendInvitationEmail(data: InvitationEmailData): Promise<void> {
@@ -32,6 +34,13 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
         })}.</p>`
       : '';
     
+    const companyInfoHtml = data.companyName 
+      ? `<div style="background-color: #e0f2fe; border-radius: 6px; padding: 16px; margin-bottom: 16px;">
+          <p style="margin: 0; font-weight: 600; color: #0369a1;">Company: ${data.companyName}</p>
+          ${data.companyCode ? `<p style="margin: 4px 0 0 0; color: #0369a1;">Company ID: <strong>${data.companyCode}</strong></p>` : ''}
+        </div>`
+      : '';
+
     const htmlBody = `
 <!DOCTYPE html>
 <html>
@@ -44,6 +53,7 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
     <h2 style="color: #1e40af; margin-top: 0;">Welcome to GuardTrack</h2>
     <p>Hello,</p>
     <p>You have been invited to join <strong>GuardTrack</strong> as a <strong>${data.role}</strong> by ${data.fromName}.</p>
+    ${companyInfoHtml}
   </div>
 
   <div style="margin-bottom: 24px;">
