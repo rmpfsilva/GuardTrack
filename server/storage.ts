@@ -111,6 +111,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserById(id: string): Promise<User | undefined>;
   getUserByUsername(username: string, companyId: string | null): Promise<User | undefined>;
+  getUsersByUsername(username: string): Promise<User[]>; // Get all users with this username (for login without company ID)
   getSuperAdminByUsername(username: string): Promise<User | undefined>; // For super admins who have null companyId
   createUser(user: InsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
@@ -462,6 +463,11 @@ export class DatabaseStorage implements IStorage {
       and(eq(users.username, username), sql`${users.companyId} IS NULL`)
     );
     return user;
+  }
+
+  async getUsersByUsername(username: string): Promise<User[]> {
+    // Get all users with this username across all companies (for login without company ID)
+    return await db.select().from(users).where(eq(users.username, username));
   }
 
   async getSuperAdminByUsername(username: string): Promise<User | undefined> {
