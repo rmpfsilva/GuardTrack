@@ -1,7 +1,16 @@
+// Gmail integration - google-mail connection
 import { google } from 'googleapis';
 
+let connectionSettings: any;
+
 async function getAccessToken() {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME
+  // Check if we have a cached token that hasn't expired
+  if (connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    console.log('[Gmail Auth] Using cached access token');
+    return connectionSettings.settings.access_token;
+  }
+  
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
     : process.env.WEB_REPL_RENEWAL 
@@ -13,7 +22,7 @@ async function getAccessToken() {
   }
 
   console.log('[Gmail Auth] Fetching connection from Replit API...');
-  const connectionSettings = await fetch(
+  connectionSettings = await fetch(
     'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
     {
       headers: {
@@ -28,7 +37,7 @@ async function getAccessToken() {
   console.log('[Gmail Auth] Has access_token:', !!connectionSettings?.settings?.access_token);
   console.log('[Gmail Auth] Has oauth.credentials.access_token:', !!connectionSettings?.settings?.oauth?.credentials?.access_token);
 
-  const accessToken = connectionSettings?.settings?.access_token ?? connectionSettings?.settings?.oauth?.credentials?.access_token;
+  const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
 
   if (!connectionSettings || !accessToken) {
     console.error('[Gmail Auth] No valid access token found');
