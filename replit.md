@@ -12,96 +12,39 @@ GuardTrack is a comprehensive web-based system designed to streamline security g
 ## System Architecture
 
 ### UI/UX Decisions
-The system features a professional security-themed design with a blue color scheme, adhering to Material Design principles for a clean and modern UI. It prioritizes a mobile-first approach for guard interactions and provides data-rich dashboards for administrators, including dark mode support.
+The system features a professional security-themed design with a blue color scheme, adhering to Material Design principles for a clean and modern UI. It prioritizes a mobile-first approach for guard interactions and provides data-rich dashboards for administrators, including dark mode support. A dedicated Guard PWA (`/guard/app`) is designed for mobile-first interaction with fixed bottom tab navigation, large touch-friendly buttons, and PWA installation prompts.
 
 ### Technical Implementations
-GuardTrack is a full-stack web application. The frontend uses React with TypeScript, Wouter for routing, TanStack Query for state management, and Shadcn UI with Tailwind CSS. It integrates the Browser Geolocation API. The backend is built with Node.js and Express, utilizing PostgreSQL (via Neon) with Drizzle ORM. Authentication is handled by Passport.js (local strategy) with persistent session cookies and scrypt for password hashing. Google Sheets API is integrated for data backup.
+GuardTrack is a full-stack web application. The frontend uses React with TypeScript, Wouter for routing, TanStack Query for state management, and Shadcn UI with Tailwind CSS. The backend is built with Node.js and Express, utilizing PostgreSQL with Drizzle ORM. Authentication is handled by Passport.js (local strategy) with persistent session cookies and scrypt for password hashing. Native mobile apps for Android and iOS are supported using Capacitor, leveraging the same codebase.
 
 ### Feature Specifications
-- **Authentication & User Management**: Role-based access (Guard, Steward, Supervisor, Admin, Super Admin) with multi-tenant company affiliation.
-- **Shift Management**: Calendar-based shift scheduling for admins, assigned schedule viewing for guards. Enhanced schedule calendar displays both scheduled shift times and actual check-in/check-out times side-by-side for easy comparison. Uses strict temporal overlap matching with 30-minute late-arrival tolerance to accurately associate check-ins with shifts.
-- **Check-in/Check-out**: Geolocation-verified check-ins/check-outs; manual overrides by admins.
-- **Break Tracking**: Geolocation and timestamp-based tracking of unpaid breaks, with a mandatory 1-hour baseline deduction and approval system for extended breaks.
-- **Overtime Tracking**: Automatic detection of overtime (>30 min past scheduled shift end) requiring admin approval for payment.
+- **Authentication & User Management**: Role-based access (Guard, Steward, Supervisor, Admin, Super Admin) with multi-tenant company affiliation and a simplified login flow.
+- **Shift Management**: Calendar-based scheduling, real-time monitoring, and automatic overtime detection.
+- **Attendance & Break Tracking**: Geolocation-verified check-ins/check-outs, and tracking of unpaid breaks with an approval system.
 - **Site Management**: Configuration of security sites with role-specific hourly rates.
-- **Attendance Tracking**: Records check-in/out times, geolocation, and calculates weekly hours with automatic break deductions.
-- **Reporting & Billing**: Weekly billing reports based on site rates, with CSV export and Google Sheets sync. Admin-only reports for overtime, anomalies, and detailed shift breakdowns.
-- **Approval System**: Admin interface for approving extended breaks and overtime requests, impacting payable hours.
-- **Leave Management**: System for requesting, approving, and canceling leave with a yearly calendar view.
-- **Mobile Responsiveness**: Fully responsive design with Progressive Web App (PWA) functionality and installation prompts.
-- **Dedicated Guard PWA** (`/guard/app`): Mobile-first PWA interface specifically designed for security guards with:
-  - Fixed bottom tab navigation (Home, Schedule, Leave, Notices)
-  - Large touch-friendly check-in/check-out buttons with geolocation
-  - Break start/end tracking with location capture
-  - Schedule/rota viewing using MySchedule component
-  - Leave request submission and status tracking
-  - Notice board access for overtime opportunities and announcements
-  - Full-screen PWA install overlay on first visit (prompts users to install the app)
-  - Install button triggers browser's native install prompt
-  - "Continue to web version" option for users who prefer browser access
-  - Company ID input for secure login (no company list exposure)
-  - Optimized manifest.json with guard app branding and shortcuts
-- **Email Invitation System**: Admins can invite new users via email using Gmail integration.
-- **Password Management**: User password changes and secure token-based password recovery. Super admins can reset any user's password.
-- **Notice Board**: Admins can post overtime opportunities and events, with push notifications to subscribed users. Guards can apply to notices.
+- **Reporting & Billing**: Weekly billing reports, CSV export, Google Sheets sync, and comprehensive invoice generation.
+- **Approval System**: Admin interface for approving extended breaks and overtime requests.
+- **Leave Management**: System for requesting, approving, and canceling leave.
+- **Mobile Responsiveness**: Fully responsive design with PWA functionality.
+- **Email Invitation System**: Admins can invite new users via email; Super Admins can invite trial clients.
+- **Password Management**: User password changes and secure token-based recovery.
+- **Notice Board**: Admins can post opportunities, with push notifications and application functionality for guards.
 - **Push Notifications**: Web push notification system for real-time alerts.
-- **Invoice System**: Comprehensive invoice generation with admin-configurable company settings (name, address, VAT, bank details, notes) and detailed, printable invoices per site.
-- **Native Mobile Apps**: Full support for Android and iOS native apps using Capacitor, leveraging the same codebase for web, Android, and iOS.
-- **Company Partnerships**: Companies must establish partnerships before sharing jobs. Each company has a unique Company ID (e.g., COMP001, COMP100) for easy identification. Admins can search for companies by Company ID (exact match, case-insensitive), name (partial match, case-insensitive), or admin email (exact match), send partnership requests with optional messages, and accept/reject incoming requests. Partnership management interface with tabs for Sent Requests (view sent), Received Requests (default, accept/reject), and Active Partnerships. Partnership cancellation available with per-partnership pending state tracking.
-- **Inter-Company Job Sharing**: Functionality for companies to share excess guard job requests with other companies, including dedicated admin dashboard views for offered and received requests. **Requires accepted partnership with target company first.**
-- **Trial Management System**: Super Admin can grant trial access (3, 7, or 14 days) to companies for evaluation. Trial status (Trial/Full/Expired) is visible to company admins in Settings with days remaining indicator. Expired trials trigger access restrictions on critical features (check-ins, shifts, sites, partnerships, job sharing, notices, leave requests). System automatically expires trials via hourly background job. Frontend displays prominent banners for all active trials (>3 days: blue info banner, ≤3 days: amber warning, expired: red alert). Super Admin can extend trials, convert to full version, or set custom trial periods via dedicated management UI.
-- **Trial Invitation System**: Super Admin can invite potential clients via email for trial periods (3, 7, or 14 days). Invitations include secure token-based registration links that pre-fill company name and email. Recipients complete registration by providing admin name, username, and password, which atomically creates both the company record and admin user account with 'admin' role (never 'super_admin'). Invitation tokens expire after a set period and are marked as accepted upon successful registration. Email delivery handled via Gmail integration with professionally formatted HTML templates. Production invitation links correctly use published deployment domain.
-- **Super Admin Interface**: Redesigned to focus on client management with full access to all company admin views for troubleshooting. Features include:
-  - **Clients Tab**: Replaces Companies tab with enriched client data showing trial/permanent status, trial duration, days remaining, total check-ins, active guards, and payment history. Provides actions to block clients, send messages, and manage trial periods.
-  - **Usage Reports Tab**: Monthly-based (previous/current month) usage reports per client showing app usage metrics (logins per day/week/month), user growth comparison charts, and month navigation. Pure app usage analytics for platform monitoring.
-  - **Messages Tab**: Customer support messaging interface for viewing and responding to support queries from company admins. Features conversation list with unread indicators, chat-style message view with sender identification (Customer/Admin badges), and real-time reply functionality.
-  - **Subscription Billing Tab**: Manual payment tracking system for recording and managing subscription payments from clients. Features include:
-    - Revenue overview with total revenue, payment count, and paying clients statistics
-    - Payment recording with company selection, plan name, amount, currency, payment date, and subscription period
-    - Payment history table with filtering by company and search functionality
-    - Edit and delete capabilities for payment records
-    - Support for multiple payment methods (bank transfer, card, cheque, cash) and transaction IDs
-    - Status tracking (completed, pending, failed, refunded) for each payment
-  - **All Company Admin Tabs**: Super Admin has access to all company admin functionality (Overview, Billing, Reports, Schedule, Guards, Users, Invites, Manual, Sites, Leave, Approvals, Notices, Partnerships, Job Sharing, Activity) for troubleshooting and providing customer support.
-  - **Trial Expiration Login Block**: Automatically blocks login attempts for expired trial users and sends email notification to company administrator.
-  - **Client Management Actions**: Block/unblock clients, send direct messages via email, extend trials, convert to full version, or set custom trial periods.
-- **App Usage Analytics**: Automatic login tracking system records every user login with timestamp for comprehensive usage statistics. Super Admin dashboard displays daily, weekly, and monthly login metrics with visual charts showing trends and user growth comparisons between current and previous periods.
-- **Customer Support Messaging**: Integrated support system enabling company admins to send support queries and view conversation history. Super Admin can view all customer messages organized by company, respond to queries, and track message read status. Chat-style interface with message threading, sender identification, and real-time updates.
-- **Error Monitoring System**: Comprehensive error logging infrastructure for Super Admin to monitor application health. Features include:
-  - Automatic capture of API errors via global error handler middleware
-  - Client-side error reporting endpoint for frontend errors
-  - Error logs with severity levels (critical, error, warn, info)
-  - Company-scoped error tracking with user context
-  - Stack traces, HTTP request details, and user agent information
-  - Resolve/unresolve workflow with resolution notes
-  - Search and filter capabilities across all error logs
-  - Unresolved error count badge for quick visibility
-- **Simplified Login Flow**: Login page requires only username and password. The system automatically looks up the user across all companies. If the same username exists in multiple companies with the same password, a company selection dialog appears. Platform Administrator checkbox allows super admin login without company context. This simplification removes the need for users to remember their company ID on every login.
-- **Test Accounts**: Demo Test Company (DEMO999) with pre-created users for testing:
-  - testguard / Test123! (guard role)
-  - teststeward / Test123! (steward role)
-  - testsupervisor / Test123! (supervisor role)
-  - testadmin / Test123! (admin role)
-  - Demo Test Site configured for check-in functionality
-- **Super Admin Account**: Platform administrator with full access:
-  - Username: superadmin
-  - Password: SuperAdmin123!
-  - Login: Check "Platform Administrator" checkbox on login page
-- **Sales Demo Account**: SecureForce Ltd (SECURE01) - A trial company with realistic demo data:
-  - Company Admin: secureforce.admin / Test123! (full admin access)
-  - Supervisor: secureforce.super / Test123! (supervisor view)
-  - Guards: david.wilson, emily.brown, james.taylor, olivia.martinez / Test123!
-  - Features: 4 London sites (Canary Wharf, Westfield Stratford, The Shard, O2 Arena), scheduled shifts, check-in history, active notices, leave requests
-  - Trial Status: 10 days remaining with Pro plan features
-  - Guard PWA: Access via /guard/app for mobile demo
+- **Company Partnerships & Job Sharing**: Functionality for companies to establish partnerships and share excess guard job requests.
+- **Trial Management System**: Super Admin can grant and manage trial access for companies, with access restrictions for expired trials.
+- **Super Admin Interface**: Dedicated interface for client management, usage reports, customer support messaging, and manual subscription billing. Super Admin can access all company admin views.
+- **App Usage Analytics**: Automatic login tracking and reporting for Super Admin dashboards.
+- **Customer Support Messaging**: Integrated system for company admins to send support queries to Super Admin.
+- **Platform Appearance Settings**: Super Admin customizable platform-wide background and overlay opacity.
+- **Error Monitoring System**: Comprehensive logging of API and client-side errors with resolution workflow.
 
 ### System Design Choices
-The architecture emphasizes a clear separation of concerns. The database schema supports multi-tenancy with `companies` as the core entity, isolating data for users, sites, and settings. Key tables include `companies`, `users`, `sites`, `check_ins`, `scheduled_shifts`, `breaks`, `overtime_requests`, `leave_requests`, `notices`, `notice_applications`, `push_subscriptions`, `company_settings`, `company_partnerships`, `job_shares`, `trial_invitations`, `user_logins`, `support_messages`, `subscription_payments`, and `error_logs`. Multi-tenant architecture ensures data isolation via `companyId` foreign keys across relevant tables. Hours calculation logic incorporates mandatory baseline break deductions and conditional deductions/overtime based on admin approvals. App usage analytics leverage the `user_logins` table for comprehensive login tracking. Customer support messaging utilizes the `support_messages` table with `isAdminReply` flag to distinguish between customer queries and Super Admin responses. Subscription billing uses the `subscription_payments` table to track manual payment records with plan details, amounts, payment dates, and status tracking. Error monitoring uses the `error_logs` table with company/user context, severity levels, stack traces, and resolution workflow.
+The architecture emphasizes a clear separation of concerns with a multi-tenant design using `companyId` for data isolation across tables such as `companies`, `users`, `sites`, `check_ins`, `scheduled_shifts`, `breaks`, `overtime_requests`, `leave_requests`, `notices`, `company_partnerships`, `job_shares`, `trial_invitations`, `user_logins`, `support_messages`, `subscription_payments`, and `error_logs`. Hours calculation incorporates baseline break deductions and conditional overtime based on approvals.
 
 ## External Dependencies
--   **PostgreSQL**: Primary database, hosted via Neon.
--   **Passport.js**: For username/password authentication.
--   **Google Sheets API**: For automatic data backup and reporting.
+-   **PostgreSQL**: Primary database.
+-   **Passport.js**: For authentication.
+-   **Google Sheets API**: For data backup and reporting.
 -   **Browser Geolocation API**: Used for capturing guard location.
--   **Gmail**: Integrated for sending transactional emails (user invitations).
--   **Web Push**: For sending push notifications to subscribed users (requires VAPID keys).
+-   **Gmail**: Integrated for sending transactional emails.
+-   **Web Push**: For push notifications.
