@@ -98,10 +98,18 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
       },
     });
 
-    console.log(`Invitation email sent successfully to ${data.toEmail}`);
-  } catch (error) {
-    console.error('Error sending invitation email:', error);
-    throw new Error('Failed to send invitation email');
+    console.log(`✅ [Invitation Email] Sent successfully to ${data.toEmail}`);
+  } catch (error: any) {
+    console.error('❌ [Invitation Email] Error sending email:', error.message);
+    if (error.response) {
+      console.error('[Invitation Email] Response status:', error.response.status);
+      console.error('[Invitation Email] Response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    if (error.stack) {
+      console.error('[Invitation Email] Stack trace:', error.stack);
+    }
+    // Preserve original error message for better debugging
+    throw error;
   }
 }
 
