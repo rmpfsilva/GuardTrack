@@ -93,7 +93,7 @@ import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { Pool } from "@neondatabase/serverless";
+import { Pool } from "pg";
 
 // Interface for storage operations
 export interface IStorage {
@@ -308,18 +308,22 @@ export class DatabaseStorage implements IStorage {
 
   constructor() {
     // Use PostgreSQL session store for persistence across server restarts
-    // This is crucial for production deployments
     const PgStore = connectPgSimple(session);
     
-    // Create a connection pool for session storage
+    // Create a standard pg pool for session storage (required by connect-pg-simple)
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
     });
     
+    // Handle pool errors gracefully
+    pool.on('error', (err) => {
+      console.error('Session pool error:', err.message);
+    });
+    
     this.sessionStore = new PgStore({
-      pool: pool as any, // Type compatibility with pg Pool
-      tableName: 'session', // Table name for sessions
-      createTableIfMissing: false, // Table already exists in production
+      pool,
+      tableName: 'session',
+      createTableIfMissing: true,
     });
   }
 
