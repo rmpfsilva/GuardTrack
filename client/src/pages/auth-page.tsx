@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Loader2, ShieldCheck } from "lucide-react";
 import { SiAndroid, SiApple } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -37,8 +37,8 @@ export default function AuthPage() {
   // Handle login mutation result for multi-company conflict
   useEffect(() => {
     if (loginMutation.isSuccess && loginMutation.data) {
-      const result = loginMutation.data;
-      if ('requiresCompanySelection' in result && result.requiresCompanySelection) {
+      const result = loginMutation.data as any;
+      if (result.requiresCompanySelection && result.companies) {
         // Show company selection
         setCompanyOptions(result.companies);
       }
@@ -202,7 +202,7 @@ export default function AuthPage() {
                 type="submit"
                 className="w-full"
                 data-testid={isLogin ? "button-login" : "button-register"}
-                disabled={loginMutation.isPending || registerMutation.isPending || (isLogin && !isSuperAdmin && lookupCompanyMutation.isPending)}
+                disabled={loginMutation.isPending || registerMutation.isPending}
               >
                 {(loginMutation.isPending || registerMutation.isPending) ? (
                   <>

@@ -76,7 +76,7 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
   - Resolve/unresolve workflow with resolution notes
   - Search and filter capabilities across all error logs
   - Unresolved error count badge for quick visibility
-- **Secure Login Flow**: Login page uses Company ID input instead of company dropdown for security (prevents tenant enumeration). Users enter their Company ID code (e.g., "DEMO999") and the system validates it via API lookup before allowing login. Platform Administrator checkbox allows super admin login without company context.
+- **Simplified Login Flow**: Login page requires only username and password. The system automatically looks up the user across all companies. If the same username exists in multiple companies with the same password, a company selection dialog appears. Platform Administrator checkbox allows super admin login without company context. This simplification removes the need for users to remember their company ID on every login.
 - **Test Accounts**: Demo Test Company (DEMO999) with pre-created users for testing:
   - testguard / Test123! (guard role)
   - teststeward / Test123! (steward role)
