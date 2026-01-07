@@ -75,7 +75,7 @@ function requireFeature(featureName: FeatureName) {
       // If no plan assigned, check trial status and allow basic features
       if (!company.planId) {
         // Companies without a plan get basic features during trial
-        const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut'];
+        const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut', 'siteManagement', 'scheduling', 'leaveManagement'];
         if (basicFeatures.includes(featureName)) {
           return next();
         }
@@ -716,6 +716,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching recent check-ins:", error);
       res.status(500).json({ message: "Failed to fetch recent check-ins" });
+    }
+  });
+
+  // Get user's monthly hours worked
+  app.get('/api/user/monthly-hours', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const now = new Date();
+      const year = parseInt(req.query.year as string) || now.getFullYear();
+      const month = parseInt(req.query.month as string) || (now.getMonth() + 1);
+      
+      const hours = await storage.getUserMonthlyHours(userId, year, month);
+      res.json({ hours, year, month });
+    } catch (error) {
+      console.error("Error fetching monthly hours:", error);
+      res.status(500).json({ message: "Failed to fetch monthly hours" });
+    }
+  });
+
+  // Get user's leave balance
+  app.get('/api/user/leave-balance', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const now = new Date();
+      const year = parseInt(req.query.year as string) || now.getFullYear();
+      
+      const balance = await storage.getUserLeaveBalance(userId, year);
+      res.json({ ...balance, year });
+    } catch (error) {
+      console.error("Error fetching leave balance:", error);
+      res.status(500).json({ message: "Failed to fetch leave balance" });
     }
   });
 

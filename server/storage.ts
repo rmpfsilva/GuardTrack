@@ -862,6 +862,68 @@ export class DatabaseStorage implements IStorage {
     return totalHours;
   }
 
+  async getUserMonthlyHours(userId: string, year: number, month: number): Promise<number> {
+    // Get all check-ins for the month
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 1);
+    
+    const userCheckIns = await db
+      .select()
+      .from(checkIns)
+      .where(
+        and(
+          eq(checkIns.userId, userId),
+          gte(checkIns.checkInTime, monthStart),
+          lt(checkIns.checkInTime, monthEnd)
+        )
+      );
+
+    let totalHours = 0;
+    for (const checkIn of userCheckIns) {
+      totalHours += await this.calculatePayableHours(checkIn);
+    }
+
+    return totalHours;
+  }
+
+  async getUserLeaveBalance(userId: string, year: number): Promise<{ usedDays: number; pendingDays: number; totalEntitlement: number }> {
+    // Get all leave requests for the year
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year + 1, 0, 1);
+    
+    const userLeaveRequests = await db
+      .select()
+      .from(leaveRequests)
+      .where(
+        and(
+          eq(leaveRequests.userId, userId),
+          gte(leaveRequests.startDate, yearStart),
+          lt(leaveRequests.startDate, yearEnd)
+        )
+      );
+
+    let usedDays = 0;
+    let pendingDays = 0;
+    
+    for (const request of userLeaveRequests) {
+      const startDate = new Date(request.startDate);
+      const endDate = new Date(request.endDate);
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      
+      if (request.status === 'approved') {
+        usedDays += days;
+      } else if (request.status === 'pending') {
+        pendingDays += days;
+      }
+    }
+
+    // Default annual leave entitlement (can be configured per company/user in the future)
+    const totalEntitlement = 28;
+
+    return { usedDays, pendingDays, totalEntitlement };
+  }
+
   // Scheduled shift operations
   async getAllScheduledShifts(): Promise<ScheduledShiftWithDetails[]> {
     const results = await db

@@ -5,7 +5,23 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { Clock, MapPin, LogOut, LogIn, Calendar, Settings, Coffee, Info } from "lucide-react";
+import { 
+  Clock, 
+  MapPin, 
+  LogOut, 
+  LogIn, 
+  Calendar, 
+  Settings, 
+  Coffee, 
+  Info,
+  CalendarDays,
+  Timer,
+  Palmtree,
+  Bell,
+  ChevronRight,
+  Loader2,
+  User
+} from "lucide-react";
 import { Link, useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 import { Button } from "@/components/ui/button";
@@ -16,10 +32,24 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationSettingsButton } from "@/components/notification-settings-button";
+import { Skeleton } from "@/components/ui/skeleton";
 import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
 import GuardNoticeBoard from "@/components/guard-notice-board";
 import type { Site, CheckIn, CheckInWithDetails, Break } from "@shared/schema";
+
+interface MonthlyHoursData {
+  hours: number;
+  year: number;
+  month: number;
+}
+
+interface LeaveBalanceData {
+  usedDays: number;
+  pendingDays: number;
+  totalEntitlement: number;
+  year: number;
+}
 
 export default function GuardDashboard() {
   const { user, isLoading: authLoading, logoutMutation } = useAuth();
@@ -29,7 +59,6 @@ export default function GuardDashboard() {
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("guard");
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
       toast({
@@ -43,37 +72,41 @@ export default function GuardDashboard() {
     }
   }, [user, authLoading, toast]);
 
-  // Update current time every second
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch sites
   const { data: sites = [], isLoading: sitesLoading } = useQuery<Site[]>({
     queryKey: ["/api/sites"],
     enabled: !!user,
   });
 
-  // Fetch active check-in
   const { data: activeCheckIn, isLoading: checkInLoading } = useQuery<CheckInWithDetails | null>({
     queryKey: ["/api/check-ins/active"],
     enabled: !!user,
   });
 
-  // Fetch recent check-ins
   const { data: recentCheckIns = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/check-ins/my-recent"],
     enabled: !!user,
   });
 
-  // Fetch active break
   const { data: activeBreak } = useQuery<Break | null>({
     queryKey: ["/api/breaks/active"],
     enabled: !!user && !!activeCheckIn,
   });
 
-  // Check-in mutation
+  const { data: monthlyHours, isLoading: hoursLoading } = useQuery<MonthlyHoursData>({
+    queryKey: ["/api/user/monthly-hours"],
+    enabled: !!user,
+  });
+
+  const { data: leaveBalance, isLoading: leaveLoading } = useQuery<LeaveBalanceData>({
+    queryKey: ["/api/user/leave-balance"],
+    enabled: !!user,
+  });
+
   const checkInMutation = useMutation({
     mutationFn: async (data: { siteId: string; latitude?: string; longitude?: string; workingRole?: string }) => {
       return await apiRequest("POST", "/api/check-ins", data);
@@ -81,6 +114,7 @@ export default function GuardDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/check-ins/active"] });
       queryClient.invalidateQueries({ queryKey: ["/api/check-ins/my-recent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/monthly-hours"] });
       toast({
         title: "Checked In",
         description: "You have successfully checked in to your shift.",
@@ -108,7 +142,6 @@ export default function GuardDashboard() {
     },
   });
 
-  // Check-out mutation
   const checkOutMutation = useMutation({
     mutationFn: async (checkInId: string) => {
       return await apiRequest("PATCH", `/api/check-ins/${checkInId}/checkout`, {});
@@ -116,6 +149,7 @@ export default function GuardDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/check-ins/active"] });
       queryClient.invalidateQueries({ queryKey: ["/api/check-ins/my-recent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/monthly-hours"] });
       toast({
         title: "Checked Out",
         description: "You have successfully checked out from your shift.",
@@ -141,7 +175,6 @@ export default function GuardDashboard() {
     },
   });
 
-  // Start break mutation
   const startBreakMutation = useMutation({
     mutationFn: async (data: { latitude?: string; longitude?: string }) => {
       return await apiRequest("POST", "/api/breaks/start", data);
@@ -162,7 +195,6 @@ export default function GuardDashboard() {
     },
   });
 
-  // End break mutation
   const endBreakMutation = useMutation({
     mutationFn: async (data: { breakId: string; latitude?: string; longitude?: string }) => {
       return await apiRequest("PATCH", `/api/breaks/${data.breakId}/end`, {
@@ -196,11 +228,9 @@ export default function GuardDashboard() {
       return;
     }
 
-    // Request geolocation
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          // Success: got location
           checkInMutation.mutate({
             siteId: selectedSiteId,
             latitude: position.coords.latitude.toString(),
@@ -209,7 +239,6 @@ export default function GuardDashboard() {
           });
         },
         (error) => {
-          // Error or denied: check in without location
           toast({
             title: "Location Access Denied",
             description: "Checking in without location verification.",
@@ -220,7 +249,6 @@ export default function GuardDashboard() {
         { timeout: 5000 }
       );
     } else {
-      // Geolocation not supported: check in without location
       toast({
         title: "Location Not Supported",
         description: "Your device doesn't support location services.",
@@ -295,9 +323,23 @@ export default function GuardDashboard() {
     return user.email?.[0]?.toUpperCase() || "U";
   };
 
+  const getGreeting = () => {
+    const hour = currentTime.getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
+  const getMonthName = (month: number) => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+    return months[month - 1];
+  };
+
+  const remainingLeave = leaveBalance ? leaveBalance.totalEntitlement - leaveBalance.usedDays : 0;
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border sticky top-0 bg-muted z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -338,20 +380,93 @@ export default function GuardDashboard() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Current Time Display */}
-        <div className="text-center mb-8">
-          <p className="text-sm text-muted-foreground mb-2">Current Time</p>
-          <p className="text-4xl font-mono font-semibold" data-testid="text-current-time">
-            {format(currentTime, "HH:mm:ss")}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {format(currentTime, "EEEE, MMMM d, yyyy")}
-          </p>
+      <div className="container mx-auto px-4 py-6 max-w-5xl">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src={user.profileImageUrl || undefined} alt={user.firstName || "User"} />
+              <AvatarFallback className="text-lg">{getInitials()}</AvatarFallback>
+            </Avatar>
+            <div>
+              <h1 className="text-2xl font-bold" data-testid="text-welcome-message">
+                {getGreeting()}, {user.firstName || 'there'}!
+              </h1>
+              <p className="text-muted-foreground">
+                {format(currentTime, "EEEE, MMMM d, yyyy")} | <span className="font-mono">{format(currentTime, "HH:mm")}</span>
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Quick Action Card */}
-        <Card className="mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card data-testid="card-monthly-hours">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Timer className="h-4 w-4" />
+                Monthly Hours
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {hoursLoading ? (
+                <Skeleton className="h-10 w-24" />
+              ) : (
+                <>
+                  <p className="text-3xl font-bold" data-testid="text-monthly-hours">
+                    {monthlyHours?.hours.toFixed(1) || '0.0'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    hours in {monthlyHours ? getMonthName(monthlyHours.month) : getMonthName(currentTime.getMonth() + 1)}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card data-testid="card-leave-balance">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Palmtree className="h-4 w-4" />
+                Annual Leave
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {leaveLoading ? (
+                <Skeleton className="h-10 w-24" />
+              ) : (
+                <>
+                  <p className="text-3xl font-bold" data-testid="text-leave-remaining">
+                    {remainingLeave}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    days remaining of {leaveBalance?.totalEntitlement || 28}
+                    {leaveBalance && leaveBalance.pendingDays > 0 && (
+                      <span className="text-amber-600 dark:text-amber-400"> ({leaveBalance.pendingDays} pending)</span>
+                    )}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card data-testid="card-upcoming-events">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <CalendarDays className="h-4 w-4" />
+                Upcoming Events
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg text-muted-foreground italic" data-testid="text-no-events">
+                No upcoming events
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Events will appear here
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {activeCheckIn ? <LogOut className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
@@ -384,7 +499,12 @@ export default function GuardDashboard() {
                   variant="destructive"
                   data-testid="button-check-out"
                 >
-                  {checkOutMutation.isPending ? "Checking Out..." : "Check Out"}
+                  {checkOutMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Checking Out...
+                    </>
+                  ) : "Check Out"}
                 </Button>
               </>
             ) : (
@@ -445,16 +565,20 @@ export default function GuardDashboard() {
                   className="w-full h-14 text-lg"
                   data-testid="button-check-in"
                 >
-                  {checkInMutation.isPending ? "Checking In..." : "Check In"}
+                  {checkInMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Checking In...
+                    </>
+                  ) : "Check In"}
                 </Button>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Break Tracking - Only show when checked in */}
         {activeCheckIn && (
-          <Card className="mb-8">
+          <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Coffee className="h-5 w-5" />
@@ -487,7 +611,12 @@ export default function GuardDashboard() {
                     variant="default"
                     data-testid="button-end-break"
                   >
-                    {endBreakMutation.isPending ? "Ending Break..." : "End Break"}
+                    {endBreakMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Ending Break...
+                      </>
+                    ) : "End Break"}
                   </Button>
                 </>
               ) : (
@@ -504,7 +633,12 @@ export default function GuardDashboard() {
                     variant="outline"
                     data-testid="button-start-break"
                   >
-                    {startBreakMutation.isPending ? "Starting Break..." : "Start Break"}
+                    {startBreakMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Starting Break...
+                      </>
+                    ) : "Start Break"}
                   </Button>
                 </>
               )}
@@ -512,25 +646,23 @@ export default function GuardDashboard() {
           </Card>
         )}
 
-        {/* My Schedule */}
-        <Card>
-          <CardContent className="p-6">
-            <MySchedule />
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <Card>
+            <CardContent className="p-6">
+              <MySchedule />
+            </CardContent>
+          </Card>
 
-        {/* Annual Leave */}
-        <Card>
-          <CardContent className="p-6">
-            <LeaveRequestForm />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardContent className="p-6">
+              <LeaveRequestForm />
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Notice Board */}
         <GuardNoticeBoard />
 
-        {/* Recent Shifts */}
-        <Card>
+        <Card className="mt-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
@@ -540,15 +672,23 @@ export default function GuardDashboard() {
           </CardHeader>
           <CardContent>
             {checkInLoading ? (
-              <p className="text-center text-muted-foreground py-8">Loading shifts...</p>
+              <div className="space-y-3">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
             ) : recentCheckIns.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No recent shifts</p>
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                <p className="text-muted-foreground">No recent shifts</p>
+                <p className="text-sm text-muted-foreground mt-1">Your shift history will appear here once you check in</p>
+              </div>
             ) : (
               <div className="space-y-3">
-                {recentCheckIns.slice(0, 10).map((checkIn) => (
+                {recentCheckIns.slice(0, 5).map((checkIn) => (
                   <div 
                     key={checkIn.id} 
-                    className="flex items-center justify-between p-3 rounded-lg border border-border"
+                    className="flex items-center justify-between p-3 rounded-lg border border-border hover-elevate"
                     data-testid={`shift-${checkIn.id}`}
                   >
                     <div className="flex items-start gap-3">
@@ -566,6 +706,11 @@ export default function GuardDashboard() {
                     </Badge>
                   </div>
                 ))}
+                {recentCheckIns.length > 5 && (
+                  <p className="text-sm text-muted-foreground text-center pt-2">
+                    Showing 5 of {recentCheckIns.length} recent shifts
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
