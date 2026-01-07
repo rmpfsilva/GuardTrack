@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, UserPlus, AlertCircle } from "lucide-react";
+import { Shield, UserPlus, AlertCircle, Building2, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const registerSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -25,11 +25,23 @@ const registerSchema = z.object({
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
+interface InvitationInfo {
+  valid: boolean;
+  email: string;
+  role: string;
+  companyName: string;
+  companyCode: string;
+  expiresAt?: string;
+  error?: string;
+}
+
 export default function RegisterPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [invitationInfo, setInvitationInfo] = useState<InvitationInfo | null>(null);
   const [isValidatingToken, setIsValidatingToken] = useState(true);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<RegisterForm>({
@@ -53,13 +65,32 @@ export default function RegisterPage() {
         description: "No invitation token provided. Please use the link from your invitation email.",
         variant: "destructive",
       });
-      // Immediate redirect without setTimeout
       setLocation("/auth");
       return;
     }
     
-    setInvitationToken(token);
-    setIsValidatingToken(false);
+    // Validate the token and get company info
+    const validateToken = async () => {
+      try {
+        const response = await fetch(`/api/invitation/validate/${token}`);
+        const data = await response.json();
+        
+        if (!response.ok || !data.valid) {
+          setTokenError(data.error || "Invalid invitation token");
+          setIsValidatingToken(false);
+          return;
+        }
+        
+        setInvitationInfo(data);
+        setInvitationToken(token);
+        setIsValidatingToken(false);
+      } catch (error) {
+        setTokenError("Failed to validate invitation");
+        setIsValidatingToken(false);
+      }
+    };
+    
+    validateToken();
   }, [toast, setLocation]);
 
   const onSubmit = async (data: RegisterForm) => {
@@ -99,23 +130,44 @@ export default function RegisterPage() {
     }
   };
 
-  // Block rendering until token validation completes
-  if (isValidatingToken || !invitationToken) {
+  // Show loading state while validating token
+  if (isValidatingToken) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Validating Invitation
+            </CardTitle>
+            <CardDescription>
+              Please wait while we validate your invitation...
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error if token is invalid
+  if (tokenError || !invitationToken) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-destructive" />
-              {!invitationToken ? "Invalid Invitation" : "Validating..."}
+              Invalid Invitation
             </CardTitle>
             <CardDescription>
-              {!invitationToken 
-                ? "No invitation token found. Redirecting to login..."
-                : "Please wait while we validate your invitation..."
-              }
+              {tokenError || "No invitation token found."}
             </CardDescription>
           </CardHeader>
+          <CardContent>
+            <Button onClick={() => setLocation("/auth")} className="w-full" data-testid="button-go-to-login">
+              Go to Login
+            </Button>
+          </CardContent>
         </Card>
       </div>
     );
@@ -136,12 +188,20 @@ export default function RegisterPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert className="mb-6">
-            <UserPlus className="h-4 w-4" />
-            <AlertDescription>
-              You've been invited to join GuardTrack. Please create your account below.
-            </AlertDescription>
-          </Alert>
+          {invitationInfo && (
+            <Alert className="mb-6 bg-primary/5 border-primary/20">
+              <Building2 className="h-4 w-4" />
+              <AlertTitle>Joining {invitationInfo.companyName}</AlertTitle>
+              <AlertDescription className="mt-2 space-y-1">
+                <p>You're registering as a <strong>{invitationInfo.role}</strong> for:</p>
+                <div className="bg-background rounded-md p-3 mt-2">
+                  <p className="font-semibold">{invitationInfo.companyName}</p>
+                  <p className="text-sm text-muted-foreground">Company ID: {invitationInfo.companyCode}</p>
+                  <p className="text-sm text-muted-foreground">Email: {invitationInfo.email}</p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

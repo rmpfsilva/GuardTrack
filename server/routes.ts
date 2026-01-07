@@ -1866,7 +1866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = admin.role === 'super_admin' ? req.body.companyId : admin.companyId;
       
       // Get company details for the email
-      const company = companyId ? await storage.getCompanyById(companyId) : null;
+      const company = companyId ? await storage.getCompany(companyId) : null;
       
       // Generate a unique token
       const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
@@ -1906,7 +1906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             role: invitation.role,
             expiresAt: invitation.expiresAt || undefined,
             companyName: company?.name,
-            companyCode: company?.companyCode,
+            companyCode: company?.companyId,
           });
           
           emailSent = true;

@@ -7,6 +7,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { sendTrialInvitationEmail } from "./emailService";
 
 declare global {
   namespace Express {
@@ -103,14 +104,14 @@ export function setupAuth(app: Express) {
       }
       
       // Get company details
-      const company = await storage.getCompanyById(invitation.companyId);
+      const company = await storage.getCompany(invitation.companyId);
       
       res.json({
         valid: true,
         email: invitation.email,
         role: invitation.role,
         companyName: company?.name,
-        companyCode: company?.companyCode,
+        companyCode: company?.companyId,
         expiresAt: invitation.expiresAt,
       });
     } catch (error: any) {
@@ -239,7 +240,7 @@ export function setupAuth(app: Express) {
                 return {
                   companyId: u.companyId,
                   companyName: company?.name || 'Unknown Company',
-                  companyCode: company?.companyCode || '',
+                  companyCode: company?.companyId || '',
                 };
               }
               return null;
@@ -266,7 +267,7 @@ export function setupAuth(app: Express) {
             // Trial has expired - send email notification and block login
             const company = await storage.getCompany(user.companyId);
             if (company && company.email) {
-              await sendInvitationEmail(
+              await sendTrialInvitationEmail(
                 company.email,
                 'Trial Period Expired - GuardTrack',
                 `Dear ${company.name} Team,\n\nYour trial period for GuardTrack has expired. To continue using the platform, please contact our support team to upgrade to a full account.\n\nThank you for trying GuardTrack.\n\nBest regards,\nGuardTrack Team`
