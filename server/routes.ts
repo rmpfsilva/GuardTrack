@@ -3540,6 +3540,74 @@ GuardTrack Team`;
     }
   });
 
+  // Platform settings (in-memory storage for simplicity)
+  let platformSettings: {
+    backgroundType: 'default' | 'guardtrack' | 'custom';
+    customBackgroundUrl: string | null;
+    overlayOpacity: number;
+  } = {
+    backgroundType: 'default',
+    customBackgroundUrl: null,
+    overlayOpacity: 50,
+  };
+
+  // Get platform settings (public - anyone can read to apply background)
+  app.get('/api/platform-settings', async (req: any, res) => {
+    try {
+      res.json(platformSettings);
+    } catch (error: any) {
+      console.error("Error fetching platform settings:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch platform settings" });
+    }
+  });
+
+  // Get platform settings (super admin)
+  app.get('/api/super-admin/platform-settings', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      res.json(platformSettings);
+    } catch (error: any) {
+      console.error("Error fetching platform settings:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch platform settings" });
+    }
+  });
+
+  // Update platform settings (super admin only)
+  app.put('/api/super-admin/platform-settings', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { backgroundType, customBackgroundUrl, overlayOpacity } = req.body;
+      
+      if (backgroundType) {
+        platformSettings.backgroundType = backgroundType;
+      }
+      if (customBackgroundUrl !== undefined) {
+        platformSettings.customBackgroundUrl = customBackgroundUrl;
+      }
+      if (overlayOpacity !== undefined) {
+        platformSettings.overlayOpacity = overlayOpacity;
+      }
+      
+      res.json(platformSettings);
+    } catch (error: any) {
+      console.error("Error updating platform settings:", error);
+      res.status(500).json({ message: error.message || "Failed to update platform settings" });
+    }
+  });
+
+  // Upload background image (super admin only)
+  app.post('/api/super-admin/upload-background', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      // For now, we'll just return a placeholder since we don't have file storage
+      // In a real implementation, you'd use object storage like Replit Object Storage
+      res.status(501).json({ 
+        message: "File upload not implemented. Please use an image URL instead.",
+        suggestion: "Enter the URL of an image hosted elsewhere"
+      });
+    } catch (error: any) {
+      console.error("Error uploading background:", error);
+      res.status(500).json({ message: error.message || "Failed to upload background" });
+    }
+  });
+
   // Client-side error reporting endpoint (for frontend errors)
   app.post('/api/error-report', async (req: any, res) => {
     try {

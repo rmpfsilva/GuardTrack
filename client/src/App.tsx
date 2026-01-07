@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { BackgroundProvider } from "@/components/background-provider";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { TrialBanner } from "@/components/trial-banner";
 import NotFound from "@/pages/not-found";
@@ -53,12 +54,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light">
-        <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </AuthProvider>
+        <BackgroundProvider>
+          <AuthProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </AuthProvider>
+        </BackgroundProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

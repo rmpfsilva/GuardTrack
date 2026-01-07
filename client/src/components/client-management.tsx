@@ -359,6 +359,23 @@ export default function ClientManagement() {
     return <Badge variant="default" className="bg-green-600" data-testid={`badge-status-${client.id}`}>Full Version</Badge>;
   };
 
+  const getPlanName = (client: ClientWithStatus) => {
+    if (!client.planId) return null;
+    const plan = subscriptionPlans.find(p => p.id === client.planId);
+    return plan ? plan.name : null;
+  };
+
+  const getPlanBadge = (client: ClientWithStatus) => {
+    const planName = getPlanName(client);
+    if (!planName) {
+      return <Badge variant="outline" className="text-xs" data-testid={`badge-plan-${client.id}`}>No Plan</Badge>;
+    }
+    const colorClass = planName === 'Pro' ? 'bg-purple-600 text-white' 
+      : planName === 'Standard' ? 'bg-blue-600 text-white' 
+      : 'bg-gray-500 text-white';
+    return <Badge className={colorClass} data-testid={`badge-plan-${client.id}`}>{planName}</Badge>;
+  };
+
   const getDurationInfo = (client: ClientWithStatus) => {
     if (client.trialStatus === 'trial' || client.trialStatus === 'expired') {
       return client.trialEndDate ? `Trial ends ${format(new Date(client.trialEndDate), 'MMM d, yyyy')}` : 'Trial period';
@@ -424,7 +441,10 @@ export default function ClientManagement() {
                       </CardDescription>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      {getStatusBadge(client)}
+                      <div className="flex items-center gap-2">
+                        {getPlanBadge(client)}
+                        {getStatusBadge(client)}
+                      </div>
                       <p className="text-xs text-muted-foreground">{getDurationInfo(client)}</p>
                     </div>
                   </div>
@@ -573,7 +593,10 @@ export default function ClientManagement() {
                       </CardDescription>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      {getStatusBadge(client)}
+                      <div className="flex items-center gap-2">
+                        {getPlanBadge(client)}
+                        {getStatusBadge(client)}
+                      </div>
                       <p className="text-xs text-muted-foreground">{getDurationInfo(client)}</p>
                     </div>
                   </div>
@@ -685,7 +708,10 @@ export default function ClientManagement() {
                       </CardDescription>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      {getStatusBadge(client)}
+                      <div className="flex items-center gap-2">
+                        {getPlanBadge(client)}
+                        {getStatusBadge(client)}
+                      </div>
                       <p className="text-xs text-muted-foreground">{getDurationInfo(client)}</p>
                     </div>
                   </div>
@@ -772,7 +798,10 @@ export default function ClientManagement() {
                       </CardDescription>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      {getStatusBadge(client)}
+                      <div className="flex items-center gap-2">
+                        {getPlanBadge(client)}
+                        {getStatusBadge(client)}
+                      </div>
                       <p className="text-xs text-muted-foreground">{getDurationInfo(client)}</p>
                     </div>
                   </div>

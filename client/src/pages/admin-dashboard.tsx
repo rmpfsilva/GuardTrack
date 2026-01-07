@@ -38,6 +38,7 @@ import SubscriptionBilling from "@/components/subscription-billing";
 import ErrorLogs from "@/components/error-logs";
 import { PlanManagement } from "@/components/plan-management";
 import { PlanSummaryCard } from "@/components/plan-summary-card";
+import PlatformSettings from "@/components/platform-settings";
 
 interface DashboardStats {
   activeGuards: number;
@@ -327,6 +328,7 @@ export default function AdminDashboard() {
                   <TabsTrigger value="subscription-billing" data-testid="tab-subscription-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
                   <TabsTrigger value="usage-reports" data-testid="tab-usage-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
                   <TabsTrigger value="error-logs" data-testid="tab-error-logs" className="text-xs sm:text-sm whitespace-nowrap">Error Logs</TabsTrigger>
+                  <TabsTrigger value="platform-settings" data-testid="tab-platform-settings" className="text-xs sm:text-sm whitespace-nowrap">Settings</TabsTrigger>
                 </>
               ) : (
                 <>
@@ -546,6 +548,10 @@ export default function AdminDashboard() {
 
               <TabsContent value="error-logs">
                 <ErrorLogs />
+              </TabsContent>
+
+              <TabsContent value="platform-settings">
+                <PlatformSettings />
               </TabsContent>
             </>
           )}
