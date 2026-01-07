@@ -56,12 +56,26 @@ export default function InvitationManagement() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/invitations"] });
-      toast({
-        title: "Invitation sent",
-        description: "The user will be able to create an account using this email address.",
-      });
+      
+      if (result.emailSent === false && result.emailError) {
+        toast({
+          title: "Invitation created - Email failed",
+          description: `The invitation was created but the email could not be sent: ${result.emailError}. You may need to share the registration link manually.`,
+          variant: "destructive",
+        });
+      } else if (result.emailSent === false) {
+        toast({
+          title: "Invitation created",
+          description: "The invitation was created but no email was sent. The user can register using their email address.",
+        });
+      } else {
+        toast({
+          title: "Invitation sent",
+          description: "The user will receive an email with instructions to create their account.",
+        });
+      }
       form.reset();
     },
     onError: (error: Error) => {

@@ -1878,13 +1878,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invitation = await storage.createInvitation(validatedData);
       
       // Send invitation email
+      let emailSent = false;
+      let emailError: string | null = null;
+      
       try {
         if (!adminUser.email) {
-          console.warn("Admin user has no email set - skipping email notification");
+          console.warn("[Invitation] Admin user has no email set - skipping email notification");
+          emailError = "Admin user has no email address configured";
         } else {
           const adminName = adminUser.firstName && adminUser.lastName 
             ? `${adminUser.firstName} ${adminUser.lastName}`
             : adminUser.username;
+          
+          console.log(`[Invitation] Sending email to ${invitation.email} from ${adminUser.email} (${adminName})`);
           
           await sendInvitationEmail({
             toEmail: invitation.email,
@@ -1894,12 +1900,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             role: invitation.role,
             expiresAt: invitation.expiresAt || undefined,
           });
+          
+          emailSent = true;
+          console.log(`[Invitation] Email sent successfully to ${invitation.email}`);
         }
-      } catch (emailError) {
-        console.error("Failed to send invitation email:", emailError);
+      } catch (err: any) {
+        console.error("[Invitation] Failed to send invitation email:", err);
+        emailError = err.message || "Failed to send email";
       }
       
-      res.status(201).json(invitation);
+      res.status(201).json({ 
+        ...invitation, 
+        emailSent,
+        emailError: emailError || undefined
+      });
     } catch (error: any) {
       console.error("Error creating invitation:", error);
       res.status(400).json({ message: error.message || "Failed to create invitation" });

@@ -11,13 +11,18 @@ interface InvitationEmailData {
 
 export async function sendInvitationEmail(data: InvitationEmailData): Promise<void> {
   try {
+    console.log('[Invitation Email] Starting send process...');
+    console.log(`[Invitation Email] To: ${data.toEmail}, From: ${data.fromEmail}`);
+    
     const gmail = await getUncachableGmailClient();
+    console.log('[Invitation Email] Gmail client obtained successfully');
     
     // Build the registration URL - use REPLIT_DOMAINS for production or dev domain
     const domain = process.env.REPLIT_DOMAINS 
       ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
       : (process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000');
     const registrationUrl = `${domain}/register?token=${data.inviteToken}`;
+    console.log(`[Invitation Email] Registration URL: ${registrationUrl}`);
     
     const expiryHtml = data.expiresAt 
       ? `<p style="color: #666; margin-top: 16px;">This invitation will expire on ${data.expiresAt.toLocaleDateString('en-GB', { 
