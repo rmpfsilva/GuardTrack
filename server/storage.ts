@@ -302,6 +302,38 @@ export interface IStorage {
   deleteSubscriptionPlan(id: string): Promise<void>;
 }
 
+// Session pool shared for bootstrapping and session store
+const sessionPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// Handle pool errors gracefully
+sessionPool.on('error', (err) => {
+  console.error('Session pool error:', err.message);
+});
+
+// Bootstrap session table with idempotent SQL (prevents race conditions in production)
+// This must be called before the server starts accepting requests
+export async function initializeSessionStore(): Promise<void> {
+  try {
+    await sessionPool.query(`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+      );
+    `);
+    await sessionPool.query(`
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+    `);
+    console.log('Session table bootstrapped successfully');
+  } catch (err: any) {
+    console.error('Error bootstrapping session table:', err.message);
+    throw err;
+  }
+}
+
 export class DatabaseStorage implements IStorage {
   // Session store for authentication
   sessionStore: session.Store;
@@ -310,20 +342,10 @@ export class DatabaseStorage implements IStorage {
     // Use PostgreSQL session store for persistence across server restarts
     const PgStore = connectPgSimple(session);
     
-    // Create a standard pg pool for session storage (required by connect-pg-simple)
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-    });
-    
-    // Handle pool errors gracefully
-    pool.on('error', (err) => {
-      console.error('Session pool error:', err.message);
-    });
-    
     this.sessionStore = new PgStore({
-      pool,
+      pool: sessionPool,
       tableName: 'session',
-      createTableIfMissing: false,
+      createTableIfMissing: false, // We handle table creation ourselves via initializeSessionStore
     });
   }
 
