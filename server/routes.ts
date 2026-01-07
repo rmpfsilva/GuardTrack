@@ -2385,6 +2385,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Company plan visibility routes (admin view)
+  app.get('/api/company/plan-summary', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      
+      if (!user.companyId) {
+        return res.status(400).json({ message: "User not associated with a company" });
+      }
+      
+      const company = await storage.getCompany(user.companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      let currentPlan = null;
+      if (company.planId) {
+        currentPlan = await storage.getSubscriptionPlan(company.planId);
+      }
+      
+      // Calculate trial days remaining if on trial
+      let trialDaysRemaining = null;
+      if (company.trialStatus === 'trial' && company.trialEndDate) {
+        const now = new Date();
+        const endDate = new Date(company.trialEndDate);
+        trialDaysRemaining = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      }
+      
+      res.json({
+        company: {
+          id: company.id,
+          companyId: company.companyId,
+          name: company.name,
+        },
+        subscription: {
+          status: company.trialStatus || 'full',
+          trialEndDate: company.trialEndDate,
+          trialDaysRemaining,
+          billingStartDate: company.billingStartDate,
+        },
+        currentPlan: currentPlan ? {
+          id: currentPlan.id,
+          name: currentPlan.name,
+          description: currentPlan.description,
+          monthlyPrice: currentPlan.monthlyPrice,
+          features: currentPlan.features,
+          limits: currentPlan.limits,
+        } : null,
+      });
+    } catch (error: any) {
+      console.error("Error fetching company plan summary:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch plan summary" });
+    }
+  });
+
+  // Get all available subscription plans (for plan comparison)
+  app.get('/api/subscription-plans', isAuthenticated, async (req: any, res) => {
+    try {
+      const plans = await storage.getAllSubscriptionPlans();
+      const activePlans = plans.filter(p => p.isActive).sort((a, b) => {
+        const aOrder = a.sortOrder ? parseFloat(a.sortOrder) : 0;
+        const bOrder = b.sortOrder ? parseFloat(b.sortOrder) : 0;
+        return aOrder - bOrder;
+      });
+      res.json(activePlans);
+    } catch (error: any) {
+      console.error("Error fetching subscription plans:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch subscription plans" });
+    }
+  });
+
   // Company partnership routes (admin only)
   app.post('/api/partnerships/search', isAuthenticated, isAdmin, async (req: any, res) => {
     try {

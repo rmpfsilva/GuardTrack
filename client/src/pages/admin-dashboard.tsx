@@ -37,6 +37,7 @@ import SupportMessages from "@/components/support-messages";
 import SubscriptionBilling from "@/components/subscription-billing";
 import ErrorLogs from "@/components/error-logs";
 import { PlanManagement } from "@/components/plan-management";
+import { PlanSummaryCard } from "@/components/plan-summary-card";
 
 interface DashboardStats {
   activeGuards: number;
@@ -460,6 +461,13 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+            
+            {/* Subscription Plan Summary - only for non-super admins */}
+            {user.role !== 'super_admin' && (
+              <div className="mt-6">
+                <PlanSummaryCard />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="billing">

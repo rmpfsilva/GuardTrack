@@ -25,14 +25,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Pencil, Trash2, Shield, User as UserIcon, AlertCircle } from "lucide-react";
+import { Pencil, Trash2, Shield, User as UserIcon, AlertCircle, Users, Eye, Crown, Settings as SettingsIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
+
+const AVAILABLE_ROLES = [
+  { value: 'guard', label: 'Security Guard (SIA)', icon: Shield },
+  { value: 'steward', label: 'Steward', icon: Users },
+  { value: 'supervisor', label: 'Supervisor', icon: Eye },
+  { value: 'admin', label: 'Admin', icon: SettingsIcon },
+] as const;
 
 export default function UserManagement() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     id: "",
     email: "",
@@ -131,6 +140,22 @@ export default function UserManagement() {
     },
   });
 
+  const updateRolesMutation = useMutation({
+    mutationFn: async ({ id, roles }: { id: string; roles: string[] }) => {
+      return apiRequest("PUT", `/api/admin/users/${id}/roles`, { roles });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to update user roles",
+      });
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       id: "",
@@ -140,9 +165,10 @@ export default function UserManagement() {
       role: "guard",
       companyId: "",
     });
+    setSelectedRoles([]);
   };
 
-  const handleEdit = (user: User) => {
+  const handleEdit = async (user: User) => {
     setSelectedUser(user);
     setFormData({
       id: user.id,
@@ -152,16 +178,47 @@ export default function UserManagement() {
       role: user.role,
       companyId: user.companyId || "",
     });
+    
+    // Fetch user's current roles
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/roles`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedRoles(data.roles || [user.role]);
+      } else {
+        setSelectedRoles([user.role]);
+      }
+    } catch {
+      setSelectedRoles([user.role]);
+    }
+    
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = () => {
+  const toggleRole = (role: string) => {
+    setSelectedRoles((prev) => {
+      if (prev.includes(role)) {
+        if (prev.length === 1) {
+          toast({
+            variant: "destructive",
+            title: "Cannot remove role",
+            description: "User must have at least one role",
+          });
+          return prev;
+        }
+        return prev.filter((r) => r !== role);
+      }
+      return [...prev, role];
+    });
+  };
+
+  const handleUpdate = async () => {
     if (!selectedUser) return;
     const updateData: any = {
       email: formData.email,
       firstName: formData.firstName,
       lastName: formData.lastName,
-      role: formData.role,
+      role: selectedRoles[0] || formData.role, // Use first selected role as primary
     };
     
     // Only super admins can change company assignment
@@ -170,6 +227,12 @@ export default function UserManagement() {
       updateData.companyId = formData.companyId || null;
     }
     
+    // Update roles first
+    if (selectedRoles.length > 0) {
+      await updateRolesMutation.mutateAsync({ id: selectedUser.id, roles: selectedRoles });
+    }
+    
+    // Then update user data
     updateUserMutation.mutate({
       id: selectedUser.id,
       data: updateData,
@@ -380,22 +443,52 @@ export default function UserManagement() {
                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-role">Role</Label>
-              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-                <SelectTrigger id="edit-role" data-testid="select-edit-user-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="guard">Guard</SelectItem>
-                  <SelectItem value="steward">Steward</SelectItem>
-                  <SelectItem value="supervisor">Supervisor</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  {currentUser?.role === 'super_admin' && (
-                    <SelectItem value="super_admin">Super Admin</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+            <div className="space-y-3">
+              <Label>Roles (select one or more)</Label>
+              <div className="space-y-2 border rounded-md p-3" data-testid="role-checkboxes">
+                {AVAILABLE_ROLES.map((roleOption) => {
+                  const Icon = roleOption.icon;
+                  return (
+                    <div key={roleOption.value} className="flex items-center space-x-3">
+                      <Checkbox
+                        id={`role-${roleOption.value}`}
+                        data-testid={`checkbox-role-${roleOption.value}`}
+                        checked={selectedRoles.includes(roleOption.value)}
+                        onCheckedChange={() => toggleRole(roleOption.value)}
+                      />
+                      <label
+                        htmlFor={`role-${roleOption.value}`}
+                        className="flex items-center gap-2 text-sm cursor-pointer"
+                      >
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                        {roleOption.label}
+                      </label>
+                    </div>
+                  );
+                })}
+                {currentUser?.role === 'super_admin' && (
+                  <div className="flex items-center space-x-3 border-t pt-2 mt-2">
+                    <Checkbox
+                      id="role-super_admin"
+                      data-testid="checkbox-role-super_admin"
+                      checked={selectedRoles.includes('super_admin')}
+                      onCheckedChange={() => toggleRole('super_admin')}
+                    />
+                    <label
+                      htmlFor="role-super_admin"
+                      className="flex items-center gap-2 text-sm cursor-pointer"
+                    >
+                      <Crown className="h-4 w-4 text-amber-500" />
+                      Super Admin
+                    </label>
+                  </div>
+                )}
+              </div>
+              {selectedRoles.length > 1 && (
+                <p className="text-xs text-muted-foreground">
+                  User can switch between {selectedRoles.length} dashboards
+                </p>
+              )}
             </div>
             {currentUser?.role === 'super_admin' && (
               <div className="space-y-2">
