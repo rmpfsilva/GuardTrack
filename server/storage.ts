@@ -319,7 +319,7 @@ export class DatabaseStorage implements IStorage {
     this.sessionStore = new PgStore({
       pool: pool as any, // Type compatibility with pg Pool
       tableName: 'session', // Table name for sessions
-      createTableIfMissing: true, // Auto-create session table
+      createTableIfMissing: false, // Table already exists in production
     });
   }
 
