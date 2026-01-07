@@ -39,7 +39,7 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    // Initialize session store table before starting the server
+    // Initialize session store before starting the server
     await initializeSessionStore();
     
     const server = await registerRoutes(app);

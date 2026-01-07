@@ -93,7 +93,7 @@ import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { Pool } from "pg";
+import { Pool } from "@neondatabase/serverless";
 
 // Interface for storage operations
 export interface IStorage {
@@ -302,35 +302,34 @@ export interface IStorage {
   deleteSubscriptionPlan(id: string): Promise<void>;
 }
 
-// Session pool shared for bootstrapping and session store
+// Session pool for PostgreSQL session storage
 const sessionPool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// Handle pool errors gracefully
-sessionPool.on('error', (err) => {
-  console.error('Session pool error:', err.message);
-});
-
-// Bootstrap session table with idempotent SQL (prevents race conditions in production)
-// This must be called before the server starts accepting requests
+// Bootstrap session table with idempotent SQL
+// This must complete before the server starts
 export async function initializeSessionStore(): Promise<void> {
+  const client = await sessionPool.connect();
   try {
-    await sessionPool.query(`
+    // Create session table if it doesn't exist
+    await client.query(`
       CREATE TABLE IF NOT EXISTS "session" (
         "sid" varchar NOT NULL COLLATE "default",
         "sess" json NOT NULL,
         "expire" timestamp(6) NOT NULL,
         CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
-      );
+      )
     `);
-    await sessionPool.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+    
+    // Create index if it doesn't exist
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")
     `);
-    console.log('Session table bootstrapped successfully');
-  } catch (err: any) {
-    console.error('Error bootstrapping session table:', err.message);
-    throw err;
+    
+    console.log('Session store initialized successfully');
+  } finally {
+    client.release();
   }
 }
 
@@ -343,9 +342,9 @@ export class DatabaseStorage implements IStorage {
     const PgStore = connectPgSimple(session);
     
     this.sessionStore = new PgStore({
-      pool: sessionPool,
+      pool: sessionPool as any,
       tableName: 'session',
-      createTableIfMissing: false, // We handle table creation ourselves via initializeSessionStore
+      createTableIfMissing: false, // We create it ourselves in initializeSessionStore
     });
   }
 
