@@ -133,6 +133,30 @@ export function usePlanFeatures() {
     return null;
   };
 
+  const getLockedTabs = (): AdminTab[] => {
+    const accessibleTabs = getAccessibleTabs();
+    return PRO_TABS.filter(tab => !accessibleTabs.includes(tab));
+  };
+
+  const getNextPlanUpgrade = (): { name: string; price: string; tabs: AdminTab[] } | null => {
+    const tier = getPlanTier();
+    if (tier === 'starter') {
+      return {
+        name: 'Standard',
+        price: '$49/mo',
+        tabs: STANDARD_TABS.filter(t => !STARTER_TABS.includes(t)),
+      };
+    }
+    if (tier === 'standard') {
+      return {
+        name: 'Pro',
+        price: '$99/mo',
+        tabs: PRO_TABS.filter(t => !STANDARD_TABS.includes(t)),
+      };
+    }
+    return null;
+  };
+
   return {
     plan: companyPlan?.plan || null,
     planName: getPlanName(),
@@ -141,6 +165,8 @@ export function usePlanFeatures() {
     hasFeatureAccess,
     hasTabAccess,
     getAccessibleTabs,
+    getLockedTabs,
+    getNextPlanUpgrade,
     allTabs: PRO_TABS,
     starterTabs: STARTER_TABS,
     standardTabs: STANDARD_TABS,
