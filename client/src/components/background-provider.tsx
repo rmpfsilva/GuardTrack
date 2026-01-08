@@ -11,11 +11,13 @@ interface PlatformSettings {
 interface BackgroundContextValue {
   settings: PlatformSettings | null;
   isLoading: boolean;
+  hasCustomBackground: boolean;
 }
 
 const BackgroundContext = createContext<BackgroundContextValue>({
   settings: null,
   isLoading: true,
+  hasCustomBackground: false,
 });
 
 export function useBackground() {
@@ -82,8 +84,10 @@ export function BackgroundProvider({ children }: { children: React.ReactNode }) 
     };
   }, [settings, theme, isError]);
 
+  const hasCustomBackground = !isError && !!settings && settings.backgroundType !== 'default';
+
   return (
-    <BackgroundContext.Provider value={{ settings: settings || null, isLoading }}>
+    <BackgroundContext.Provider value={{ settings: settings || null, isLoading, hasCustomBackground }}>
       {children}
     </BackgroundContext.Provider>
   );

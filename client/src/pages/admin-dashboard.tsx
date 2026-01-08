@@ -29,6 +29,7 @@ import AdminLeaveManagement from "@/components/admin-leave-management";
 import AdvancedReports from "@/components/advanced-reports";
 import AdminApprovals from "@/components/admin-approvals";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
+import { useBackground } from "@/components/background-provider";
 import NoticeBoardManagement from "@/components/notice-board-management";
 import CompanyManagement from "@/components/company-management";
 import CompanyPartnerships from "@/components/company-partnerships";
@@ -53,6 +54,7 @@ export default function AdminDashboard() {
   const { user, isLoading: authLoading, isAdmin, logoutMutation } = useAuth();
   const { toast } = useToast();
   const { hasTabAccess, getAccessibleTabs, planTier, isLoading: planLoading } = usePlanFeatures();
+  const { hasCustomBackground } = useBackground();
   const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [editingCheckIn, setEditingCheckIn] = useState<CheckInWithDetails | null>(null);
@@ -140,7 +142,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen ${hasCustomBackground ? 'bg-transparent' : 'bg-background'}`}>
       {/* Header */}
       <header className="border-b border-border sticky top-0 bg-muted z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">

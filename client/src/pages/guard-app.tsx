@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
 import GuardNoticeBoard from "@/components/guard-notice-board";
+import { useBackground } from "@/components/background-provider";
 import type { Site, CheckInWithDetails, Break, LeaveRequest } from "@shared/schema";
 
 type TabType = "home" | "schedule" | "leave" | "notices";
@@ -34,6 +35,7 @@ export default function GuardApp() {
   const { user, isLoading: authLoading, logoutMutation, loginMutation } = useAuth();
   const { toast } = useToast();
   const { isInstallable, isInstalled, isIOS, isAndroid, installApp, hasPrompt, promptShown } = useInstallPWA();
+  const { hasCustomBackground } = useBackground();
   const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
@@ -657,7 +659,7 @@ export default function GuardApp() {
   const userInitials = `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || 'G';
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className={`flex flex-col h-screen ${hasCustomBackground ? 'bg-transparent' : 'bg-background'}`}>
       <header className="sticky top-0 z-50 bg-primary text-primary-foreground px-4 py-3 shadow-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

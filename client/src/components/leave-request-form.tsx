@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Plus, Info } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,7 @@ type LeaveRequestFormValues = z.infer<typeof leaveRequestFormSchema>;
 
 export default function LeaveRequestForm() {
   const [isOpen, setIsOpen] = useState(false);
+  const [showGuidelines, setShowGuidelines] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<LeaveRequestFormValues>({
@@ -296,80 +297,74 @@ export default function LeaveRequestForm() {
         </div>
       </div>
 
-      {/* Side Information - Guidelines */}
+      {/* Side Information - Guidelines (Collapsible) */}
       <div className="lg:col-span-1">
         <Card className="sticky top-4">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Info className="h-5 w-5 text-primary" />
               Holiday Guidelines
             </CardTitle>
-            <CardDescription>
-              Important information about applying for time off
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">Understanding Time Off</h4>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                Holiday applications involve requesting time off, not just paid holidays. 
-                It is an employer's legal obligation that any accrued holiday is used as a break from working conditions.
-              </p>
-            </div>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-muted-foreground text-xs">
+              Submit leave requests for approval. Plan ahead for best results.
+            </p>
+            
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="w-full justify-between"
+              onClick={() => setShowGuidelines(!showGuidelines)}
+              data-testid="button-toggle-guidelines"
+            >
+              <span className="text-xs">{showGuidelines ? 'Hide details' : 'Learn more about leave policies'}</span>
+              {showGuidelines ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
 
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">Types of Leave</h4>
-              <ul className="space-y-1.5 text-muted-foreground text-xs">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span><strong>Annual Leave:</strong> Pre-planned vacation days</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span><strong>Sick Leave:</strong> Time off due to illness with medical documentation</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span><strong>Personal Days:</strong> Days for personal matters</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span><strong>Unpaid Leave:</strong> Time off without pay for extended periods</span>
-                </li>
-              </ul>
-            </div>
+            {showGuidelines && (
+              <div className="space-y-4 pt-2 border-t animate-in slide-in-from-top-2 duration-200">
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm">Types of Leave</h4>
+                  <ul className="space-y-1.5 text-muted-foreground text-xs">
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span><strong>Annual Leave:</strong> Pre-planned vacation days</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span><strong>Sick Leave:</strong> Time off due to illness</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span><strong>Personal Days:</strong> Days for personal matters</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span><strong>Unpaid Leave:</strong> Extended time off without pay</span>
+                    </li>
+                  </ul>
+                </div>
 
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">Application Process</h4>
-              <ol className="space-y-1.5 text-muted-foreground text-xs list-decimal list-inside">
-                <li>Plan ahead to avoid workflow disruptions</li>
-                <li>Submit request with all relevant details</li>
-                <li>Manager reviews considering schedules and deadlines</li>
-                <li>Receive confirmation once approved</li>
-              </ol>
-            </div>
-
-            <div className="space-y-2 pt-2 border-t">
-              <h4 className="font-semibold text-sm">Key Reminders</h4>
-              <ul className="space-y-1.5 text-muted-foreground text-xs">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">✓</span>
-                  <span>Submit requests as early as possible</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">✓</span>
-                  <span>Approval depends on business needs and team schedules</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">✓</span>
-                  <span>Ensure sufficient leave balance before applying</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">✓</span>
-                  <span>Discuss unpaid leave impact with management</span>
-                </li>
-              </ul>
-            </div>
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm">Key Reminders</h4>
+                  <ul className="space-y-1.5 text-muted-foreground text-xs">
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span>Submit requests as early as possible</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span>Approval depends on team schedules</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span>Ensure sufficient leave balance</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
