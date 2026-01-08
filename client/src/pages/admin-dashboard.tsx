@@ -28,6 +28,7 @@ import InvitationManagement from "@/components/invitation-management";
 import AdminLeaveManagement from "@/components/admin-leave-management";
 import AdvancedReports from "@/components/advanced-reports";
 import AdminApprovals from "@/components/admin-approvals";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
 import NoticeBoardManagement from "@/components/notice-board-management";
 import CompanyManagement from "@/components/company-management";
 import CompanyPartnerships from "@/components/company-partnerships";
@@ -468,8 +469,9 @@ export default function AdminDashboard() {
             
             {/* Subscription Plan Summary - only for non-super admins */}
             {user.role !== 'super_admin' && (
-              <div className="mt-6">
+              <div className="mt-6 space-y-6">
                 <PlanSummaryCard />
+                <UpgradePrompt />
               </div>
             )}
           </TabsContent>

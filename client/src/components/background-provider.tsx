@@ -1,4 +1,4 @@
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, createContext, useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "@/components/theme-provider";
 
@@ -34,24 +34,23 @@ function cleanupBackground() {
 
 export function BackgroundProvider({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const { data: settings, isLoading, isError } = useQuery<PlatformSettings>({
-    queryKey: ["/api/platform-settings", refreshKey],
+  const { data: settings, isLoading, isError, refetch } = useQuery<PlatformSettings>({
+    queryKey: ["/api/platform-settings"],
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
   useEffect(() => {
     const handleSettingsChange = () => {
-      setRefreshKey(prev => prev + 1);
+      refetch();
     };
     
     window.addEventListener('platform-settings-changed', handleSettingsChange);
     return () => {
       window.removeEventListener('platform-settings-changed', handleSettingsChange);
     };
-  }, []);
+  }, [refetch]);
 
   useEffect(() => {
     if (isError || !settings || settings.backgroundType === 'default') {
