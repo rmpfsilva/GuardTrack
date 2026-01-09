@@ -275,6 +275,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get own company info - accessible by any authenticated user (including guards)
+  // IMPORTANT: This route must be defined BEFORE /api/companies/:id to avoid routing conflicts
+  app.get('/api/companies/my-company', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      
+      if (!user.companyId) {
+        return res.status(400).json({ message: "User not assigned to a company" });
+      }
+      
+      const company = await storage.getCompany(user.companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Return minimal company info for non-admins (guards, stewards)
+      res.json({
+        id: company.id,
+        name: company.name,
+        companyId: company.companyId,
+      });
+    } catch (error) {
+      console.error("Error fetching own company:", error);
+      res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
   app.get('/api/companies/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;

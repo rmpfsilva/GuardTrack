@@ -150,11 +150,11 @@ export default function GuardApp() {
     enabled: !!user,
   });
 
-  // Fetch company name for the header
+  // Fetch company name for the header (using guard-safe endpoint)
   const { data: company } = useQuery<{ id: string; name: string }>({
-    queryKey: ["/api/companies", user?.companyId],
+    queryKey: ["/api/companies/my-company"],
     queryFn: async () => {
-      const res = await fetch(`/api/companies/${user?.companyId}`, { credentials: 'include' });
+      const res = await fetch('/api/companies/my-company', { credentials: 'include' });
       if (!res.ok) return null;
       return res.json();
     },
