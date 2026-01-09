@@ -14,6 +14,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import type { ScheduledShiftWithDetails, Site, User as UserType } from "@shared/schema";
 
+const getRecurrenceLabel = (recurrence: string): string => {
+  const labels: Record<string, string> = {
+    none: "One-time",
+    daily: "Daily",
+    weekdays: "Mon-Fri",
+    weekends: "Sat-Sun",
+    weekly: "Weekly",
+    monthly: "Monthly",
+  };
+  return labels[recurrence] || recurrence;
+};
+
 export default function ScheduleManagement() {
   const { toast } = useToast();
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -278,8 +290,10 @@ export default function ScheduleManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">One-time</SelectItem>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="daily">Daily (Every day)</SelectItem>
+                    <SelectItem value="weekdays">Weekdays (Mon-Fri)</SelectItem>
+                    <SelectItem value="weekends">Weekends (Sat-Sun)</SelectItem>
+                    <SelectItem value="weekly">Weekly (Same day each week)</SelectItem>
                     <SelectItem value="monthly">Monthly</SelectItem>
                   </SelectContent>
                 </Select>
@@ -403,7 +417,7 @@ export default function ScheduleManagement() {
                         </div>
                         {shift.recurrence !== 'none' && (
                           <Badge variant="secondary" className="text-xs">
-                            {shift.recurrence}
+                            {getRecurrenceLabel(shift.recurrence)}
                           </Badge>
                         )}
                       </div>
@@ -489,8 +503,10 @@ export default function ScheduleManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">One-time</SelectItem>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="daily">Daily (Every day)</SelectItem>
+                  <SelectItem value="weekdays">Weekdays (Mon-Fri)</SelectItem>
+                  <SelectItem value="weekends">Weekends (Sat-Sun)</SelectItem>
+                  <SelectItem value="weekly">Weekly (Same day each week)</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
                 </SelectContent>
               </Select>
