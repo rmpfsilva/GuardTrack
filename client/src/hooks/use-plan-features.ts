@@ -93,7 +93,7 @@ export function usePlanFeatures() {
 
     const planName = companyPlan.plan.name?.toLowerCase();
     
-    if (planName === 'pro') {
+    if (planName === 'pro' || planName === 'professional') {
       return PRO_TABS;
     }
     
@@ -127,7 +127,7 @@ export function usePlanFeatures() {
 
   const getPlanTier = (): 'starter' | 'standard' | 'pro' | null => {
     const name = getPlanName()?.toLowerCase();
-    if (name === 'pro') return 'pro';
+    if (name === 'pro' || name === 'professional') return 'pro';
     if (name === 'standard') return 'standard';
     if (name === 'starter') return 'starter';
     return null;
