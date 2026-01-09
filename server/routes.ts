@@ -681,19 +681,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/sites', isAuthenticated, isAdmin, requireActiveTrial, requireFeature('siteManagement'), async (req: any, res) => {
     try {
       const user = req.user;
-      const validatedData = insertSiteSchema.parse(req.body);
       
-      // Set companyId from user's company (admins can only create sites in their company)
+      // For non-super-admin users, inject companyId before validation
+      const dataToValidate = { ...req.body };
       if (user.role !== 'super_admin') {
         if (!user.companyId) {
           return res.status(400).json({ message: "User not assigned to a company" });
         }
-        validatedData.companyId = user.companyId;
-      } else if (!validatedData.companyId) {
+        dataToValidate.companyId = user.companyId;
+      } else if (!dataToValidate.companyId) {
         // Super admin must specify companyId
         return res.status(400).json({ message: "Company ID is required" });
       }
       
+      const validatedData = insertSiteSchema.parse(dataToValidate);
       const site = await storage.createSite(validatedData);
       res.status(201).json(site);
     } catch (error: any) {
