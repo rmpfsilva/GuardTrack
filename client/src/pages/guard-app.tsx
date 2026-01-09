@@ -150,6 +150,17 @@ export default function GuardApp() {
     enabled: !!user,
   });
 
+  // Fetch company name for the header
+  const { data: company } = useQuery<{ id: string; name: string }>({
+    queryKey: ["/api/companies", user?.companyId],
+    queryFn: async () => {
+      const res = await fetch(`/api/companies/${user?.companyId}`, { credentials: 'include' });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!user?.companyId,
+  });
+
   const checkInMutation = useMutation({
     mutationFn: async (data: { siteId: string; latitude?: string; longitude?: string; workingRole?: string }) => {
       return await apiRequest("POST", "/api/check-ins", data);
@@ -665,7 +676,7 @@ export default function GuardApp() {
           <div className="flex items-center gap-3">
             <img src={guardTrackLogo} alt="GuardTrack" className="h-8 w-8" />
             <div>
-              <h1 className="text-lg font-bold">GuardTrack</h1>
+              <h1 className="text-lg font-bold" data-testid="text-company-name">{company?.name || 'GuardTrack'}</h1>
               <p className="text-xs opacity-80">{format(currentTime, "EEE, MMM d • h:mm a")}</p>
             </div>
           </div>
