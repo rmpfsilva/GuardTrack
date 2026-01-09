@@ -467,10 +467,9 @@ export default function SubscriptionBilling() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Basic">Basic</SelectItem>
-                          <SelectItem value="Professional">Professional</SelectItem>
-                          <SelectItem value="Enterprise">Enterprise</SelectItem>
-                          <SelectItem value="Custom">Custom</SelectItem>
+                          <SelectItem value="Starter">Starter</SelectItem>
+                          <SelectItem value="Standard">Standard</SelectItem>
+                          <SelectItem value="Pro">Pro</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -707,10 +706,9 @@ export default function SubscriptionBilling() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Basic">Basic</SelectItem>
-                          <SelectItem value="Professional">Professional</SelectItem>
-                          <SelectItem value="Enterprise">Enterprise</SelectItem>
-                          <SelectItem value="Custom">Custom</SelectItem>
+                          <SelectItem value="Starter">Starter</SelectItem>
+                          <SelectItem value="Standard">Standard</SelectItem>
+                          <SelectItem value="Pro">Pro</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
