@@ -246,7 +246,7 @@ export default function GuardDashboard() {
           });
           checkInMutation.mutate({ siteId: selectedSiteId, workingRole: selectedRole });
         },
-        { timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       toast({
@@ -276,7 +276,7 @@ export default function GuardDashboard() {
         () => {
           startBreakMutation.mutate({});
         },
-        { timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       startBreakMutation.mutate({});
@@ -298,7 +298,7 @@ export default function GuardDashboard() {
         () => {
           endBreakMutation.mutate({ breakId: activeBreak.id });
         },
-        { timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       endBreakMutation.mutate({ breakId: activeBreak.id });
