@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { 
   Clock, MapPin, LogIn, LogOut, Calendar, Bell, User, 
   Home, Coffee, FileText, ChevronRight, Loader2, AlertCircle,
-  CheckCircle2, XCircle, Download, X, Share, Smartphone
+  CheckCircle2, XCircle, Download, X, Share, Smartphone, ExternalLink, Youtube, Mail, Copy
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -429,6 +429,19 @@ export default function GuardApp() {
                           <span>Tap "Add" to install</span>
                         </li>
                       </ol>
+                      <div className="mt-4 pt-3 border-t">
+                        <a 
+                          href="https://www.youtube.com/watch?v=QpFbExFHXe0" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-red-600 hover:text-red-700 font-medium text-sm"
+                          data-testid="link-ios-video-overlay"
+                        >
+                          <Youtube className="h-5 w-5" />
+                          Watch Video Tutorial
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -500,6 +513,66 @@ export default function GuardApp() {
             </div>
           </div>
 
+          {/* iOS Install Video Link - Always Visible for Sharing */}
+          <Card className="w-full max-w-sm mb-6 border-white/20 bg-white/10 backdrop-blur-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-10 w-10 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
+                  <Youtube className="h-5 w-5 text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-sm text-white">iPhone Install Guide</p>
+                  <p className="text-xs text-white/70">Video tutorial for adding to home screen</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a 
+                  href="https://www.youtube.com/watch?v=QpFbExFHXe0" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex-1"
+                >
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    className="w-full"
+                    data-testid="button-watch-ios-video"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Watch
+                  </Button>
+                </a>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  onClick={() => {
+                    navigator.clipboard.writeText("https://www.youtube.com/watch?v=QpFbExFHXe0");
+                    toast({ title: "Link copied!", description: "Video link copied to clipboard" });
+                  }}
+                  data-testid="button-copy-ios-video"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Link
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  onClick={() => {
+                    const subject = encodeURIComponent("How to Install GuardTrack on iPhone");
+                    const body = encodeURIComponent("Watch this video to learn how to install the GuardTrack app on your iPhone:\n\nhttps://www.youtube.com/watch?v=QpFbExFHXe0\n\nThen visit the app at: " + window.location.origin + "/guard/app");
+                    window.open(`mailto:?subject=${subject}&body=${body}`);
+                  }}
+                  data-testid="button-email-ios-video"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* PWA Install Section */}
           {isInstallable && !isInstalled && (
             <Card className="w-full max-w-sm mb-6 border-primary/30 bg-primary/5">
@@ -544,6 +617,19 @@ export default function GuardApp() {
                             <span>Tap "Add" to install the app</span>
                           </li>
                         </ol>
+                        <div className="mt-4 pt-3 border-t space-y-2">
+                          <a 
+                            href="https://www.youtube.com/watch?v=QpFbExFHXe0" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-red-600 hover:text-red-700 font-medium text-sm"
+                            data-testid="link-ios-video-card"
+                          >
+                            <Youtube className="h-5 w-5" />
+                            Watch Video Tutorial
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
                       </div>
                     )}
                   </div>
