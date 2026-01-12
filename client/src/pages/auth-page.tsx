@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Building2, Loader2, ShieldCheck } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Building2, Loader2, ShieldCheck, Youtube, ExternalLink, Share, Copy, Mail, X } from "lucide-react";
 import { SiAndroid, SiApple } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -26,6 +27,10 @@ export default function AuthPage() {
   // For handling multiple company conflict
   const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  
+  // App store dialogs
+  const [showIOSDialog, setShowIOSDialog] = useState(false);
+  const [showAndroidDialog, setShowAndroidDialog] = useState(false);
 
   // Redirect if already logged in (using useEffect to avoid setState during render)
   useEffect(() => {
@@ -250,9 +255,7 @@ export default function AuthPage() {
               <Button
                 variant="outline"
                 className="flex items-center gap-2"
-                onClick={() => {
-                  alert('Android app coming soon! Link will be available after Play Store approval.');
-                }}
+                onClick={() => setShowAndroidDialog(true)}
                 data-testid="button-download-android"
               >
                 <SiAndroid className="h-5 w-5" />
@@ -264,9 +267,7 @@ export default function AuthPage() {
               <Button
                 variant="outline"
                 className="flex items-center gap-2"
-                onClick={() => {
-                  alert('iOS app coming soon! Link will be available after App Store approval.');
-                }}
+                onClick={() => setShowIOSDialog(true)}
                 data-testid="button-download-ios"
               >
                 <SiApple className="h-5 w-5" />
@@ -303,6 +304,141 @@ export default function AuthPage() {
           </ul>
         </div>
       </div>
+
+      {/* iOS App Store Dialog */}
+      <Dialog open={showIOSDialog} onOpenChange={setShowIOSDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SiApple className="h-6 w-6" />
+              iOS App Coming Soon
+            </DialogTitle>
+            <DialogDescription>
+              The GuardTrack app will be available on the App Store soon. In the meantime, you can add the app to your iPhone home screen for quick access.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="font-medium text-sm mb-3">How to install on iPhone/iPad:</p>
+              <ol className="text-sm space-y-2 text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">1</span>
+                  <span>Open the app in Safari browser</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">2</span>
+                  <span>Tap the <Share className="h-4 w-4 inline" /> Share button</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">3</span>
+                  <span>Scroll down and tap "Add to Home Screen"</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">4</span>
+                  <span>Tap "Add" to install</span>
+                </li>
+              </ol>
+            </div>
+            
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium mb-3 flex items-center gap-2">
+                <Youtube className="h-5 w-5 text-red-600" />
+                Watch Video Tutorial
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a 
+                  href="https://www.youtube.com/watch?v=QpFbExFHXe0" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex-1"
+                >
+                  <Button variant="default" size="sm" className="w-full" data-testid="button-watch-ios-video-dialog">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Watch Video
+                  </Button>
+                </a>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    navigator.clipboard.writeText("https://www.youtube.com/watch?v=QpFbExFHXe0");
+                    toast({ title: "Link copied!", description: "Video link copied to clipboard" });
+                  }}
+                  data-testid="button-copy-ios-video-dialog"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Link
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    const subject = encodeURIComponent("How to Install GuardTrack on iPhone");
+                    const body = encodeURIComponent("Watch this video to learn how to install the GuardTrack app on your iPhone:\n\nhttps://www.youtube.com/watch?v=QpFbExFHXe0\n\nThen visit the app at: " + window.location.origin + "/guard/app");
+                    window.open(`mailto:?subject=${subject}&body=${body}`);
+                  }}
+                  data-testid="button-email-ios-video-dialog"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex justify-end pt-2">
+              <Button variant="secondary" onClick={() => setShowIOSDialog(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Android Play Store Dialog */}
+      <Dialog open={showAndroidDialog} onOpenChange={setShowAndroidDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SiAndroid className="h-6 w-6" />
+              Android App Coming Soon
+            </DialogTitle>
+            <DialogDescription>
+              The GuardTrack app will be available on the Google Play Store soon. In the meantime, you can add the app to your Android home screen for quick access.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="font-medium text-sm mb-3">How to install on Android:</p>
+              <ol className="text-sm space-y-2 text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">1</span>
+                  <span>Open the app in Chrome browser</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">2</span>
+                  <span>Tap the menu (three dots) in the top right</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">3</span>
+                  <span>Tap "Install app" or "Add to Home screen"</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">4</span>
+                  <span>Tap "Install" to add the app</span>
+                </li>
+              </ol>
+            </div>
+            
+            <div className="flex justify-end pt-2">
+              <Button variant="secondary" onClick={() => setShowAndroidDialog(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
