@@ -37,6 +37,7 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Customer Support Messaging**: Integrated system for company admins to send support queries to Super Admin.
 - **Platform Appearance Settings**: Super Admin customizable platform-wide background and overlay opacity.
 - **Error Monitoring System**: Comprehensive logging of API and client-side errors with resolution workflow.
+- **Configurable Guard App Navigation**: Company admins can customize the guard mobile app navigation tabs (add, edit, delete, reorder) through the Settings page. Tabs support feature gating and role-based visibility. Default tabs are Home, Schedule, Leave, and Notices.
 
 ### System Design Choices
 The architecture emphasizes a clear separation of concerns with a multi-tenant design using `companyId` for data isolation across tables such as `companies`, `users`, `sites`, `check_ins`, `scheduled_shifts`, `breaks`, `overtime_requests`, `leave_requests`, `notices`, `company_partnerships`, `job_shares`, `trial_invitations`, `user_logins`, `support_messages`, `subscription_payments`, and `error_logs`. Hours calculation incorporates baseline break deductions and conditional overtime based on approvals.
