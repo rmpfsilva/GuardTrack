@@ -239,7 +239,7 @@ export default function GuardAppTabSettings() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <LayoutGrid className="h-5 w-5" />
-            <CardTitle>Guard App Navigation</CardTitle>
+            <CardTitle>Platform Guard App Navigation</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -257,9 +257,9 @@ export default function GuardAppTabSettings() {
             <div className="flex items-center gap-2">
               <LayoutGrid className="h-5 w-5" />
               <div>
-                <CardTitle>Guard App Navigation</CardTitle>
+                <CardTitle>Platform Guard App Navigation</CardTitle>
                 <CardDescription>
-                  Configure the tabs that appear in the guard mobile app. Drag to reorder.
+                  Configure the tabs that appear in the guard mobile app for all companies. Drag to reorder.
                 </CardDescription>
               </div>
             </div>

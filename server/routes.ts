@@ -545,16 +545,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Guard App Tab Configuration Routes (admin only)
+  // Guard App Tab Configuration Routes (platform-wide, super_admin only for write operations)
   app.get('/api/guard-app-tabs', isAuthenticated, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (!user.companyId) {
-        return res.status(400).json({ message: "Company ID required" });
-      }
-      
-      // Initialize default tabs if none exist, then return tabs
-      const tabs = await storage.initializeDefaultTabs(user.companyId);
+      // Initialize default tabs if none exist, then return tabs (platform-wide)
+      const tabs = await storage.initializeDefaultTabs();
       res.json(tabs);
     } catch (error: any) {
       console.error("Error fetching guard app tabs:", error);
@@ -562,18 +557,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/guard-app-tabs/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.get('/api/guard-app-tabs/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
       const tab = await storage.getGuardAppTab(id);
       if (!tab) {
         return res.status(404).json({ message: "Tab not found" });
-      }
-      
-      // Ensure tab belongs to user's company
-      const user = req.user;
-      if (user.role !== 'super_admin' && tab.companyId !== user.companyId) {
-        return res.status(403).json({ message: "Access denied" });
       }
       
       res.json(tab);
@@ -583,13 +572,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/guard-app-tabs', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post('/api/guard-app-tabs', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (!user.companyId) {
-        return res.status(400).json({ message: "Company ID required" });
-      }
-
       const { z } = await import("zod");
       const createTabSchema = z.object({
         tabKey: z.string().min(1),
@@ -603,10 +587,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const validatedData = createTabSchema.parse(req.body);
-      const tab = await storage.createGuardAppTab({
-        ...validatedData,
-        companyId: user.companyId,
-      });
+      const tab = await storage.createGuardAppTab(validatedData);
       
       res.status(201).json(tab);
     } catch (error: any) {
@@ -615,19 +596,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/guard-app-tabs/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.patch('/api/guard-app-tabs/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       const tab = await storage.getGuardAppTab(id);
       
       if (!tab) {
         return res.status(404).json({ message: "Tab not found" });
-      }
-      
-      // Ensure tab belongs to user's company
-      const user = req.user;
-      if (user.role !== 'super_admin' && tab.companyId !== user.companyId) {
-        return res.status(403).json({ message: "Access denied" });
       }
 
       const { z } = await import("zod");
@@ -652,19 +627,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/guard-app-tabs/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.delete('/api/guard-app-tabs/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       const tab = await storage.getGuardAppTab(id);
       
       if (!tab) {
         return res.status(404).json({ message: "Tab not found" });
-      }
-      
-      // Ensure tab belongs to user's company
-      const user = req.user;
-      if (user.role !== 'super_admin' && tab.companyId !== user.companyId) {
-        return res.status(403).json({ message: "Access denied" });
       }
       
       // Prevent deleting the default home tab
@@ -680,14 +649,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk update tab order
-  app.patch('/api/guard-app-tabs/reorder', isAuthenticated, isAdmin, async (req: any, res) => {
+  // Bulk update tab order (super_admin only)
+  app.patch('/api/guard-app-tabs/reorder', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (!user.companyId) {
-        return res.status(400).json({ message: "Company ID required" });
-      }
-
       const { z } = await import("zod");
       const reorderSchema = z.object({
         tabs: z.array(z.object({

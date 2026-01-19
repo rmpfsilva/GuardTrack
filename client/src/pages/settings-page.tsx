@@ -779,8 +779,8 @@ export default function SettingsPage() {
             {/* Invoice Settings - Admin and Super Admin */}
             {(user?.role === 'admin' || user?.role === 'super_admin') && <InvoiceSettings />}
 
-            {/* Guard App Tab Configuration - Admin and Super Admin */}
-            {(user?.role === 'admin' || user?.role === 'super_admin') && <GuardAppTabSettings />}
+            {/* Guard App Tab Configuration - Platform Admin (Super Admin) only */}
+            {user?.role === 'super_admin' && <GuardAppTabSettings />}
 
             {/* Support Messages - Company Admin only (not Super Admin) */}
             {user?.role === 'admin' && <CompanySupportMessages />}

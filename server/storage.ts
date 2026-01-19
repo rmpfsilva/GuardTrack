@@ -315,13 +315,13 @@ export interface IStorage {
   updateSubscriptionPlan(id: string, updates: UpdateSubscriptionPlan): Promise<SubscriptionPlan>;
   deleteSubscriptionPlan(id: string): Promise<void>;
 
-  // Guard app tab operations (configurable navigation)
-  getGuardAppTabs(companyId: string): Promise<GuardAppTab[]>;
+  // Guard app tab operations (platform-wide, super_admin configurable)
+  getGuardAppTabs(): Promise<GuardAppTab[]>;
   getGuardAppTab(id: string): Promise<GuardAppTab | undefined>;
   createGuardAppTab(tab: InsertGuardAppTab): Promise<GuardAppTab>;
   updateGuardAppTab(id: string, updates: UpdateGuardAppTab): Promise<GuardAppTab>;
   deleteGuardAppTab(id: string): Promise<void>;
-  initializeDefaultTabs(companyId: string): Promise<GuardAppTab[]>;
+  initializeDefaultTabs(): Promise<GuardAppTab[]>;
 }
 
 // Session pool for PostgreSQL session storage
@@ -3484,12 +3484,11 @@ export class DatabaseStorage implements IStorage {
     await db.delete(subscriptionPlans).where(eq(subscriptionPlans.id, id));
   }
 
-  // Guard App Tab operations
-  async getGuardAppTabs(companyId: string): Promise<GuardAppTab[]> {
+  // Guard App Tab operations (platform-wide, super_admin only)
+  async getGuardAppTabs(): Promise<GuardAppTab[]> {
     const tabs = await db
       .select()
       .from(guardAppTabs)
-      .where(eq(guardAppTabs.companyId, companyId))
       .orderBy(asc(guardAppTabs.sortOrder));
     return tabs;
   }
@@ -3520,17 +3519,16 @@ export class DatabaseStorage implements IStorage {
     await db.delete(guardAppTabs).where(eq(guardAppTabs.id, id));
   }
 
-  async initializeDefaultTabs(companyId: string): Promise<GuardAppTab[]> {
-    // Check if tabs already exist for this company
-    const existingTabs = await this.getGuardAppTabs(companyId);
+  async initializeDefaultTabs(): Promise<GuardAppTab[]> {
+    // Check if platform tabs already exist
+    const existingTabs = await this.getGuardAppTabs();
     if (existingTabs.length > 0) {
       return existingTabs;
     }
 
-    // Default tabs configuration
+    // Default tabs configuration (platform-wide)
     const defaultTabs: InsertGuardAppTab[] = [
       {
-        companyId,
         tabKey: 'home',
         label: 'Home',
         icon: 'Home',
@@ -3541,7 +3539,6 @@ export class DatabaseStorage implements IStorage {
         roleVisibility: ['guard', 'steward', 'supervisor'],
       },
       {
-        companyId,
         tabKey: 'schedule',
         label: 'Schedule',
         icon: 'Calendar',
@@ -3552,7 +3549,6 @@ export class DatabaseStorage implements IStorage {
         roleVisibility: ['guard', 'steward', 'supervisor'],
       },
       {
-        companyId,
         tabKey: 'leave',
         label: 'Leave',
         icon: 'FileText',
@@ -3563,7 +3559,6 @@ export class DatabaseStorage implements IStorage {
         roleVisibility: ['guard', 'steward', 'supervisor'],
       },
       {
-        companyId,
         tabKey: 'notices',
         label: 'Notices',
         icon: 'Bell',

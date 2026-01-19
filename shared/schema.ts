@@ -1025,10 +1025,10 @@ export const updateErrorLogSchema = createInsertSchema(errorLogs).omit({
 }).partial();
 
 // Guard App Tabs - Configurable navigation tabs for the guard mobile app
+// Platform-wide guard app tabs configuration (super_admin only)
 export const guardAppTabs = pgTable("guard_app_tabs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  companyId: varchar("company_id").references(() => companies.id, { onDelete: 'cascade' }).notNull(),
-  tabKey: varchar("tab_key", { length: 50 }).notNull(), // 'home' | 'schedule' | 'leave' | 'notices' | 'profile' | 'settings'
+  tabKey: varchar("tab_key", { length: 50 }).notNull().unique(), // 'home' | 'schedule' | 'leave' | 'notices' | 'profile' | 'settings'
   label: varchar("label", { length: 100 }).notNull(), // Display label (e.g., "Home", "My Schedule")
   icon: varchar("icon", { length: 50 }).notNull(), // Lucide icon name (e.g., "Home", "Calendar", "FileText")
   sortOrder: numeric("sort_order", { precision: 3, scale: 0 }).notNull().default('0'),
@@ -1048,7 +1048,6 @@ export const insertGuardAppTabSchema = createInsertSchema(guardAppTabs).omit({
 
 export const updateGuardAppTabSchema = createInsertSchema(guardAppTabs).omit({
   id: true,
-  companyId: true,
   createdAt: true,
   updatedAt: true,
 }).partial();
