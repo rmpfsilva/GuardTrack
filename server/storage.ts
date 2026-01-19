@@ -89,6 +89,10 @@ import {
   type SubscriptionPlan,
   type InsertSubscriptionPlan,
   type UpdateSubscriptionPlan,
+  guardAppTabs,
+  type GuardAppTab,
+  type InsertGuardAppTab,
+  type UpdateGuardAppTab,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
@@ -310,6 +314,14 @@ export interface IStorage {
   createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
   updateSubscriptionPlan(id: string, updates: UpdateSubscriptionPlan): Promise<SubscriptionPlan>;
   deleteSubscriptionPlan(id: string): Promise<void>;
+
+  // Guard app tab operations (configurable navigation)
+  getGuardAppTabs(companyId: string): Promise<GuardAppTab[]>;
+  getGuardAppTab(id: string): Promise<GuardAppTab | undefined>;
+  createGuardAppTab(tab: InsertGuardAppTab): Promise<GuardAppTab>;
+  updateGuardAppTab(id: string, updates: UpdateGuardAppTab): Promise<GuardAppTab>;
+  deleteGuardAppTab(id: string): Promise<void>;
+  initializeDefaultTabs(companyId: string): Promise<GuardAppTab[]>;
 }
 
 // Session pool for PostgreSQL session storage
@@ -3470,6 +3482,102 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSubscriptionPlan(id: string): Promise<void> {
     await db.delete(subscriptionPlans).where(eq(subscriptionPlans.id, id));
+  }
+
+  // Guard App Tab operations
+  async getGuardAppTabs(companyId: string): Promise<GuardAppTab[]> {
+    const tabs = await db
+      .select()
+      .from(guardAppTabs)
+      .where(eq(guardAppTabs.companyId, companyId))
+      .orderBy(asc(guardAppTabs.sortOrder));
+    return tabs;
+  }
+
+  async getGuardAppTab(id: string): Promise<GuardAppTab | undefined> {
+    const [tab] = await db
+      .select()
+      .from(guardAppTabs)
+      .where(eq(guardAppTabs.id, id));
+    return tab;
+  }
+
+  async createGuardAppTab(tab: InsertGuardAppTab): Promise<GuardAppTab> {
+    const [newTab] = await db.insert(guardAppTabs).values(tab).returning();
+    return newTab;
+  }
+
+  async updateGuardAppTab(id: string, updates: UpdateGuardAppTab): Promise<GuardAppTab> {
+    const [updatedTab] = await db
+      .update(guardAppTabs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(guardAppTabs.id, id))
+      .returning();
+    return updatedTab;
+  }
+
+  async deleteGuardAppTab(id: string): Promise<void> {
+    await db.delete(guardAppTabs).where(eq(guardAppTabs.id, id));
+  }
+
+  async initializeDefaultTabs(companyId: string): Promise<GuardAppTab[]> {
+    // Check if tabs already exist for this company
+    const existingTabs = await this.getGuardAppTabs(companyId);
+    if (existingTabs.length > 0) {
+      return existingTabs;
+    }
+
+    // Default tabs configuration
+    const defaultTabs: InsertGuardAppTab[] = [
+      {
+        companyId,
+        tabKey: 'home',
+        label: 'Home',
+        icon: 'Home',
+        sortOrder: '0',
+        isActive: true,
+        isDefault: true,
+        featureGate: null,
+        roleVisibility: ['guard', 'steward', 'supervisor'],
+      },
+      {
+        companyId,
+        tabKey: 'schedule',
+        label: 'Schedule',
+        icon: 'Calendar',
+        sortOrder: '1',
+        isActive: true,
+        isDefault: false,
+        featureGate: 'shiftScheduling',
+        roleVisibility: ['guard', 'steward', 'supervisor'],
+      },
+      {
+        companyId,
+        tabKey: 'leave',
+        label: 'Leave',
+        icon: 'FileText',
+        sortOrder: '2',
+        isActive: true,
+        isDefault: false,
+        featureGate: 'leaveRequests',
+        roleVisibility: ['guard', 'steward', 'supervisor'],
+      },
+      {
+        companyId,
+        tabKey: 'notices',
+        label: 'Notices',
+        icon: 'Bell',
+        sortOrder: '3',
+        isActive: true,
+        isDefault: false,
+        featureGate: 'noticeBoard',
+        roleVisibility: ['guard', 'steward', 'supervisor'],
+      },
+    ];
+
+    // Insert default tabs
+    const createdTabs = await db.insert(guardAppTabs).values(defaultTabs).returning();
+    return createdTabs;
   }
 }
 
