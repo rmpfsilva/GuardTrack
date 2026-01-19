@@ -1024,6 +1024,35 @@ export const updateErrorLogSchema = createInsertSchema(errorLogs).omit({
   createdAt: true,
 }).partial();
 
+// Guard App Tabs - Configurable navigation tabs for the guard mobile app
+export const guardAppTabs = pgTable("guard_app_tabs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: 'cascade' }).notNull(),
+  tabKey: varchar("tab_key", { length: 50 }).notNull(), // 'home' | 'schedule' | 'leave' | 'notices' | 'profile' | 'settings'
+  label: varchar("label", { length: 100 }).notNull(), // Display label (e.g., "Home", "My Schedule")
+  icon: varchar("icon", { length: 50 }).notNull(), // Lucide icon name (e.g., "Home", "Calendar", "FileText")
+  sortOrder: numeric("sort_order", { precision: 3, scale: 0 }).notNull().default('0'),
+  isActive: boolean("is_active").notNull().default(true),
+  isDefault: boolean("is_default").notNull().default(false), // Default tab when app loads
+  featureGate: varchar("feature_gate", { length: 50 }), // Optional: subscription feature required (e.g., 'leaveRequests', 'noticeBoard')
+  roleVisibility: jsonb("role_visibility").$type<string[]>().default(['guard', 'steward', 'supervisor']), // Roles that can see this tab
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertGuardAppTabSchema = createInsertSchema(guardAppTabs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateGuardAppTabSchema = createInsertSchema(guardAppTabs).omit({
+  id: true,
+  companyId: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 // TypeScript types
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
@@ -1123,6 +1152,10 @@ export type UpdateSubscriptionPayment = z.infer<typeof updateSubscriptionPayment
 export type ErrorLog = typeof errorLogs.$inferSelect;
 export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
 export type UpdateErrorLog = z.infer<typeof updateErrorLogSchema>;
+
+export type GuardAppTab = typeof guardAppTabs.$inferSelect;
+export type InsertGuardAppTab = z.infer<typeof insertGuardAppTabSchema>;
+export type UpdateGuardAppTab = z.infer<typeof updateGuardAppTabSchema>;
 
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
