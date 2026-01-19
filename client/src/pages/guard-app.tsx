@@ -27,15 +27,36 @@ import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
 import GuardNoticeBoard from "@/components/guard-notice-board";
 import { useBackground } from "@/components/background-provider";
-import type { Site, CheckInWithDetails, Break, LeaveRequest } from "@shared/schema";
+import { useFeatureAccess, type FeatureName } from "@/hooks/use-feature-access";
+import type { Site, CheckInWithDetails, Break, LeaveRequest, GuardAppTab } from "@shared/schema";
+import { Shield, Briefcase, Settings as SettingsIcon } from "lucide-react";
 
-type TabType = "home" | "schedule" | "leave" | "notices";
+type TabType = string;
+
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  Home,
+  Calendar,
+  FileText,
+  Bell,
+  User,
+  Shield,
+  Clock,
+  MapPin,
+  Briefcase,
+  Settings: SettingsIcon,
+};
+
+function getTabIcon(iconName: string) {
+  const IconComponent = iconMap[iconName] || Home;
+  return <IconComponent className="h-5 w-5" />;
+}
 
 export default function GuardApp() {
   const { user, isLoading: authLoading, logoutMutation, loginMutation } = useAuth();
   const { toast } = useToast();
   const { isInstallable, isInstalled, isIOS, isAndroid, installApp, hasPrompt, promptShown } = useInstallPWA();
   const { hasCustomBackground } = useBackground();
+  const { hasFeature, hasFullAccess } = useFeatureAccess();
   const [, setLocation] = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
@@ -149,6 +170,37 @@ export default function GuardApp() {
     queryKey: ["/api/leave-requests/my"],
     enabled: !!user,
   });
+
+  // Fetch configurable tabs
+  const { data: guardTabs = [] } = useQuery<GuardAppTab[]>({
+    queryKey: ["/api/guard-app-tabs"],
+    enabled: !!user,
+  });
+
+  // Get visible tabs sorted by order with role and feature filtering
+  const visibleTabs = guardTabs
+    .filter(tab => {
+      // Must be active
+      if (!tab.isActive) return false;
+      
+      // Check role visibility
+      const userRole = user?.role || 'guard';
+      if (tab.roleVisibility && tab.roleVisibility.length > 0) {
+        if (!tab.roleVisibility.includes(userRole)) return false;
+      }
+      
+      // Check feature gate (if tab has a feature gate, user must have that feature)
+      if (tab.featureGate) {
+        if (!hasFullAccess && !hasFeature(tab.featureGate as FeatureName)) return false;
+      }
+      
+      return true;
+    })
+    .sort((a, b) => {
+      const orderA = parseInt(a.sortOrder) || 0;
+      const orderB = parseInt(b.sortOrder) || 0;
+      return orderA - orderB;
+    });
 
   // Fetch company name for the header (using guard-safe endpoint)
   const { data: company } = useQuery<{ id: string; name: string }>({
@@ -1070,39 +1122,58 @@ export default function GuardApp() {
               </TabsContent>
             </div>
 
-          <TabsList className="fixed bottom-0 left-0 right-0 h-16 grid grid-cols-4 rounded-none border-t bg-background shadow-lg z-50">
-            <TabsTrigger 
-              value="home" 
-              className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-              data-testid="tab-home"
-            >
-              <Home className="h-5 w-5" />
-              <span className="text-xs">Home</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="schedule" 
-              className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-              data-testid="tab-schedule"
-            >
-              <Calendar className="h-5 w-5" />
-              <span className="text-xs">Schedule</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="leave" 
-              className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-              data-testid="tab-leave"
-            >
-              <FileText className="h-5 w-5" />
-              <span className="text-xs">Leave</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="notices" 
-              className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-              data-testid="tab-notices"
-            >
-              <Bell className="h-5 w-5" />
-              <span className="text-xs">Notices</span>
-            </TabsTrigger>
+          <TabsList 
+            className={`fixed bottom-0 left-0 right-0 h-16 grid rounded-none border-t bg-background shadow-lg z-50`}
+            style={{ gridTemplateColumns: `repeat(${visibleTabs.length || 4}, 1fr)` }}
+          >
+            {visibleTabs.length > 0 ? (
+              visibleTabs.map((tab) => (
+                <TabsTrigger 
+                  key={tab.id}
+                  value={tab.tabKey} 
+                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
+                  data-testid={`tab-${tab.tabKey}`}
+                >
+                  {getTabIcon(tab.icon)}
+                  <span className="text-xs">{tab.label}</span>
+                </TabsTrigger>
+              ))
+            ) : (
+              <>
+                <TabsTrigger 
+                  value="home" 
+                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
+                  data-testid="tab-home"
+                >
+                  <Home className="h-5 w-5" />
+                  <span className="text-xs">Home</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="schedule" 
+                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
+                  data-testid="tab-schedule"
+                >
+                  <Calendar className="h-5 w-5" />
+                  <span className="text-xs">Schedule</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="leave" 
+                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
+                  data-testid="tab-leave"
+                >
+                  <FileText className="h-5 w-5" />
+                  <span className="text-xs">Leave</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="notices" 
+                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
+                  data-testid="tab-notices"
+                >
+                  <Bell className="h-5 w-5" />
+                  <span className="text-xs">Notices</span>
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
         </Tabs>
       </main>
