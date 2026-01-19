@@ -545,6 +545,171 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Guard App Tab Configuration Routes (admin only)
+  app.get('/api/guard-app-tabs', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) {
+        return res.status(400).json({ message: "Company ID required" });
+      }
+      
+      // Initialize default tabs if none exist, then return tabs
+      const tabs = await storage.initializeDefaultTabs(user.companyId);
+      res.json(tabs);
+    } catch (error: any) {
+      console.error("Error fetching guard app tabs:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch guard app tabs" });
+    }
+  });
+
+  app.get('/api/guard-app-tabs/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const tab = await storage.getGuardAppTab(id);
+      if (!tab) {
+        return res.status(404).json({ message: "Tab not found" });
+      }
+      
+      // Ensure tab belongs to user's company
+      const user = req.user;
+      if (user.role !== 'super_admin' && tab.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      res.json(tab);
+    } catch (error: any) {
+      console.error("Error fetching guard app tab:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch guard app tab" });
+    }
+  });
+
+  app.post('/api/guard-app-tabs', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) {
+        return res.status(400).json({ message: "Company ID required" });
+      }
+
+      const { z } = await import("zod");
+      const createTabSchema = z.object({
+        tabKey: z.string().min(1),
+        label: z.string().min(1),
+        icon: z.string().min(1),
+        sortOrder: z.string(),
+        isActive: z.boolean().default(true),
+        isDefault: z.boolean().default(false),
+        featureGate: z.string().nullable().optional(),
+        roleVisibility: z.array(z.string()).default(['guard', 'steward', 'supervisor']),
+      });
+
+      const validatedData = createTabSchema.parse(req.body);
+      const tab = await storage.createGuardAppTab({
+        ...validatedData,
+        companyId: user.companyId,
+      });
+      
+      res.status(201).json(tab);
+    } catch (error: any) {
+      console.error("Error creating guard app tab:", error);
+      res.status(400).json({ message: error.message || "Failed to create guard app tab" });
+    }
+  });
+
+  app.patch('/api/guard-app-tabs/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const tab = await storage.getGuardAppTab(id);
+      
+      if (!tab) {
+        return res.status(404).json({ message: "Tab not found" });
+      }
+      
+      // Ensure tab belongs to user's company
+      const user = req.user;
+      if (user.role !== 'super_admin' && tab.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { z } = await import("zod");
+      const updateTabSchema = z.object({
+        tabKey: z.string().min(1).optional(),
+        label: z.string().min(1).optional(),
+        icon: z.string().min(1).optional(),
+        sortOrder: z.string().optional(),
+        isActive: z.boolean().optional(),
+        isDefault: z.boolean().optional(),
+        featureGate: z.string().nullable().optional(),
+        roleVisibility: z.array(z.string()).optional(),
+      });
+
+      const validatedData = updateTabSchema.parse(req.body);
+      const updatedTab = await storage.updateGuardAppTab(id, validatedData);
+      
+      res.json(updatedTab);
+    } catch (error: any) {
+      console.error("Error updating guard app tab:", error);
+      res.status(400).json({ message: error.message || "Failed to update guard app tab" });
+    }
+  });
+
+  app.delete('/api/guard-app-tabs/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const tab = await storage.getGuardAppTab(id);
+      
+      if (!tab) {
+        return res.status(404).json({ message: "Tab not found" });
+      }
+      
+      // Ensure tab belongs to user's company
+      const user = req.user;
+      if (user.role !== 'super_admin' && tab.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Prevent deleting the default home tab
+      if (tab.tabKey === 'home' && tab.isDefault) {
+        return res.status(400).json({ message: "Cannot delete the default home tab" });
+      }
+      
+      await storage.deleteGuardAppTab(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting guard app tab:", error);
+      res.status(400).json({ message: error.message || "Failed to delete guard app tab" });
+    }
+  });
+
+  // Bulk update tab order
+  app.patch('/api/guard-app-tabs/reorder', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) {
+        return res.status(400).json({ message: "Company ID required" });
+      }
+
+      const { z } = await import("zod");
+      const reorderSchema = z.object({
+        tabs: z.array(z.object({
+          id: z.string(),
+          sortOrder: z.string(),
+        })),
+      });
+
+      const { tabs } = reorderSchema.parse(req.body);
+      
+      // Update each tab's sort order
+      const updatedTabs = await Promise.all(
+        tabs.map(({ id, sortOrder }) => storage.updateGuardAppTab(id, { sortOrder }))
+      );
+      
+      res.json(updatedTabs);
+    } catch (error: any) {
+      console.error("Error reordering guard app tabs:", error);
+      res.status(400).json({ message: error.message || "Failed to reorder guard app tabs" });
+    }
+  });
+
   // User management routes (admin only)
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
