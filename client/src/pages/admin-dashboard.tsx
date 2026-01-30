@@ -41,7 +41,6 @@ import CompanySupportMessages from "@/components/company-support-messages";
 import SubscriptionBilling from "@/components/subscription-billing";
 import ErrorLogs from "@/components/error-logs";
 import { PlanManagement } from "@/components/plan-management";
-import { PlanSummaryCard } from "@/components/plan-summary-card";
 import PlatformSettings from "@/components/platform-settings";
 import SuperAdminUserManagement from "@/components/super-admin-user-management";
 
@@ -224,9 +223,16 @@ export default function AdminDashboard() {
                   Platform Admin
                 </Badge>
               ) : userCompany ? (
-                <Badge variant="outline" className="text-xs" data-testid="badge-company-name">
-                  {userCompany.name}
-                </Badge>
+                <>
+                  <Badge variant="outline" className="text-xs" data-testid="badge-company-name">
+                    {userCompany.name}
+                  </Badge>
+                  {planTier && (
+                    <Badge variant="default" className="text-xs" data-testid="badge-plan-tier">
+                      {planTier}
+                    </Badge>
+                  )}
+                </>
               ) : null}
             </div>
           </div>
@@ -538,10 +544,9 @@ export default function AdminDashboard() {
               </Card>
             </div>
             
-            {/* Subscription Plan Summary - only for non-super admins */}
+            {/* Upgrade Prompt - only for non-super admins */}
             {user.role !== 'super_admin' && (
-              <div className="mt-6 space-y-6">
-                <PlanSummaryCard />
+              <div className="mt-6">
                 <UpgradePrompt />
               </div>
             )}
