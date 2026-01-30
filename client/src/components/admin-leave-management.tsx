@@ -49,7 +49,7 @@ export default function AdminLeaveManagement() {
 
   // Fetch employees for the create leave dropdown
   const { data: employees = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/admin/users"],
   });
 
   // Mutation for creating leave on behalf of employees
