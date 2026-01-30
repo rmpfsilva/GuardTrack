@@ -80,8 +80,36 @@ export function setupAuth(app: Express) {
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: string, done) => {
     const user = await storage.getUserById(id);
-    // Sanitize user to remove password before setting on req.user
-    done(null, user ? sanitizeUser(user) : null);
+    if (!user) {
+      return done(null, null);
+    }
+    
+    // Fetch user's roles from userRoles table and determine highest priority role
+    const userRoles = await storage.getUserRoles(id);
+    const rolePriority: Record<string, number> = {
+      'super_admin': 5,
+      'admin': 4,
+      'supervisor': 3,
+      'steward': 2,
+      'guard': 1
+    };
+    
+    // If user has roles in userRoles table, use the highest priority one
+    let effectiveRole = user.role;
+    if (userRoles.length > 0) {
+      const sortedRoles = userRoles.sort((a, b) => (rolePriority[b] || 0) - (rolePriority[a] || 0));
+      effectiveRole = sortedRoles[0];
+    }
+    
+    // Sanitize and include the effective role
+    const sanitized = sanitizeUser(user);
+    const userWithRoles = {
+      ...sanitized,
+      role: effectiveRole, // Override with highest priority role from userRoles
+      roles: userRoles.length > 0 ? userRoles : [user.role] // Include all roles
+    };
+    
+    done(null, userWithRoles);
   });
 
   // Validate invitation token and return company info (for registration page)

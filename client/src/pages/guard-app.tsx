@@ -862,7 +862,7 @@ export default function GuardApp() {
         </div>
       )}
 
-      <main className="flex-1 overflow-auto pb-20">
+      <main className="flex-1 overflow-auto pb-24">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="h-full">
           <div className="p-4">
               <TabsContent value="home" className="mt-0 space-y-4">
@@ -1071,15 +1071,40 @@ export default function GuardApp() {
                   </CardContent>
                 </Card>
 
-                <Button 
-                  variant="ghost" 
-                  className="w-full text-muted-foreground"
-                  onClick={handleLogout}
-                  data-testid="button-logout"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
+                {/* Admin/Super Admin users can access the full dashboard */}
+                {(user.role === 'admin' || user.role === 'super_admin') && (
+                  <Card 
+                    className="cursor-pointer hover-elevate border-primary/30"
+                    onClick={() => setLocation('/')}
+                    data-testid="card-admin-dashboard"
+                  >
+                    <CardContent className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Shield className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <span className="font-medium">Admin Dashboard</span>
+                          <p className="text-xs text-muted-foreground">Access full management</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Logout section - clearly separated */}
+                <div className="pt-4 border-t mt-4">
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={handleLogout}
+                    data-testid="button-logout"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
               </TabsContent>
 
               <TabsContent value="schedule" className="mt-0">
