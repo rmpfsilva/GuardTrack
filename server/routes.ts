@@ -1704,6 +1704,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin can create leave on behalf of employees
+  app.post('/api/admin/leave-requests', isAuthenticated, isAdmin, requireActiveTrial, requireFeature('leaveRequests'), async (req: any, res) => {
+    try {
+      const admin = req.user;
+      const { userId, ...leaveData } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "Employee ID is required" });
+      }
+      
+      // Validate the employee belongs to admin's company
+      if (admin.role !== 'super_admin') {
+        const employee = await storage.getUser(userId);
+        if (!employee || employee.companyId !== admin.companyId) {
+          return res.status(403).json({ message: "Cannot create leave for employees from other companies" });
+        }
+      }
+      
+      const validatedData = insertLeaveRequestSchema.parse({
+        ...leaveData,
+        userId,
+      });
+      
+      // Create leave request and auto-approve it since admin is creating it
+      const leaveRequest = await storage.createLeaveRequest(validatedData);
+      
+      // Auto-approve the leave since admin is creating it manually
+      const approvedLeave = await storage.updateLeaveRequest(leaveRequest.id, {
+        status: 'approved',
+        reviewedBy: admin.id,
+        reviewNotes: 'Auto-approved: Created by admin on behalf of employee',
+      });
+      
+      res.status(201).json(approvedLeave);
+    } catch (error: any) {
+      console.error("Error creating admin leave request:", error);
+      res.status(400).json({ message: error.message || "Failed to create leave request" });
+    }
+  });
+
   app.get('/api/leave-requests/my', isAuthenticated, async (req: any, res) => {
     try {
       const requests = await storage.getUserLeaveRequests(req.user.id);

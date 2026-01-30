@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isWithinInterval, startOfWeek, endOfWeek, startOfYear, endOfYear } from "date-fns";
-import { Calendar as CalendarIcon, Check, X, Clock, Ban, Info } from "lucide-react";
+import { Calendar as CalendarIcon, Check, X, Clock, Ban, Info, Plus } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import type { LeaveRequestWithDetails } from "@shared/schema";
+import type { LeaveRequestWithDetails, User } from "@shared/schema";
 
 export default function AdminLeaveManagement() {
   const { toast } = useToast();
@@ -30,9 +32,55 @@ export default function AdminLeaveManagement() {
   const [cancellationReason, setCancellationReason] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [dateLeaveDialogOpen, setDateLeaveDialogOpen] = useState(false);
+  
+  // State for admin creating leave on behalf of employees
+  const [createLeaveDialogOpen, setCreateLeaveDialogOpen] = useState(false);
+  const [createLeaveForm, setCreateLeaveForm] = useState({
+    userId: "",
+    startDate: "",
+    endDate: "",
+    leaveType: "annual",
+    reason: "",
+  });
 
   const { data: pendingRequests = [], isLoading: pendingLoading } = useQuery<LeaveRequestWithDetails[]>({
     queryKey: ["/api/leave-requests/pending"],
+  });
+
+  // Fetch employees for the create leave dropdown
+  const { data: employees = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
+
+  // Mutation for creating leave on behalf of employees
+  const createLeaveMutation = useMutation({
+    mutationFn: async (data: typeof createLeaveForm) => {
+      return await apiRequest("POST", "/api/admin/leave-requests", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leave-requests/pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leave-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leave-requests/upcoming"] });
+      toast({
+        title: "Leave Created",
+        description: "Leave has been created and auto-approved for the employee.",
+      });
+      setCreateLeaveDialogOpen(false);
+      setCreateLeaveForm({
+        userId: "",
+        startDate: "",
+        endDate: "",
+        leaveType: "annual",
+        reason: "",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Create Leave",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const { data: allRequests = [], isLoading: allLoading } = useQuery<LeaveRequestWithDetails[]>({
@@ -316,9 +364,15 @@ export default function AdminLeaveManagement() {
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
       {/* Main Content - Leave Management */}
       <div className="lg:col-span-3 space-y-6">
-        <div>
-          <h2 className="text-2xl font-semibold mb-2">Annual Leave Management</h2>
-          <p className="text-muted-foreground">Review and approve leave requests from your team</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold mb-2">Annual Leave Management</h2>
+            <p className="text-muted-foreground">Review and approve leave requests from your team</p>
+          </div>
+          <Button onClick={() => setCreateLeaveDialogOpen(true)} data-testid="button-create-leave">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Leave
+          </Button>
         </div>
 
         <Tabs defaultValue="pending" className="w-full">
@@ -778,6 +832,99 @@ export default function AdminLeaveManagement() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDateLeaveDialogOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Leave Dialog */}
+      <Dialog open={createLeaveDialogOpen} onOpenChange={setCreateLeaveDialogOpen}>
+        <DialogContent data-testid="dialog-create-leave">
+          <DialogHeader>
+            <DialogTitle>Add Leave for Employee</DialogTitle>
+            <DialogDescription>
+              Create and auto-approve leave on behalf of an employee who cannot submit their own request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="employee">Employee</Label>
+              <Select
+                value={createLeaveForm.userId}
+                onValueChange={(value) => setCreateLeaveForm({ ...createLeaveForm, userId: value })}
+              >
+                <SelectTrigger id="employee" data-testid="select-employee">
+                  <SelectValue placeholder="Select an employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.firstName} {emp.lastName} ({emp.email || emp.username})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={createLeaveForm.startDate}
+                  onChange={(e) => setCreateLeaveForm({ ...createLeaveForm, startDate: e.target.value })}
+                  data-testid="input-start-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={createLeaveForm.endDate}
+                  onChange={(e) => setCreateLeaveForm({ ...createLeaveForm, endDate: e.target.value })}
+                  data-testid="input-end-date"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="leaveType">Leave Type</Label>
+              <Select
+                value={createLeaveForm.leaveType}
+                onValueChange={(value) => setCreateLeaveForm({ ...createLeaveForm, leaveType: value })}
+              >
+                <SelectTrigger id="leaveType" data-testid="select-leave-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="annual">Annual Leave</SelectItem>
+                  <SelectItem value="sick">Sick Leave</SelectItem>
+                  <SelectItem value="personal">Personal Leave</SelectItem>
+                  <SelectItem value="unpaid">Unpaid Leave</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reason">Reason (Optional)</Label>
+              <Textarea
+                id="reason"
+                placeholder="Enter reason for leave..."
+                value={createLeaveForm.reason}
+                onChange={(e) => setCreateLeaveForm({ ...createLeaveForm, reason: e.target.value })}
+                data-testid="input-leave-reason"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateLeaveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createLeaveMutation.mutate(createLeaveForm)}
+              disabled={createLeaveMutation.isPending || !createLeaveForm.userId || !createLeaveForm.startDate || !createLeaveForm.endDate}
+              data-testid="button-confirm-create-leave"
+            >
+              {createLeaveMutation.isPending ? "Creating..." : "Create Leave"}
             </Button>
           </DialogFooter>
         </DialogContent>
