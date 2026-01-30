@@ -42,6 +42,7 @@ import ErrorLogs from "@/components/error-logs";
 import { PlanManagement } from "@/components/plan-management";
 import { PlanSummaryCard } from "@/components/plan-summary-card";
 import PlatformSettings from "@/components/platform-settings";
+import SuperAdminUserManagement from "@/components/super-admin-user-management";
 
 interface DashboardStats {
   activeGuards: number;
@@ -328,6 +329,7 @@ export default function AdminDashboard() {
                 <>
                   {/* Super Admin Tabs - Platform Management Only */}
                   <TabsTrigger value="clients" data-testid="tab-clients" className="text-xs sm:text-sm whitespace-nowrap">Clients</TabsTrigger>
+                  <TabsTrigger value="all-users" data-testid="tab-all-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
                   <TabsTrigger value="plans" data-testid="tab-plans" className="text-xs sm:text-sm whitespace-nowrap">Plans</TabsTrigger>
                   <TabsTrigger value="messages" data-testid="tab-messages" className="text-xs sm:text-sm whitespace-nowrap">Messages</TabsTrigger>
                   <TabsTrigger value="subscription-billing" data-testid="tab-subscription-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
@@ -534,6 +536,10 @@ export default function AdminDashboard() {
             <>
               <TabsContent value="clients">
                 <ClientManagement />
+              </TabsContent>
+
+              <TabsContent value="all-users">
+                <SuperAdminUserManagement />
               </TabsContent>
 
               <TabsContent value="plans">

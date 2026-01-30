@@ -3077,6 +3077,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Super Admin Client Management Routes
+  // Super Admin User Management - Get all users across all companies
+  app.get('/api/super-admin/all-users', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const allCompanies = await storage.getAllCompanies();
+      
+      // Create company lookup map
+      const companyMap = new Map(allCompanies.map(c => [c.id, c.name]));
+      
+      // Enrich users with their roles and company name
+      const usersWithDetails = await Promise.all(
+        allUsers.map(async (user) => {
+          const roles = await storage.getUserRoles(user.id);
+          return {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+            role: user.role,
+            roles: roles.length > 0 ? roles : [user.role],
+            companyId: user.companyId,
+            companyName: user.companyId ? companyMap.get(user.companyId) : null,
+            isActive: true, // All users in the system are considered active (no isActive field in schema)
+            createdAt: user.createdAt,
+          };
+        })
+      );
+      
+      res.json(usersWithDetails);
+    } catch (error) {
+      console.error("Error fetching all users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Super Admin - Get companies list for filtering
+  app.get('/api/super-admin/companies-list', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const allCompanies = await storage.getAllCompanies();
+      res.json(allCompanies.map(c => ({ id: c.id, name: c.name })));
+    } catch (error) {
+      console.error("Error fetching companies list:", error);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
+  // Super Admin - Update user roles
+  app.put('/api/super-admin/users/:id/roles', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { z } = await import("zod");
+      
+      // Validate request body with Zod
+      const VALID_ROLES_ARRAY = ['guard', 'steward', 'supervisor', 'admin', 'super_admin'] as const;
+      const rolesSchema = z.object({
+        roles: z.array(z.enum(VALID_ROLES_ARRAY)).min(1, "At least one role is required")
+      });
+      
+      const validationResult = rolesSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ message: validationResult.error.errors[0].message });
+      }
+      
+      const { roles } = validationResult.data;
+      
+      // Role priority order (highest privilege first) for deterministic primary role selection
+      const rolePriority: Record<string, number> = {
+        'super_admin': 5,
+        'admin': 4,
+        'supervisor': 3,
+        'steward': 2,
+        'guard': 1
+      };
+      
+      // Sort roles by priority (highest first) and use the highest as primary role
+      const sortedRoles = [...roles].sort((a, b) => rolePriority[b] - rolePriority[a]);
+      const primaryRole = sortedRoles[0];
+      
+      // Update the user's roles in the user_roles table
+      await storage.setUserRoles(id, roles, req.user.id);
+      
+      // Also update the legacy role field to the highest priority role
+      await storage.updateUser(id, { role: primaryRole });
+      
+      res.json({ message: "Roles updated successfully", roles, primaryRole });
+    } catch (error: any) {
+      console.error("Error updating user roles:", error);
+      res.status(500).json({ message: error.message || "Failed to update user roles" });
+    }
+  });
+
+  // Super Admin - Reset user password
+  app.post('/api/super-admin/users/:id/reset-password', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { z } = await import("zod");
+      
+      // Validate request body with Zod
+      const passwordSchema = z.object({
+        password: z.string().min(6, "Password must be at least 6 characters")
+      });
+      
+      const validationResult = passwordSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ message: validationResult.error.errors[0].message });
+      }
+      
+      const { password } = validationResult.data;
+      
+      // Hash the new password
+      const { scryptSync, randomBytes } = await import("crypto");
+      const salt = randomBytes(16).toString("hex");
+      const hash = scryptSync(password, salt, 64).toString("hex");
+      const hashedPassword = `${salt}:${hash}`;
+      
+      // Update the user's password
+      await storage.updateUser(id, { password: hashedPassword });
+      
+      res.json({ message: "Password reset successfully" });
+    } catch (error: any) {
+      console.error("Error resetting user password:", error);
+      res.status(500).json({ message: error.message || "Failed to reset password" });
+    }
+  });
+
   app.get('/api/super-admin/clients', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
       const allCompanies = await storage.getAllCompanies();
