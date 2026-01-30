@@ -16,7 +16,7 @@ import { NotificationSettingsButton } from "@/components/notification-settings-b
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LocationDisplay } from "@/components/location-display";
-import type { Site, CheckInWithDetails, User, Company, LeaveRequestWithDetails, SupportMessage, ErrorLog } from "@shared/schema";
+import type { Site, CheckInWithDetails, User, Company, LeaveRequestWithDetails, SupportMessage, ErrorLog, CompanyPartnershipWithDetails, JobShareWithDetails } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
 import ScheduleManagement from "@/components/schedule-management";
@@ -156,6 +156,18 @@ export default function AdminDashboard() {
     enabled: !!user && user?.role === 'super_admin',
   });
 
+  // Fetch received partnership requests (for partnerships tab notification)
+  const { data: receivedPartnerships = [] } = useQuery<CompanyPartnershipWithDetails[]>({
+    queryKey: ["/api/partnerships/received"],
+    enabled: !!user && isCompanyAdmin,
+  });
+
+  // Fetch incoming job shares (for job sharing tab notification)
+  const { data: incomingJobShares = [] } = useQuery<JobShareWithDetails[]>({
+    queryKey: ["/api/job-shares/incoming"],
+    enabled: !!user && isCompanyAdmin,
+  });
+
   // Calculate which tabs have new entries (not currently selected)
   const tabHasNew = (tabValue: string): boolean => {
     if (activeTab === tabValue) return false;
@@ -169,6 +181,10 @@ export default function AdminDashboard() {
         return supportMessages.filter(m => !m.isRead).length > 0;
       case 'error-logs':
         return errorLogs.filter(e => !e.isResolved).length > 0;
+      case 'partnerships':
+        return receivedPartnerships.filter(p => p.status === 'pending').length > 0;
+      case 'job-sharing':
+        return incomingJobShares.filter(j => j.status === 'pending').length > 0;
       default:
         return false;
     }
@@ -401,8 +417,8 @@ export default function AdminDashboard() {
                   {hasTabAccess('manual') && <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>}
                   {hasTabAccess('approvals') && <TabsTrigger value="approvals" data-testid="tab-approvals" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('approvals') ? 'tab-has-new' : ''}`}>Approvals</TabsTrigger>}
                   {hasTabAccess('notices') && <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>}
-                  {hasTabAccess('partnerships') && <TabsTrigger value="partnerships" data-testid="tab-partnerships" className="text-xs sm:text-sm whitespace-nowrap">Partnerships</TabsTrigger>}
-                  {hasTabAccess('job-sharing') && <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className="text-xs sm:text-sm whitespace-nowrap">Job Sharing</TabsTrigger>}
+                  {hasTabAccess('partnerships') && <TabsTrigger value="partnerships" data-testid="tab-partnerships" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('partnerships') ? 'tab-has-new' : ''}`}>Partnerships</TabsTrigger>}
+                  {hasTabAccess('job-sharing') && <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('job-sharing') ? 'tab-has-new' : ''}`}>Job Sharing</TabsTrigger>}
                   {hasTabAccess('billing') && <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>}
                   {hasTabAccess('activity') && <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>}
                   <TabsTrigger value="support" data-testid="tab-support" className="text-xs sm:text-sm whitespace-nowrap">Support</TabsTrigger>
