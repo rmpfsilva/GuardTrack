@@ -3086,18 +3086,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create company lookup map
       const companyMap = new Map(allCompanies.map(c => [c.id, c.name]));
       
+      // Role priority for determining highest priority role
+      const rolePriority: Record<string, number> = {
+        'super_admin': 5,
+        'admin': 4,
+        'supervisor': 3,
+        'steward': 2,
+        'guard': 1
+      };
+      
       // Enrich users with their roles and company name
       const usersWithDetails = await Promise.all(
         allUsers.map(async (user) => {
           const roles = await storage.getUserRoles(user.id);
+          
+          // Determine expected role (highest priority from userRoles)
+          let expectedRole = user.role;
+          if (roles.length > 0) {
+            const sortedRoles = [...roles].sort((a, b) => (rolePriority[b] || 0) - (rolePriority[a] || 0));
+            expectedRole = sortedRoles[0];
+          }
+          
+          // Check if there's a role mismatch
+          const hasRoleMismatch = roles.length > 0 && user.role !== expectedRole;
+          
           return {
             id: user.id,
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
             username: user.username,
-            role: user.role,
+            role: user.role, // Legacy role field (what's stored in users table)
             roles: roles.length > 0 ? roles : [user.role],
+            expectedRole, // What the role SHOULD be based on userRoles
+            hasRoleMismatch, // Flag for UI to highlight
             companyId: user.companyId,
             companyName: user.companyId ? companyMap.get(user.companyId) : null,
             isActive: true, // All users in the system are considered active (no isActive field in schema)
@@ -3200,6 +3222,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error resetting user password:", error);
       res.status(500).json({ message: error.message || "Failed to reset password" });
+    }
+  });
+
+  // Super Admin - Fix role mismatch (sync legacy role field with userRoles)
+  app.post('/api/super-admin/users/:id/fix-role', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get user's roles from userRoles table
+      const userRoles = await storage.getUserRoles(id);
+      
+      if (userRoles.length === 0) {
+        return res.status(400).json({ message: "User has no roles in userRoles table" });
+      }
+      
+      // Role priority for determining highest priority role
+      const rolePriority: Record<string, number> = {
+        'super_admin': 5,
+        'admin': 4,
+        'supervisor': 3,
+        'steward': 2,
+        'guard': 1
+      };
+      
+      // Get the highest priority role
+      const sortedRoles = [...userRoles].sort((a, b) => (rolePriority[b] || 0) - (rolePriority[a] || 0));
+      const correctRole = sortedRoles[0];
+      
+      // Update the legacy role field
+      await storage.updateUser(id, { role: correctRole });
+      
+      res.json({ 
+        message: "Role fixed successfully", 
+        previousRole: req.body.previousRole,
+        newRole: correctRole 
+      });
+    } catch (error: any) {
+      console.error("Error fixing user role:", error);
+      res.status(500).json({ message: error.message || "Failed to fix role" });
     }
   });
 

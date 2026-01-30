@@ -37,15 +37,15 @@ import {
   Shield, 
   Building2, 
   Mail, 
-  Phone, 
   Calendar,
   UserCog,
   Check,
   X,
   RefreshCw,
   Eye,
-  Edit,
-  Key
+  Key,
+  AlertTriangle,
+  Wrench
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -76,6 +76,8 @@ interface UserWithDetails {
   username: string;
   role: string;
   roles: string[];
+  expectedRole: string;
+  hasRoleMismatch: boolean;
   companyId: string | null;
   companyName?: string;
   isActive: boolean;
@@ -98,6 +100,7 @@ export default function SuperAdminUserManagement() {
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [showIssuesOnly, setShowIssuesOnly] = useState(false);
 
   const { data: users = [], isLoading: isLoadingUsers, refetch: refetchUsers } = useQuery<UserWithDetails[]>({
     queryKey: ["/api/super-admin/all-users"],
@@ -151,6 +154,26 @@ export default function SuperAdminUserManagement() {
     },
   });
 
+  const fixRoleMutation = useMutation({
+    mutationFn: async ({ userId, previousRole }: { userId: string; previousRole: string }) => {
+      return apiRequest("POST", `/api/super-admin/users/${userId}/fix-role`, { previousRole });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Role Fixed",
+        description: `User role updated from ${ROLE_LABELS[data.previousRole as RoleType] || data.previousRole} to ${ROLE_LABELS[data.newRole as RoleType] || data.newRole}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/all-users"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fix role.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredUsers = users.filter((user) => {
     const matchesSearch = 
       searchQuery === "" ||
@@ -170,8 +193,14 @@ export default function SuperAdminUserManagement() {
       user.role === roleFilter ||
       user.roles?.includes(roleFilter);
 
-    return matchesSearch && matchesCompany && matchesRole;
+    const matchesIssuesFilter = !showIssuesOnly || user.hasRoleMismatch;
+
+    return matchesSearch && matchesCompany && matchesRole && matchesIssuesFilter;
   });
+
+  // Count users with role issues
+  const usersWithIssues = users.filter(u => u.hasRoleMismatch);
+  const issueCount = usersWithIssues.length;
 
   const handleOpenRoleDialog = (user: UserWithDetails) => {
     setSelectedUser(user);
@@ -242,7 +271,7 @@ export default function SuperAdminUserManagement() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by email, name, phone, or ID..."
+                placeholder="Search by email, name, username, or ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -278,8 +307,34 @@ export default function SuperAdminUserManagement() {
             </Select>
           </div>
 
+          {/* Role Issues Alert Banner */}
+          {issueCount > 0 && (
+            <div className="flex items-center justify-between p-3 rounded-md bg-amber-500/10 border border-amber-500/30">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                <div>
+                  <p className="font-medium text-amber-700 dark:text-amber-400">
+                    {issueCount} user{issueCount !== 1 ? 's' : ''} with role issues detected
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                    These users have mismatched legacy role fields that may cause access problems.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant={showIssuesOnly ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowIssuesOnly(!showIssuesOnly)}
+                data-testid="button-toggle-issues-filter"
+              >
+                {showIssuesOnly ? "Show All" : "Show Issues Only"}
+              </Button>
+            </div>
+          )}
+
           <div className="text-sm text-muted-foreground">
             Showing {filteredUsers.length} of {users.length} users
+            {showIssuesOnly && ` (filtered to ${issueCount} with issues)`}
           </div>
 
           {isLoadingUsers ? (
@@ -344,12 +399,34 @@ export default function SuperAdminUserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.isActive !== false ? "default" : "secondary"}>
-                          {user.isActive !== false ? "Active" : "Inactive"}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant={user.isActive !== false ? "default" : "secondary"}>
+                            {user.isActive !== false ? "Active" : "Inactive"}
+                          </Badge>
+                          {user.hasRoleMismatch && (
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Role Issue
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {user.hasRoleMismatch && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => fixRoleMutation.mutate({ userId: user.id, previousRole: user.role })}
+                              disabled={fixRoleMutation.isPending}
+                              className="text-amber-700 border-amber-500/50 hover:bg-amber-500/10"
+                              title={`Fix: Change from ${ROLE_LABELS[user.role as RoleType] || user.role} to ${ROLE_LABELS[user.expectedRole as RoleType] || user.expectedRole}`}
+                              data-testid={`button-fix-role-${user.id}`}
+                            >
+                              <Wrench className="h-3 w-3 mr-1" />
+                              Fix Role
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -457,6 +534,39 @@ export default function SuperAdminUserManagement() {
                   ))}
                 </div>
               </div>
+
+              {/* Role Mismatch Warning */}
+              {selectedUser.hasRoleMismatch && (
+                <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-amber-700 dark:text-amber-400">
+                        Role Mismatch Detected
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                        Legacy role field shows <strong>{ROLE_LABELS[selectedUser.role as RoleType] || selectedUser.role}</strong>, 
+                        but should be <strong>{ROLE_LABELS[selectedUser.expectedRole as RoleType] || selectedUser.expectedRole}</strong> based on assigned roles.
+                        This may cause the user to see the wrong dashboard or have incorrect permissions.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 text-amber-700 border-amber-500/50 hover:bg-amber-500/10"
+                        onClick={() => {
+                          fixRoleMutation.mutate({ userId: selectedUser.id, previousRole: selectedUser.role });
+                          setIsDetailsDialogOpen(false);
+                        }}
+                        disabled={fixRoleMutation.isPending}
+                        data-testid="button-fix-role-detail"
+                      >
+                        <Wrench className="h-3 w-3 mr-1" />
+                        Fix Role Now
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter className="gap-2">
