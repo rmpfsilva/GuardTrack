@@ -16,7 +16,7 @@ import { NotificationSettingsButton } from "@/components/notification-settings-b
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LocationDisplay } from "@/components/location-display";
-import type { Site, CheckInWithDetails, User, Company } from "@shared/schema";
+import type { Site, CheckInWithDetails, User, Company, LeaveRequestWithDetails, SupportMessage, ErrorLog } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
 import ScheduleManagement from "@/components/schedule-management";
@@ -61,6 +61,7 @@ export default function AdminDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [editingCheckIn, setEditingCheckIn] = useState<CheckInWithDetails | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>(user?.role === 'super_admin' ? 'clients' : 'overview');
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -124,6 +125,54 @@ export default function AdminDashboard() {
     },
     enabled: !!user?.companyId && isAdmin && user?.role !== 'super_admin',
   });
+
+  // Fetch pending leave requests (for tab notification)
+  const { data: pendingLeave = [] } = useQuery<LeaveRequestWithDetails[]>({
+    queryKey: ["/api/leave-requests/pending"],
+    enabled: !!user && isCompanyAdmin,
+  });
+
+  // Fetch pending breaks (for approvals tab notification)
+  const { data: pendingBreaks = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/breaks/pending"],
+    enabled: !!user && isCompanyAdmin,
+  });
+
+  // Fetch pending overtime (for approvals tab notification)
+  const { data: pendingOvertime = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/overtime/pending"],
+    enabled: !!user && isCompanyAdmin,
+  });
+
+  // Fetch support messages for super admin (messages tab notification)
+  const { data: supportMessages = [] } = useQuery<SupportMessage[]>({
+    queryKey: ["/api/super-admin/support-messages"],
+    enabled: !!user && user?.role === 'super_admin',
+  });
+
+  // Fetch error logs for super admin (error logs tab notification)
+  const { data: errorLogs = [] } = useQuery<ErrorLog[]>({
+    queryKey: ["/api/super-admin/error-logs"],
+    enabled: !!user && user?.role === 'super_admin',
+  });
+
+  // Calculate which tabs have new entries (not currently selected)
+  const tabHasNew = (tabValue: string): boolean => {
+    if (activeTab === tabValue) return false;
+    
+    switch (tabValue) {
+      case 'leave':
+        return pendingLeave.length > 0;
+      case 'approvals':
+        return pendingBreaks.length > 0 || pendingOvertime.length > 0;
+      case 'messages':
+        return supportMessages.filter(m => !m.isRead).length > 0;
+      case 'error-logs':
+        return errorLogs.filter(e => !e.isResolved).length > 0;
+      default:
+        return false;
+    }
+  };
 
   if (authLoading || !user || !isAdmin) {
     return (
@@ -323,7 +372,7 @@ export default function AdminDashboard() {
         )}
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue={user.role === 'super_admin' ? 'clients' : 'overview'} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="w-full overflow-x-auto pb-2">
             <TabsList className="inline-flex min-w-min bg-muted">
               {user.role === 'super_admin' ? (
@@ -332,10 +381,10 @@ export default function AdminDashboard() {
                   <TabsTrigger value="clients" data-testid="tab-clients" className="text-xs sm:text-sm whitespace-nowrap">Clients</TabsTrigger>
                   <TabsTrigger value="all-users" data-testid="tab-all-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
                   <TabsTrigger value="plans" data-testid="tab-plans" className="text-xs sm:text-sm whitespace-nowrap">Plans</TabsTrigger>
-                  <TabsTrigger value="messages" data-testid="tab-messages" className="text-xs sm:text-sm whitespace-nowrap">Messages</TabsTrigger>
+                  <TabsTrigger value="messages" data-testid="tab-messages" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('messages') ? 'tab-has-new' : ''}`}>Messages</TabsTrigger>
                   <TabsTrigger value="subscription-billing" data-testid="tab-subscription-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
                   <TabsTrigger value="usage-reports" data-testid="tab-usage-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
-                  <TabsTrigger value="error-logs" data-testid="tab-error-logs" className="text-xs sm:text-sm whitespace-nowrap">Error Logs</TabsTrigger>
+                  <TabsTrigger value="error-logs" data-testid="tab-error-logs" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('error-logs') ? 'tab-has-new' : ''}`}>Error Logs</TabsTrigger>
                   <TabsTrigger value="platform-settings" data-testid="tab-platform-settings" className="text-xs sm:text-sm whitespace-nowrap">Settings</TabsTrigger>
                 </>
               ) : (
@@ -347,10 +396,10 @@ export default function AdminDashboard() {
                   {hasTabAccess('users') && <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>}
                   {hasTabAccess('schedule') && <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>}
                   {hasTabAccess('sites') && <TabsTrigger value="sites" data-testid="tab-sites" className="text-xs sm:text-sm whitespace-nowrap">Sites</TabsTrigger>}
-                  {hasTabAccess('leave') && <TabsTrigger value="leave" data-testid="tab-leave" className="text-xs sm:text-sm whitespace-nowrap">Leave</TabsTrigger>}
+                  {hasTabAccess('leave') && <TabsTrigger value="leave" data-testid="tab-leave" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('leave') ? 'tab-has-new' : ''}`}>Leave</TabsTrigger>}
                   {hasTabAccess('invitations') && <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>}
                   {hasTabAccess('manual') && <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>}
-                  {hasTabAccess('approvals') && <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm whitespace-nowrap">Approvals</TabsTrigger>}
+                  {hasTabAccess('approvals') && <TabsTrigger value="approvals" data-testid="tab-approvals" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('approvals') ? 'tab-has-new' : ''}`}>Approvals</TabsTrigger>}
                   {hasTabAccess('notices') && <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>}
                   {hasTabAccess('partnerships') && <TabsTrigger value="partnerships" data-testid="tab-partnerships" className="text-xs sm:text-sm whitespace-nowrap">Partnerships</TabsTrigger>}
                   {hasTabAccess('job-sharing') && <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className="text-xs sm:text-sm whitespace-nowrap">Job Sharing</TabsTrigger>}
