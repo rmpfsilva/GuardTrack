@@ -1674,7 +1674,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!existingShift) {
           return res.status(404).json({ message: "Scheduled shift not found" });
         }
-        if (existingShift.user.companyId !== admin.companyId) {
+        // Get the user to check their company
+        const shiftUser = await storage.getUser(existingShift.userId);
+        if (!shiftUser || shiftUser.companyId !== admin.companyId) {
           return res.status(403).json({ message: "Cannot delete shifts from other companies" });
         }
       }
