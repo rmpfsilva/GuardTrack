@@ -368,28 +368,30 @@ export default function ScheduleManagement() {
                   dayShifts.map((shift) => (
                     <Card key={shift.id} className="p-2 hover-elevate" data-testid={`shift-${shift.id}`}>
                       <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium truncate">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium truncate flex-1">
                             {shift.user.firstName} {shift.user.lastName}
                           </span>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 shrink-0">
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-7 w-7"
                               onClick={() => handleEdit(shift)}
+                              title="Edit shift"
                               data-testid={`button-edit-shift-${shift.id}`}
                             >
-                              <Pencil className="w-3 h-3" />
+                              <Pencil className="w-3.5 h-3.5" />
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
                               onClick={() => handleDelete(shift.id)}
+                              title="Delete shift"
                               data-testid={`button-delete-shift-${shift.id}`}
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
                         </div>
