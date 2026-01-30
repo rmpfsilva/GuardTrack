@@ -777,16 +777,16 @@ export default function SettingsPage() {
             )}
 
             {/* Invoice Settings - Admin and Super Admin */}
-            {(user?.role === 'admin' || user?.role === 'super_admin') && <InvoiceSettings />}
+            {(user?.role === 'admin' || user?.role === 'super_admin' || (user as any)?.roles?.includes('admin') || (user as any)?.roles?.includes('super_admin')) && <InvoiceSettings />}
 
             {/* Guard App Tab Configuration - Platform Admin (Super Admin) only */}
-            {user?.role === 'super_admin' && <GuardAppTabSettings />}
+            {(user?.role === 'super_admin' || (user as any)?.roles?.includes('super_admin')) && <GuardAppTabSettings />}
 
             {/* Support Messages - Company Admin only (not Super Admin) */}
-            {user?.role === 'admin' && <CompanySupportMessages />}
+            {(user?.role === 'admin' || (user as any)?.roles?.includes('admin')) && user?.role !== 'super_admin' && !(user as any)?.roles?.includes('super_admin') && <CompanySupportMessages />}
 
             {/* Contact Support - Company Admin only (not Super Admin) */}
-            {user?.role === 'admin' && (
+            {((user?.role === 'admin' || (user as any)?.roles?.includes('admin')) && user?.role !== 'super_admin' && !(user as any)?.roles?.includes('super_admin')) && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-2">
