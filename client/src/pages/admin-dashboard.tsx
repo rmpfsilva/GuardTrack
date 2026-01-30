@@ -37,6 +37,7 @@ import JobSharing from "@/components/job-sharing";
 import ClientManagement from "@/components/client-management";
 import ClientUsageReports from "@/components/client-usage-reports";
 import SupportMessages from "@/components/support-messages";
+import CompanySupportMessages from "@/components/company-support-messages";
 import SubscriptionBilling from "@/components/subscription-billing";
 import ErrorLogs from "@/components/error-logs";
 import { PlanManagement } from "@/components/plan-management";
@@ -355,6 +356,7 @@ export default function AdminDashboard() {
                   {hasTabAccess('job-sharing') && <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className="text-xs sm:text-sm whitespace-nowrap">Job Sharing</TabsTrigger>}
                   {hasTabAccess('billing') && <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>}
                   {hasTabAccess('activity') && <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>}
+                  <TabsTrigger value="support" data-testid="tab-support" className="text-xs sm:text-sm whitespace-nowrap">Support</TabsTrigger>
                 </>
               )}
             </TabsList>
@@ -638,6 +640,13 @@ export default function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Support Tab - Company Admins only (not Super Admin) */}
+          <TabsContent value="support">
+            <div className="space-y-6">
+              <CompanySupportMessages />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
