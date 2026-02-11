@@ -294,7 +294,8 @@ export const notices = pgTable("notices", {
   siteId: varchar("site_id").references(() => sites.id, { onDelete: 'set null' }),
   startTime: timestamp("start_time"), // For overtime shifts or events
   endTime: timestamp("end_time"),
-  workingRole: varchar("working_role"), // Required role: 'guard' | 'steward' | 'supervisor'
+  workingRole: varchar("working_role"), // Required role (legacy single): 'guard' | 'steward' | 'supervisor'
+  requiredRoles: jsonb("required_roles").$type<string[]>(),
   spotsAvailable: varchar("spots_available"), // Number of positions available
   isActive: boolean("is_active").notNull().default(true),
   postedBy: varchar("posted_by").notNull().references(() => users.id, { onDelete: 'cascade' }),

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { usePlanFeatures, AdminTab } from "@/hooks/use-plan-features";
 import { format, startOfWeek, endOfWeek } from "date-fns";
-import { Users, MapPin, Clock, Activity, Calendar, Settings, Smartphone, Copy, ExternalLink, Mail, ChevronDown } from "lucide-react";
+import { Users, MapPin, Clock, Activity, Calendar, Settings, Smartphone, Copy, ExternalLink, Mail, ChevronDown, RefreshCw } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +61,13 @@ export default function AdminDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [editingCheckIn, setEditingCheckIn] = useState<CheckInWithDetails | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
   const [activeTab, setActiveTab] = useState<string>(user?.role === 'super_admin' ? 'clients' : 'overview');
 
   // Redirect if not authenticated or not admin
@@ -97,18 +105,21 @@ export default function AdminDashboard() {
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/admin/stats"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   // Fetch recent activity (company admins only)
   const { data: recentActivity = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/admin/recent-activity"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   // Fetch active check-ins (company admins only)
   const { data: activeCheckIns = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/admin/active-check-ins"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   // Fetch user's company information (regular admins only)
@@ -129,46 +140,54 @@ export default function AdminDashboard() {
   const { data: pendingLeave = [] } = useQuery<LeaveRequestWithDetails[]>({
     queryKey: ["/api/leave-requests/pending"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   // Fetch pending breaks (for approvals tab notification)
   const { data: pendingBreaks = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/breaks/pending"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   // Fetch pending overtime (for approvals tab notification)
   const { data: pendingOvertime = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/overtime/pending"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   // Fetch support messages for super admin (messages tab notification)
   const { data: supportMessages = [] } = useQuery<SupportMessage[]>({
     queryKey: ["/api/super-admin/support-messages"],
     enabled: !!user && user?.role === 'super_admin',
+    refetchInterval: 30000,
   });
 
   // Fetch error logs for super admin (error logs tab notification)
   const { data: errorLogs = [] } = useQuery<ErrorLog[]>({
     queryKey: ["/api/super-admin/error-logs"],
     enabled: !!user && user?.role === 'super_admin',
+    refetchInterval: 30000,
   });
 
   // Fetch received partnership requests (for partnerships tab notification)
   const { data: receivedPartnerships = [] } = useQuery<CompanyPartnershipWithDetails[]>({
     queryKey: ["/api/partnerships/received"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   const { data: receivedJobShares = [] } = useQuery<JobShareWithDetails[]>({
     queryKey: ["/api/job-shares/received"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   const { data: offeredJobShares = [] } = useQuery<JobShareWithDetails[]>({
     queryKey: ["/api/job-shares/offered"],
     enabled: !!user && isCompanyAdmin,
+    refetchInterval: 30000,
   });
 
   // Calculate which tabs have new entries (not currently selected)
@@ -250,6 +269,15 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              data-testid="button-refresh-admin"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </Button>
             <NotificationSettingsButton variant="ghost" size="icon" />
             <ThemeToggle />
             <div className="flex items-center gap-2">

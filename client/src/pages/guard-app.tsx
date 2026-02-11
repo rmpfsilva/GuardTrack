@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { 
   Clock, MapPin, LogIn, LogOut, Calendar, Bell, User, 
   Home, Coffee, FileText, ChevronRight, Loader2, AlertCircle,
-  CheckCircle2, XCircle, Download, X, Share, Smartphone, ExternalLink, Youtube, Mail, Copy
+  CheckCircle2, XCircle, Download, X, Share, Smartphone, ExternalLink, Youtube, Mail, Copy, RefreshCw
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -66,6 +66,13 @@ export default function GuardApp() {
   const [showInstallBanner, setShowInstallBanner] = useState(true);
   const [showInstallOverlay, setShowInstallOverlay] = useState(true);
   const [installDismissed, setInstallDismissed] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   // Check sessionStorage after mount to avoid SSR issues
   useEffect(() => {
@@ -162,16 +169,19 @@ export default function GuardApp() {
   const { data: activeCheckIn, isLoading: checkInLoading } = useQuery<CheckInWithDetails | null>({
     queryKey: ["/api/check-ins/active"],
     enabled: !!user,
+    refetchInterval: 30000,
   });
 
   const { data: activeBreak } = useQuery<Break | null>({
     queryKey: ["/api/breaks/active"],
     enabled: !!user && !!activeCheckIn,
+    refetchInterval: 30000,
   });
 
   const { data: leaveRequests = [] } = useQuery<LeaveRequest[]>({
     queryKey: ["/api/leave-requests/my"],
     enabled: !!user,
+    refetchInterval: 30000,
   });
 
   // Fetch configurable tabs
@@ -850,6 +860,16 @@ export default function GuardApp() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="text-primary-foreground"
+              data-testid="button-refresh-guard"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </Button>
             <Avatar className="h-9 w-9 border-2 border-primary-foreground/30">
               <AvatarFallback className="bg-primary-foreground/20 text-primary-foreground text-sm">
                 {userInitials}

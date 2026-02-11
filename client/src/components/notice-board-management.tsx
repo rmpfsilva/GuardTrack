@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { Plus, Megaphone, Trash2, Users, Calendar, Clock } from "lucide-react";
+import { Plus, Megaphone, Trash2, Users, Calendar, Clock, Check, X, ChevronDown, ChevronUp, User, RefreshCw, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,10 +33,19 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Notice, type NoticeApplication } from "@shared/schema";
+import { type Notice, type NoticeApplication, type NoticeApplicationWithDetails } from "@shared/schema";
 import { z } from "zod";
+
+const NOTICE_ROLES = [
+  { value: "guard", label: "Guard" },
+  { value: "steward", label: "Steward" },
+  { value: "supervisor", label: "Supervisor" },
+  { value: "call_out", label: "Call Out" },
+] as const;
 
 // Form schema for the UI (converts date + time strings to timestamps for backend)
 const formSchema = z.object({
@@ -57,6 +66,8 @@ type FormValues = z.infer<typeof formSchema>;
 export default function NoticeBoardManagement() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [expandedNotice, setExpandedNotice] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -77,11 +88,13 @@ export default function NoticeBoardManagement() {
   // Fetch notices
   const { data: notices = [], isLoading } = useQuery<Notice[]>({
     queryKey: ["/api/notices"],
+    refetchInterval: 30000,
   });
 
-  // Fetch applications for notices
-  const { data: applications = [] } = useQuery<NoticeApplication[]>({
+  // Fetch applications for notices (includes user details)
+  const { data: applications = [] } = useQuery<NoticeApplicationWithDetails[]>({
     queryKey: ["/api/notice-applications"],
+    refetchInterval: 30000,
   });
 
   // Create notice mutation
@@ -100,8 +113,9 @@ export default function NoticeBoardManagement() {
         startTime: startDateTime,
         endTime: endDateTime,
         expiresAt: expiresAtDate,
-        siteId: null, // Always null - sites are managed manually
-        workingRole: data.workingRole || null,
+        siteId: null,
+        workingRole: selectedRoles.length === 1 ? selectedRoles[0] : (selectedRoles.length > 0 ? selectedRoles[0] : null),
+        requiredRoles: selectedRoles.length > 0 ? selectedRoles : null,
         spotsAvailable: data.spotsAvailable || null,
       };
 
@@ -111,6 +125,7 @@ export default function NoticeBoardManagement() {
       queryClient.invalidateQueries({ queryKey: ["/api/notices"] });
       setIsCreateDialogOpen(false);
       form.reset();
+      setSelectedRoles([]);
       toast({
         title: "Success",
         description: "Notice posted successfully! Notifications sent to all guards.",
@@ -147,12 +162,39 @@ export default function NoticeBoardManagement() {
     },
   });
 
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+
+  const reviewApplicationMutation = useMutation({
+    mutationFn: async ({ id, status, reviewNotes }: { id: string; status: string; reviewNotes?: string }) => {
+      return await apiRequest("PATCH", `/api/notice-applications/${id}`, { status, reviewNotes: reviewNotes || null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notice-applications"] });
+      setReviewNotes({});
+      toast({
+        title: "Success",
+        description: "Application updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: FormValues) => {
     createNoticeMutation.mutate(data);
   };
 
   const getApplicationCount = (noticeId: string) => {
     return applications.filter(app => app.noticeId === noticeId).length;
+  };
+
+  const getApplicationsForNotice = (noticeId: string) => {
+    return applications.filter(app => app.noticeId === noticeId);
   };
 
   const getNoticeTypeLabel = (type: string) => {
@@ -301,29 +343,31 @@ export default function NoticeBoardManagement() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="workingRole"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Required Role (Optional)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || undefined}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-notice-role">
-                              <SelectValue placeholder="Any role" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">Any role</SelectItem>
-                            <SelectItem value="guard">Guard</SelectItem>
-                            <SelectItem value="steward">Steward</SelectItem>
-                            <SelectItem value="supervisor">Supervisor</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+                  <div className="space-y-2">
+                    <Label>Required Roles (Optional)</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {NOTICE_ROLES.map((role) => (
+                        <div key={role.value} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`role-${role.value}`}
+                            checked={selectedRoles.includes(role.value)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedRoles([...selectedRoles, role.value]);
+                              } else {
+                                setSelectedRoles(selectedRoles.filter(r => r !== role.value));
+                              }
+                            }}
+                            data-testid={`checkbox-role-${role.value}`}
+                          />
+                          <Label htmlFor={`role-${role.value}`} className="text-sm font-normal cursor-pointer">{role.label}</Label>
+                        </div>
+                      ))}
+                    </div>
+                    {selectedRoles.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No roles selected = open to any role</p>
                     )}
-                  />
+                  </div>
 
                   <FormField
                     control={form.control}
@@ -454,17 +498,141 @@ export default function NoticeBoardManagement() {
                       </span>
                     </div>
                   </div>
-                  {(notice.workingRole || notice.spotsAvailable) && (
-                    <div className="mt-3 pt-3 border-t flex gap-4 text-sm">
-                      {notice.workingRole && (
-                        <span>
-                          <span className="text-muted-foreground">Role:</span> <span className="font-medium capitalize">{notice.workingRole}</span>
-                        </span>
-                      )}
+                  {(notice.workingRole || (notice as any).requiredRoles || notice.spotsAvailable) && (
+                    <div className="mt-3 pt-3 border-t flex flex-wrap gap-4 text-sm">
+                      {(() => {
+                        const roles = (notice as any).requiredRoles as string[] | null;
+                        if (roles && roles.length > 0) {
+                          return (
+                            <span className="flex items-center gap-1 flex-wrap">
+                              <span className="text-muted-foreground">Roles:</span>
+                              {roles.map(r => (
+                                <Badge key={r} variant="outline" className="capitalize text-xs">{NOTICE_ROLES.find(nr => nr.value === r)?.label || r}</Badge>
+                              ))}
+                            </span>
+                          );
+                        } else if (notice.workingRole) {
+                          return (
+                            <span>
+                              <span className="text-muted-foreground">Role:</span> <span className="font-medium capitalize">{notice.workingRole}</span>
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                       {notice.spotsAvailable && (
                         <span>
                           <span className="text-muted-foreground">Spots:</span> <span className="font-medium">{notice.spotsAvailable}</span>
                         </span>
+                      )}
+                    </div>
+                  )}
+
+                  {applicantCount > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setExpandedNotice(expandedNotice === notice.id ? null : notice.id)}
+                        className="gap-1 px-0"
+                        data-testid={`button-toggle-applicants-${notice.id}`}
+                      >
+                        <Users className="h-4 w-4" />
+                        View {applicantCount} {applicantCount === 1 ? "Applicant" : "Applicants"}
+                        {expandedNotice === notice.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </Button>
+
+                      {expandedNotice === notice.id && (
+                        <div className="mt-3 space-y-3">
+                          {getApplicationsForNotice(notice.id).map((app) => {
+                            const statusColor = app.status === 'accepted' ? 'default' : app.status === 'rejected' ? 'destructive' : 'secondary';
+                            return (
+                              <Card key={app.id} data-testid={`card-application-${app.id}`}>
+                                <CardContent className="p-4">
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="flex items-center gap-1">
+                                          <User className="h-4 w-4 text-muted-foreground" />
+                                          <span className="font-medium" data-testid={`text-applicant-name-${app.id}`}>
+                                            {app.user?.firstName || app.user?.username || 'Unknown'} {app.user?.lastName || ''}
+                                          </span>
+                                        </div>
+                                        <Badge variant={statusColor} className="capitalize text-xs" data-testid={`badge-application-status-${app.id}`}>
+                                          {app.status}
+                                        </Badge>
+                                        {app.user?.role && (
+                                          <Badge variant="outline" className="capitalize text-xs">{app.user.role}</Badge>
+                                        )}
+                                      </div>
+                                      {app.user?.email && (
+                                        <p className="text-xs text-muted-foreground mt-1">{app.user.email}</p>
+                                      )}
+                                      {app.user?.phone && (
+                                        <p className="text-xs text-muted-foreground">{app.user.phone}</p>
+                                      )}
+                                      {app.message && (
+                                        <p className="text-sm mt-2 bg-muted/50 p-2 rounded-md" data-testid={`text-application-message-${app.id}`}>
+                                          {app.message}
+                                        </p>
+                                      )}
+                                      {app.createdAt && (
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          Applied: {format(new Date(app.createdAt), "MMM dd, yyyy HH:mm")}
+                                        </p>
+                                      )}
+                                      {app.reviewNotes && (
+                                        <p className="text-xs text-muted-foreground mt-1 italic">
+                                          Review note: {app.reviewNotes}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {app.status === 'pending' && (
+                                      <div className="flex flex-col gap-2 shrink-0">
+                                        <div className="flex gap-1">
+                                          <Button
+                                            variant="default"
+                                            size="sm"
+                                            onClick={() => reviewApplicationMutation.mutate({
+                                              id: app.id,
+                                              status: 'accepted',
+                                              reviewNotes: reviewNotes[app.id] || undefined,
+                                            })}
+                                            disabled={reviewApplicationMutation.isPending}
+                                            data-testid={`button-accept-application-${app.id}`}
+                                          >
+                                            <Check className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => reviewApplicationMutation.mutate({
+                                              id: app.id,
+                                              status: 'rejected',
+                                              reviewNotes: reviewNotes[app.id] || undefined,
+                                            })}
+                                            disabled={reviewApplicationMutation.isPending}
+                                            data-testid={`button-reject-application-${app.id}`}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                        <Input
+                                          placeholder="Note (optional)"
+                                          value={reviewNotes[app.id] || ''}
+                                          onChange={(e) => setReviewNotes({ ...reviewNotes, [app.id]: e.target.value })}
+                                          className="text-xs"
+                                          data-testid={`input-review-note-${app.id}`}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   )}
