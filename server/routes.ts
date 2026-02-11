@@ -4,7 +4,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { setupAuth, hashPassword } from "./auth";
-import { users, breaks, checkIns, sites, companies } from "@shared/schema";
+import { users, breaks, checkIns, sites, companies, JOB_SHARE_ROLES } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
@@ -2966,7 +2966,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user;
       
-      // Validate required fields
       if (!req.body.toCompanyId || req.body.toCompanyId.trim() === '') {
         return res.status(400).json({ message: "Target company is required" });
       }
@@ -2975,18 +2974,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Site is required" });
       }
       
-      // Prevent sharing with own company
       if (req.body.toCompanyId === user.companyId) {
         return res.status(400).json({ message: "Cannot share jobs with your own company" });
       }
+
+      const positions = req.body.positions;
+      if (!positions || !Array.isArray(positions) || positions.length === 0) {
+        return res.status(400).json({ message: "At least one position is required" });
+      }
+
+      const validRoles = JOB_SHARE_ROLES as readonly string[];
+      for (const pos of positions) {
+        if (!pos.role || !validRoles.includes(pos.role)) {
+          return res.status(400).json({ message: `Invalid role: ${pos.role}. Valid roles: ${validRoles.join(', ')}` });
+        }
+        if (!pos.count || Number(pos.count) < 1) {
+          return res.status(400).json({ message: "Each position must have a count of at least 1" });
+        }
+        if (!pos.hourlyRate || parseFloat(pos.hourlyRate) < 0) {
+          return res.status(400).json({ message: "Each position must have a valid hourly rate" });
+        }
+      }
+
+      const sanitizedPositions = positions.map((p: any) => ({
+        role: p.role,
+        count: Number(p.count),
+        hourlyRate: String(p.hourlyRate),
+      }));
+
+      const totalJobs = sanitizedPositions.reduce((sum: number, p: any) => sum + p.count, 0);
       
       const jobShareData = {
-        ...req.body,
+        toCompanyId: req.body.toCompanyId,
+        siteId: req.body.siteId,
         fromCompanyId: user.companyId,
         createdBy: user.id,
-        // Parse date strings to Date objects
         startDate: new Date(req.body.startDate),
         endDate: new Date(req.body.endDate),
+        positions: sanitizedPositions,
+        requirements: req.body.requirements || null,
+        numberOfJobs: String(totalJobs),
+        workingRole: sanitizedPositions[0].role,
+        hourlyRate: sanitizedPositions[0].hourlyRate,
       };
 
       const jobShare = await storage.createJobShare(jobShareData);
@@ -3003,26 +3032,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = req.body;
       const user = req.user;
       
-      // Get the job share to check authorization
       const jobShare = await storage.getJobShare(id);
       if (!jobShare) {
         return res.status(404).json({ message: "Job share not found" });
       }
       
-      // Multi-tenant authorization: only super admins or companies involved can modify
       if (user.role !== 'super_admin') {
         if (jobShare.fromCompanyId !== user.companyId && jobShare.toCompanyId !== user.companyId) {
           return res.status(403).json({ message: "Forbidden - You can only modify job shares involving your company" });
         }
       }
-      
-      // If updating status to accepted/rejected, add review info
-      if (updates.status && updates.status !== 'pending') {
-        updates.reviewedBy = req.user.id;
-        updates.reviewedAt = new Date();
+
+      let sanitizedUpdates: any = {};
+
+      if (updates.status && ['accepted', 'rejected', 'cancelled'].includes(updates.status)) {
+        sanitizedUpdates.status = updates.status;
+        sanitizedUpdates.reviewedBy = req.user.id;
+        sanitizedUpdates.reviewedAt = new Date();
+        if (updates.reviewNotes) sanitizedUpdates.reviewNotes = updates.reviewNotes;
+      } else if (updates.positions || updates.siteId || updates.startDate || updates.endDate || updates.requirements !== undefined) {
+        if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId) {
+          return res.status(403).json({ message: "Only the creator company can edit job share details" });
+        }
+        if (jobShare.status !== 'pending') {
+          return res.status(400).json({ message: "Can only edit pending job shares" });
+        }
+
+        if (updates.positions && Array.isArray(updates.positions) && updates.positions.length > 0) {
+          const validRoles = JOB_SHARE_ROLES as readonly string[];
+          for (const pos of updates.positions) {
+            if (!pos.role || !validRoles.includes(pos.role)) {
+              return res.status(400).json({ message: `Invalid role: ${pos.role}` });
+            }
+          }
+          const cleanPositions = updates.positions.map((p: any) => ({
+            role: p.role,
+            count: Number(p.count),
+            hourlyRate: String(p.hourlyRate),
+          }));
+          sanitizedUpdates.positions = cleanPositions;
+          const totalJobs = cleanPositions.reduce((sum: number, p: any) => sum + p.count, 0);
+          sanitizedUpdates.numberOfJobs = String(totalJobs);
+          sanitizedUpdates.workingRole = cleanPositions[0].role;
+          sanitizedUpdates.hourlyRate = cleanPositions[0].hourlyRate;
+        }
+        if (updates.siteId) sanitizedUpdates.siteId = updates.siteId;
+        if (updates.startDate) sanitizedUpdates.startDate = new Date(updates.startDate);
+        if (updates.endDate) sanitizedUpdates.endDate = new Date(updates.endDate);
+        if (updates.requirements !== undefined) sanitizedUpdates.requirements = updates.requirements || null;
       }
 
-      const updatedJobShare = await storage.updateJobShare(id, updates);
+      const updatedJobShare = await storage.updateJobShare(id, sanitizedUpdates);
       res.json(updatedJobShare);
     } catch (error: any) {
       console.error("Error updating job share:", error);
@@ -3030,9 +3090,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/job-shares/:id', isAuthenticated, isAdmin, async (req, res) => {
+  app.delete('/api/job-shares/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const user = req.user;
+
+      const jobShare = await storage.getJobShare(id);
+      if (!jobShare) {
+        return res.status(404).json({ message: "Job share not found" });
+      }
+
+      if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId) {
+        return res.status(403).json({ message: "Only the creator company can delete job shares" });
+      }
+
       await storage.deleteJobShare(id);
       res.status(204).send();
     } catch (error: any) {

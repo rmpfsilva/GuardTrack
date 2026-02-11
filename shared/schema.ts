@@ -364,22 +364,32 @@ export const companyPartnerships = pgTable("company_partnerships", {
 });
 
 // Job shares table - for inter-company job sharing
+export const JOB_SHARE_ROLES = ['guard', 'steward', 'supervisor', 'call_out'] as const;
+export type JobShareRole = typeof JOB_SHARE_ROLES[number];
+
+export interface JobSharePosition {
+  role: JobShareRole;
+  count: number;
+  hourlyRate: string;
+}
+
 export const jobShares = pgTable("job_shares", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  fromCompanyId: varchar("from_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Company offering the jobs
-  toCompanyId: varchar("to_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }), // Company receiving the offer
-  siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: 'cascade' }), // Site where guards are needed
-  numberOfJobs: varchar("number_of_jobs").notNull(), // Number of positions available
-  startDate: timestamp("start_date").notNull(), // When the jobs start
-  endDate: timestamp("end_date").notNull(), // When the jobs end
-  workingRole: varchar("working_role").notNull().default('guard'), // Required role: 'guard' | 'steward' | 'supervisor'
-  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull(), // Rate offered per hour
-  requirements: text("requirements"), // Description of requirements or special needs
-  status: varchar("status").notNull().default('pending'), // 'pending' | 'accepted' | 'rejected' | 'cancelled'
-  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: 'cascade' }), // Admin who created the share
-  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }), // Admin who reviewed
+  fromCompanyId: varchar("from_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  toCompanyId: varchar("to_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: 'cascade' }),
+  numberOfJobs: varchar("number_of_jobs").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  workingRole: varchar("working_role").notNull().default('guard'),
+  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull(),
+  positions: jsonb("positions").$type<JobSharePosition[]>(),
+  requirements: text("requirements"),
+  status: varchar("status").notNull().default('pending'),
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
   reviewedAt: timestamp("reviewed_at"),
-  reviewNotes: text("review_notes"), // Notes from reviewer
+  reviewNotes: text("review_notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
