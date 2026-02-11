@@ -156,35 +156,35 @@ export function setupAuth(app: Express) {
       
       if (!username || !password) {
         storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, ipAddress, userAgent, errorReason: 'Missing username or password' }).catch(() => {});
-        return res.status(400).send("Username and password are required");
+        return res.status(400).json({ message: "Username and password are required" });
       }
 
       if (!invitationToken) {
         storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, ipAddress, userAgent, errorReason: 'Missing invitation token' }).catch(() => {});
-        return res.status(400).send("Invitation token is required");
+        return res.status(400).json({ message: "Invitation token is required" });
       }
 
       const invitation = await storage.getInvitationByToken(invitationToken);
       
       if (!invitation) {
         storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, email: undefined, ipAddress, userAgent, errorReason: 'Invalid invitation token' }).catch(() => {});
-        return res.status(400).send("Invalid invitation token");
+        return res.status(400).json({ message: "Invalid invitation token" });
       }
 
       if (invitation.status !== 'pending') {
         storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, email: invitation.email, companyId: invitation.companyId, ipAddress, userAgent, errorReason: 'Invitation already used' }).catch(() => {});
-        return res.status(400).send("This invitation has already been used");
+        return res.status(400).json({ message: "This invitation has already been used" });
       }
 
       if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
         storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, email: invitation.email, companyId: invitation.companyId, ipAddress, userAgent, errorReason: 'Invitation expired' }).catch(() => {});
-        return res.status(400).send("This invitation has expired");
+        return res.status(400).json({ message: "This invitation has expired" });
       }
 
       const existingUser = await storage.getUserByUsername(username, invitation.companyId);
       if (existingUser) {
         storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, email: invitation.email, companyId: invitation.companyId, ipAddress, userAgent, errorReason: 'Username already exists in company' }).catch(() => {});
-        return res.status(400).send("Username already exists in this company");
+        return res.status(400).json({ message: "Username already exists in this company" });
       }
 
       const user = await storage.createUser({
@@ -219,7 +219,7 @@ export function setupAuth(app: Express) {
       
       if (!username || !password) {
         storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Missing username or password' }).catch(() => {});
-        return res.status(400).send("Username and password are required");
+        return res.status(400).json({ message: "Username and password are required" });
       }
       
       let user: SelectUser | undefined;
@@ -228,24 +228,24 @@ export function setupAuth(app: Express) {
         user = await storage.getSuperAdminByUsername(username);
         if (!user) {
           storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Super admin not found' }).catch(() => {});
-          return res.status(401).send("Invalid credentials");
+          return res.status(401).json({ message: "Invalid credentials" });
         }
         const passwordMatch = await comparePasswords(password, user.password);
         if (!passwordMatch) {
           storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, userId: user.id, ipAddress, userAgent, errorReason: 'Invalid password (super admin)' }).catch(() => {});
-          return res.status(401).send("Invalid credentials");
+          return res.status(401).json({ message: "Invalid credentials" });
         }
       }
       else if (companyId) {
         user = await storage.getUserByUsername(username, companyId);
         if (!user) {
           storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, companyId, ipAddress, userAgent, errorReason: 'User not found in company' }).catch(() => {});
-          return res.status(401).send("Invalid credentials");
+          return res.status(401).json({ message: "Invalid credentials" });
         }
         const passwordMatch = await comparePasswords(password, user.password);
         if (!passwordMatch) {
           storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, userId: user.id, companyId, ipAddress, userAgent, errorReason: 'Invalid password' }).catch(() => {});
-          return res.status(401).send("Invalid credentials");
+          return res.status(401).json({ message: "Invalid credentials" });
         }
       }
       else {
@@ -253,7 +253,7 @@ export function setupAuth(app: Express) {
         
         if (matchingUsers.length === 0) {
           storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Username not found' }).catch(() => {});
-          return res.status(401).send("Invalid credentials");
+          return res.status(401).json({ message: "Invalid credentials" });
         }
         
         const validUsers: SelectUser[] = [];
@@ -266,7 +266,7 @@ export function setupAuth(app: Express) {
         
         if (validUsers.length === 0) {
           storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Invalid password' }).catch(() => {});
-          return res.status(401).send("Invalid credentials");
+          return res.status(401).json({ message: "Invalid credentials" });
         }
         
         if (validUsers.length > 1) {
@@ -340,7 +340,7 @@ export function setupAuth(app: Express) {
       });
     } catch (error: any) {
       console.error('Login error:', error);
-      return res.status(500).send("Login failed");
+      return res.status(500).json({ message: "Login failed" });
     }
   });
 
@@ -359,7 +359,7 @@ export function setupAuth(app: Express) {
   app.patch("/api/user/profile", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
-        return res.status(401).send("Unauthorized");
+        return res.status(401).json({ message: "Unauthorized" });
       }
 
       // Import and validate with Zod schema
@@ -372,7 +372,7 @@ export function setupAuth(app: Express) {
       // Fetch updated user and sanitize
       const updatedUser = await storage.getUserById(req.user.id);
       if (!updatedUser) {
-        return res.status(404).send("User not found");
+        return res.status(404).json({ message: "User not found" });
       }
 
       res.status(200).json(sanitizeUser(updatedUser));
@@ -381,14 +381,14 @@ export function setupAuth(app: Express) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: error.errors[0]?.message || "Invalid input" });
       }
-      res.status(500).send(error.message || "Failed to update profile");
+      res.status(500).json({ message: error.message || "Failed to update profile" });
     }
   });
 
   app.patch("/api/user/credentials", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
-        return res.status(401).send("Unauthorized");
+        return res.status(401).json({ message: "Unauthorized" });
       }
 
       // Import and validate with Zod schema
@@ -401,7 +401,7 @@ export function setupAuth(app: Express) {
       // Fetch updated user and sanitize
       const updatedUser = await storage.getUserById(req.user.id);
       if (!updatedUser) {
-        return res.status(404).send("User not found");
+        return res.status(404).json({ message: "User not found" });
       }
 
       res.status(200).json(sanitizeUser(updatedUser));
@@ -410,36 +410,36 @@ export function setupAuth(app: Express) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: error.errors[0]?.message || "Invalid input" });
       }
-      res.status(500).send(error.message || "Failed to update credentials");
+      res.status(500).json({ message: error.message || "Failed to update credentials" });
     }
   });
 
   app.post("/api/user/change-password", async (req, res, next) => {
     try {
       if (!req.isAuthenticated()) {
-        return res.status(401).send("Unauthorized");
+        return res.status(401).json({ message: "Unauthorized" });
       }
 
       const { currentPassword, newPassword } = req.body;
 
       if (!currentPassword || !newPassword) {
-        return res.status(400).send("Current password and new password are required");
+        return res.status(400).json({ message: "Current password and new password are required" });
       }
 
       if (newPassword.length < 6) {
-        return res.status(400).send("New password must be at least 6 characters");
+        return res.status(400).json({ message: "New password must be at least 6 characters" });
       }
 
       // Get full user data (including password hash)
       const user = await storage.getUserById(req.user.id);
       if (!user) {
-        return res.status(404).send("User not found");
+        return res.status(404).json({ message: "User not found" });
       }
 
       // Verify current password
       const isValidPassword = await comparePasswords(currentPassword, user.password);
       if (!isValidPassword) {
-        return res.status(401).send("Current password is incorrect");
+        return res.status(401).json({ message: "Current password is incorrect" });
       }
 
       // Update password
@@ -450,7 +450,7 @@ export function setupAuth(app: Express) {
       res.status(200).json({ message: "Password changed successfully" });
     } catch (error: any) {
       console.error("Error changing password:", error);
-      res.status(500).send(error.message || "Failed to change password");
+      res.status(500).json({ message: error.message || "Failed to change password" });
     }
   });
 
@@ -477,7 +477,7 @@ export function setupAuth(app: Express) {
         user = await storage.getSuperAdminByUsername(username);
       }
       else {
-        return res.status(400).send("Email or username with company selection is required");
+        return res.status(400).json({ message: "Email or username with company selection is required" });
       }
 
       if (!user) {
@@ -509,7 +509,7 @@ export function setupAuth(app: Express) {
       });
     } catch (error: any) {
       console.error("Error requesting password reset:", error);
-      res.status(500).send("Failed to process password reset request");
+      res.status(500).json({ message: "Failed to process password reset request" });
     }
   });
 
@@ -526,7 +526,7 @@ export function setupAuth(app: Express) {
       res.status(200).json({ valid: true });
     } catch (error: any) {
       console.error("Error verifying reset token:", error);
-      res.status(500).send("Failed to verify reset token");
+      res.status(500).json({ message: "Failed to verify reset token" });
     }
   });
 
@@ -536,16 +536,16 @@ export function setupAuth(app: Express) {
       const { token, newPassword } = req.body;
 
       if (!token || !newPassword) {
-        return res.status(400).send("Token and new password are required");
+        return res.status(400).json({ message: "Token and new password are required" });
       }
 
       if (newPassword.length < 6) {
-        return res.status(400).send("New password must be at least 6 characters");
+        return res.status(400).json({ message: "New password must be at least 6 characters" });
       }
 
       const resetToken = await storage.getPasswordResetToken(token);
       if (!resetToken) {
-        return res.status(400).send("Invalid or expired reset token");
+        return res.status(400).json({ message: "Invalid or expired reset token" });
       }
 
       // Update password
@@ -559,7 +559,7 @@ export function setupAuth(app: Express) {
       res.status(200).json({ message: "Password reset successfully" });
     } catch (error: any) {
       console.error("Error resetting password:", error);
-      res.status(500).send("Failed to reset password");
+      res.status(500).json({ message: "Failed to reset password" });
     }
   });
 }
