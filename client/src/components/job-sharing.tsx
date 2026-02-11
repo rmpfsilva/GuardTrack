@@ -47,9 +47,12 @@ export default function JobSharing() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAcceptDialogOpen, setIsAcceptDialogOpen] = useState(false);
+  const [isEditWorkersDialogOpen, setIsEditWorkersDialogOpen] = useState(false);
   const [editingShare, setEditingShare] = useState<JobShareWithDetails | null>(null);
   const [acceptingShare, setAcceptingShare] = useState<JobShareWithDetails | null>(null);
+  const [editingWorkersShare, setEditingWorkersShare] = useState<JobShareWithDetails | null>(null);
   const [assignedWorkers, setAssignedWorkers] = useState<Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }>>([]);
+  const [editWorkers, setEditWorkers] = useState<Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }>>([]);
   const [acceptNotes, setAcceptNotes] = useState("");
   const [selectedTab, setSelectedTab] = useState<'offered' | 'received'>('offered');
 
@@ -136,6 +139,67 @@ export default function JobSharing() {
       toast({ title: "Error", description: error.message || "Failed to update job share", variant: "destructive" });
     },
   });
+
+  const updateWorkersMutation = useMutation({
+    mutationFn: async ({ id, assignedWorkers: workers }: { id: string; assignedWorkers: any[] }) => {
+      return await apiRequest('PATCH', `/api/job-shares/${id}`, { assignedWorkers: workers });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Assigned workers updated" });
+      queryClient.invalidateQueries({ queryKey: ['/api/job-shares/received'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/job-shares/offered'] });
+      setIsEditWorkersDialogOpen(false);
+      setEditingWorkersShare(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message || "Failed to update workers", variant: "destructive" });
+    },
+  });
+
+  const openEditWorkersDialog = (share: JobShareWithDetails) => {
+    setEditingWorkersShare(share);
+    const existing = (share.assignedWorkers || []) as JobShareAssignedWorker[];
+    if (existing.length > 0) {
+      setEditWorkers(existing.map(w => ({
+        name: w.name || "",
+        role: normalizeLegacyRole(w.role || 'sia'),
+        phone: w.phone || "",
+        email: w.email || "",
+        siaLicense: w.siaLicense || "",
+      })));
+    } else {
+      const sharePositions = getPositionsForShare(share);
+      const workers: Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }> = [];
+      for (const pos of sharePositions) {
+        for (let i = 0; i < Number(pos.count); i++) {
+          workers.push({ name: "", role: pos.role, phone: "", email: "", siaLicense: "" });
+        }
+      }
+      setEditWorkers(workers);
+    }
+    setIsEditWorkersDialogOpen(true);
+  };
+
+  const handleSaveWorkers = () => {
+    if (!editingWorkersShare) return;
+    updateWorkersMutation.mutate({
+      id: editingWorkersShare.id,
+      assignedWorkers: editWorkers,
+    });
+  };
+
+  const updateEditWorker = (index: number, field: string, value: string) => {
+    setEditWorkers(prev => prev.map((w, i) => i === index ? { ...w, [field]: value } : w));
+  };
+
+  const addEditWorker = () => {
+    setEditWorkers(prev => [...prev, { name: "", role: "sia" as JobShareRole, phone: "", email: "", siaLicense: "" }]);
+  };
+
+  const removeEditWorker = (index: number) => {
+    if (editWorkers.length <= 1) return;
+    setEditWorkers(prev => prev.filter((_, i) => i !== index));
+  };
 
   const resetForm = () => {
     setFormData({ toCompanyId: "", siteId: "", startDate: "", endDate: "", requirements: "" });
@@ -657,12 +721,27 @@ export default function JobSharing() {
                       </div>
                     )}
 
-                    {share.status === 'accepted' && share.assignedWorkers && share.assignedWorkers.length > 0 && (
+                    {share.status === 'accepted' && (
                       <div className="pt-2 border-t">
-                        <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-                          <UserPlus className="h-4 w-4" />Assigned Workers
-                        </p>
-                        <AssignedWorkersDisplay workers={share.assignedWorkers} />
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <UserPlus className="h-4 w-4" />Assigned Workers
+                            {share.assignedWorkers && share.assignedWorkers.length > 0 && ` (${share.assignedWorkers.length})`}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditWorkersDialog(share)}
+                            data-testid={`button-edit-workers-${share.id}`}
+                          >
+                            <Pencil className="h-3 w-3 mr-1" />Edit Workers
+                          </Button>
+                        </div>
+                        {share.assignedWorkers && share.assignedWorkers.length > 0 ? (
+                          <AssignedWorkersDisplay workers={share.assignedWorkers} />
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">No workers assigned yet</p>
+                        )}
                       </div>
                     )}
                   </CardContent>
@@ -834,6 +913,88 @@ export default function JobSharing() {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleEdit} disabled={updateMutation.isPending} data-testid="button-save-edit">
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditWorkersDialogOpen} onOpenChange={(open) => { setIsEditWorkersDialogOpen(open); if (!open) { setEditingWorkersShare(null); setEditWorkers([]); } }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] !flex !flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>Edit Assigned Workers</DialogTitle>
+            <DialogDescription>
+              Update the workers assigned to this job share.
+              {editingWorkersShare && (
+                <span className="block mt-1 text-xs">
+                  From: {editingWorkersShare.fromCompany?.name} | Site: {editingWorkersShare.site?.name}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label className="text-sm font-medium">Workers</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addEditWorker} data-testid="button-add-edit-worker">
+                  <Plus className="h-3 w-3 mr-1" />Add Worker
+                </Button>
+              </div>
+              {editWorkers.map((worker, index) => (
+                <div key={index} className="p-3 rounded-md border bg-muted/30 space-y-3" data-testid={`edit-worker-row-${index}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="outline" className="text-xs">Worker {index + 1}</Badge>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Select value={worker.role} onValueChange={(val) => updateEditWorker(index, 'role', val)}>
+                        <SelectTrigger className="w-[140px]" data-testid={`edit-worker-role-${index}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {JOB_SHARE_ROLES.map(r => (
+                            <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {editWorkers.length > 1 && (
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeEditWorker(index)} data-testid={`button-remove-edit-worker-${index}`}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Full name"
+                      value={worker.name}
+                      onChange={(e) => updateEditWorker(index, 'name', e.target.value)}
+                      data-testid={`edit-worker-name-${index}`}
+                    />
+                    <Input
+                      placeholder="Phone (optional)"
+                      value={worker.phone}
+                      onChange={(e) => updateEditWorker(index, 'phone', e.target.value)}
+                      data-testid={`edit-worker-phone-${index}`}
+                    />
+                    <Input
+                      placeholder="Email (optional)"
+                      value={worker.email}
+                      onChange={(e) => updateEditWorker(index, 'email', e.target.value)}
+                      data-testid={`edit-worker-email-${index}`}
+                    />
+                    <Input
+                      placeholder="SIA license (optional)"
+                      value={worker.siaLicense}
+                      onChange={(e) => updateEditWorker(index, 'siaLicense', e.target.value)}
+                      data-testid={`edit-worker-sia-${index}`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={() => setIsEditWorkersDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveWorkers} disabled={updateWorkersMutation.isPending} data-testid="button-save-workers">
+              {updateWorkersMutation.isPending ? "Saving..." : "Save Workers"}
             </Button>
           </DialogFooter>
         </DialogContent>

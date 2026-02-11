@@ -3112,6 +3112,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sanitizedUpdates.assignedWorkers = cleanWorkers;
           }
         }
+      } else if (!updates.status && updates.assignedWorkers && Array.isArray(updates.assignedWorkers)) {
+        if (jobShare.status !== 'accepted') {
+          return res.status(400).json({ message: "Can only edit workers on accepted job shares" });
+        }
+        if (user.role !== 'super_admin' && jobShare.toCompanyId !== user.companyId) {
+          return res.status(403).json({ message: "Only the accepting company can edit assigned workers" });
+        }
+        const validRoles = [...JOB_SHARE_ROLES, 'guard'] as string[];
+        const cleanWorkers = updates.assignedWorkers
+          .filter((w: any) => w.name && w.name.trim())
+          .map((w: any) => ({
+            name: w.name.trim(),
+            role: validRoles.includes(w.role) ? (w.role === 'guard' ? 'sia' : w.role) : 'sia',
+            phone: w.phone?.trim() || undefined,
+            email: w.email?.trim() || undefined,
+            siaLicense: w.siaLicense?.trim() || undefined,
+          }));
+        sanitizedUpdates.assignedWorkers = cleanWorkers;
       } else if (updates.positions || updates.siteId || updates.startDate || updates.endDate || updates.requirements !== undefined) {
         if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId) {
           return res.status(403).json({ message: "Only the creator company can edit job share details" });
