@@ -1578,6 +1578,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/scheduled-shifts/batch', isAuthenticated, isAdmin, requireActiveTrial, requireFeature('shiftScheduling'), async (req: any, res) => {
+    try {
+      const admin = req.user;
+      const { shifts: shiftsData } = req.body;
+
+      if (!Array.isArray(shiftsData) || shiftsData.length === 0) {
+        return res.status(400).json({ message: "At least one shift is required" });
+      }
+
+      if (shiftsData.length > 50) {
+        return res.status(400).json({ message: "Maximum 50 shifts can be created at once" });
+      }
+
+      const createdShifts = [];
+      for (const shiftData of shiftsData) {
+        const validatedData = insertScheduledShiftSchema.parse(shiftData);
+
+        if (admin.role !== 'super_admin') {
+          const user = await storage.getUserById(validatedData.userId);
+          const site = await storage.getSite(validatedData.siteId);
+
+          if (!user || user.companyId !== admin.companyId) {
+            return res.status(403).json({ message: "Cannot create shifts for users from other companies" });
+          }
+          if (!site || site.companyId !== admin.companyId) {
+            return res.status(403).json({ message: "Cannot create shifts for sites from other companies" });
+          }
+        }
+
+        const shift = await storage.createScheduledShift(validatedData);
+        createdShifts.push(shift);
+      }
+
+      res.status(201).json(createdShifts);
+    } catch (error: any) {
+      console.error("[BATCH CREATE SHIFT ERROR]", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid input data" });
+      }
+      res.status(400).json({ message: error.message || "Failed to create shifts" });
+    }
+  });
+
   app.post('/api/scheduled-shifts', isAuthenticated, isAdmin, requireActiveTrial, requireFeature('shiftScheduling'), async (req: any, res) => {
     try {
       const admin = req.user;
