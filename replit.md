@@ -38,7 +38,9 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Customer Support Messaging**: Integrated system for company admins to send support queries to Super Admin.
 - **Platform Appearance Settings**: Super Admin customizable platform-wide background and overlay opacity.
 - **Error Monitoring System**: Comprehensive logging of API and client-side errors with resolution workflow.
-- **Configurable Guard App Navigation**: Platform admin (super_admin) can customize the guard mobile app navigation tabs (add, edit, delete, reorder) through the Settings page. Tabs are platform-wide (same for all companies), support feature gating and role-based visibility. Default tabs are Home, Schedule, Leave, and Notices.
+- **Configurable Guard App Navigation**: Platform admin (super_admin) can customize the guard mobile app navigation tabs (add, edit, delete, reorder) through the Settings page. Tabs are platform-wide (same for all companies), support feature gating and role-based visibility. Default tabs are Home, Schedule, Leave, Notices, and Settings. Settings tab is always available (auto-appended if not in configured tabs).
+- **Guard App Settings Tab**: Dedicated settings tab in the guard mobile app with profile information display, self-service password change (POST `/api/user/change-password`), and sign out functionality.
+- **Password Management**: User password changes and secure token-based recovery. Self-service change password available for all users via the guard app settings tab.
 
 ### System Design Choices
 The architecture emphasizes a clear separation of concerns with a multi-tenant design using `companyId` for data isolation across tables such as `companies`, `users`, `sites`, `check_ins`, `scheduled_shifts`, `breaks`, `overtime_requests`, `leave_requests`, `notices`, `company_partnerships`, `job_shares`, `trial_invitations`, `user_logins`, `support_messages`, `subscription_payments`, and `error_logs`. Hours calculation incorporates baseline break deductions and conditional overtime based on approvals.

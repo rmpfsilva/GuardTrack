@@ -29,7 +29,7 @@ const JOB_TITLES = [
   "Event Marshal",
 ];
 
-const JOB_ROLES = ["guard", "steward", "supervisor", "call_out"] as const;
+const JOB_ROLES = ["guard", "steward", "supervisor", "call_out", "admin"] as const;
 
 const JOB_ROLE_LABELS: Record<string, string> = {
   guard: "Guard",
@@ -37,6 +37,7 @@ const JOB_ROLE_LABELS: Record<string, string> = {
   supervisor: "Supervisor",
   call_out: "Call Out",
   admin: "Admin",
+  super_admin: "Super Admin",
 };
 
 const getRecurrenceLabel = (recurrence: string): string => {

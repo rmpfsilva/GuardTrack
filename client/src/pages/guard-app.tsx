@@ -79,6 +79,9 @@ export default function GuardApp() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginCompanyId, setLoginCompanyId] = useState<string>("");
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const handleInstallClick = async () => {
     if (isIOS) {
@@ -386,6 +389,34 @@ export default function GuardApp() {
 
   const handleLogout = () => {
     logoutMutation.mutate();
+  };
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      return await apiRequest('POST', '/api/user/change-password', data);
+    },
+    onSuccess: () => {
+      toast({ title: "Password Changed", description: "Your password has been updated successfully." });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message || "Failed to change password", variant: "destructive" });
+    },
+  });
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Error", description: "New passwords do not match", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: "Error", description: "New password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+    changePasswordMutation.mutate({ currentPassword, newPassword });
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -1093,18 +1124,21 @@ export default function GuardApp() {
                   </Card>
                 )}
 
-                {/* Logout section - clearly separated */}
-                <div className="pt-4 border-t mt-4">
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={handleLogout}
-                    data-testid="button-logout"
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                  </Button>
-                </div>
+                <Card 
+                  className="cursor-pointer hover-elevate"
+                  onClick={() => setActiveTab("settings")}
+                  data-testid="card-quick-settings"
+                >
+                  <CardContent className="flex items-center justify-between p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                        <SettingsIcon className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <span className="font-medium">Settings</span>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="schedule" className="mt-0">
@@ -1145,24 +1179,140 @@ export default function GuardApp() {
                 <h2 className="text-xl font-bold mb-4">Notice Board</h2>
                 <GuardNoticeBoard />
               </TabsContent>
+
+              <TabsContent value="settings" className="mt-0 space-y-4">
+                <h2 className="text-xl font-bold mb-4">Settings</h2>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <User className="h-5 w-5" />
+                      Profile
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Name</p>
+                        <p className="font-medium" data-testid="text-profile-name">{user.firstName} {user.lastName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Username</p>
+                        <p className="font-medium" data-testid="text-profile-username">{user.username}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Role</p>
+                        <p className="font-medium capitalize" data-testid="text-profile-role">{user.role}</p>
+                      </div>
+                      {user.email && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Email</p>
+                          <p className="font-medium" data-testid="text-profile-email">{user.email}</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      Change Password
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleChangePassword} className="space-y-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="current-password">Current Password</Label>
+                        <Input
+                          id="current-password"
+                          type="password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          placeholder="Enter current password"
+                          data-testid="input-current-password"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="new-password">New Password</Label>
+                        <Input
+                          id="new-password"
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Enter new password (min 6 characters)"
+                          data-testid="input-new-password"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="confirm-password">Confirm New Password</Label>
+                        <Input
+                          id="confirm-password"
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Confirm new password"
+                          data-testid="input-confirm-password"
+                        />
+                      </div>
+                      <Button 
+                        type="submit" 
+                        className="w-full"
+                        disabled={changePasswordMutation.isPending || !currentPassword || !newPassword || !confirmPassword}
+                        data-testid="button-change-password"
+                      >
+                        {changePasswordMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : null}
+                        Update Password
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                <div className="pt-2">
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={handleLogout}
+                    data-testid="button-logout"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              </TabsContent>
             </div>
 
           <TabsList 
             className={`fixed bottom-0 left-0 right-0 h-16 grid rounded-none border-t bg-background shadow-lg z-50`}
-            style={{ gridTemplateColumns: `repeat(${visibleTabs.length || 4}, 1fr)` }}
+            style={{ gridTemplateColumns: `repeat(${(visibleTabs.length > 0 ? (visibleTabs.some(t => t.tabKey === 'settings') ? visibleTabs.length : visibleTabs.length + 1) : 5)}, 1fr)` }}
           >
             {visibleTabs.length > 0 ? (
-              visibleTabs.map((tab) => (
-                <TabsTrigger 
-                  key={tab.id}
-                  value={tab.tabKey} 
-                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-                  data-testid={`tab-${tab.tabKey}`}
-                >
-                  {getTabIcon(tab.icon)}
-                  <span className="text-xs">{tab.label}</span>
-                </TabsTrigger>
-              ))
+              <>
+                {visibleTabs.map((tab) => (
+                  <TabsTrigger 
+                    key={tab.id}
+                    value={tab.tabKey} 
+                    className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
+                    data-testid={`tab-${tab.tabKey}`}
+                  >
+                    {getTabIcon(tab.icon)}
+                    <span className="text-xs">{tab.label}</span>
+                  </TabsTrigger>
+                ))}
+                {!visibleTabs.some(t => t.tabKey === 'settings') && (
+                  <TabsTrigger 
+                    value="settings" 
+                    className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
+                    data-testid="tab-settings"
+                  >
+                    <SettingsIcon className="h-5 w-5" />
+                    <span className="text-xs">Settings</span>
+                  </TabsTrigger>
+                )}
+              </>
             ) : (
               <>
                 <TabsTrigger 
@@ -1196,6 +1346,14 @@ export default function GuardApp() {
                 >
                   <Bell className="h-5 w-5" />
                   <span className="text-xs">Notices</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="settings" 
+                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
+                  data-testid="tab-settings"
+                >
+                  <SettingsIcon className="h-5 w-5" />
+                  <span className="text-xs">Settings</span>
                 </TabsTrigger>
               </>
             )}
