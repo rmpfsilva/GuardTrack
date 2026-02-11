@@ -6,7 +6,7 @@ import { db } from "./db";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
 import { users, breaks, checkIns, sites, companies, JOB_SHARE_ROLES } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
-import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema } from "@shared/schema";
+import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema, insertInvoiceSchema, updateInvoiceSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 import { sendInvitationEmail } from './emailService';
@@ -4076,6 +4076,112 @@ GuardTrack Team`;
     } catch (error: any) {
       console.error("Error deleting subscription payment:", error);
       res.status(500).json({ message: error.message || "Failed to delete subscription payment" });
+    }
+  });
+
+  // Invoice Routes (Super Admin CRUD)
+  app.get('/api/super-admin/invoices', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId } = req.query;
+      let result;
+      if (companyId) {
+        result = await storage.getInvoicesByCompany(companyId);
+      } else {
+        result = await storage.getAllInvoices();
+      }
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error fetching invoices:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch invoices" });
+    }
+  });
+
+  app.get('/api/super-admin/invoices/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const invoice = await storage.getInvoice(id);
+      if (!invoice) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      res.json(invoice);
+    } catch (error: any) {
+      console.error("Error fetching invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch invoice" });
+    }
+  });
+
+  app.post('/api/super-admin/invoices', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const parsed = insertInvoiceSchema.safeParse({
+        ...req.body,
+        createdBy: req.user.id,
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+        periodStart: req.body.periodStart ? new Date(req.body.periodStart) : null,
+        periodEnd: req.body.periodEnd ? new Date(req.body.periodEnd) : null,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid invoice data", errors: parsed.error.flatten() });
+      }
+      const invoice = await storage.createInvoice(parsed.data);
+      res.status(201).json(invoice);
+    } catch (error: any) {
+      console.error("Error creating invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to create invoice" });
+    }
+  });
+
+  app.patch('/api/super-admin/invoices/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const existing = await storage.getInvoice(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      const updates = { ...req.body };
+      if (updates.dueDate) updates.dueDate = new Date(updates.dueDate);
+      if (updates.periodStart) updates.periodStart = new Date(updates.periodStart);
+      if (updates.periodEnd) updates.periodEnd = new Date(updates.periodEnd);
+      if (updates.paidAt) updates.paidAt = new Date(updates.paidAt);
+
+      const parsed = updateInvoiceSchema.safeParse(updates);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid update data", errors: parsed.error.flatten() });
+      }
+      const invoice = await storage.updateInvoice(id, parsed.data);
+      res.json(invoice);
+    } catch (error: any) {
+      console.error("Error updating invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to update invoice" });
+    }
+  });
+
+  app.delete('/api/super-admin/invoices/:id', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const existing = await storage.getInvoice(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      await storage.deleteInvoice(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to delete invoice" });
+    }
+  });
+
+  // Company-facing invoice route (admin users can view their company's invoices)
+  app.get('/api/invoices', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) {
+        return res.status(400).json({ message: "No company associated with this user" });
+      }
+      const result = await storage.getInvoicesByCompany(user.companyId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error fetching company invoices:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch invoices" });
     }
   });
 

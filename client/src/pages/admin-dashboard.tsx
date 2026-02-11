@@ -40,6 +40,8 @@ import ClientUsageReports from "@/components/client-usage-reports";
 import SupportMessages from "@/components/support-messages";
 import CompanySupportMessages from "@/components/company-support-messages";
 import SubscriptionBilling from "@/components/subscription-billing";
+import InvoiceManagement from "@/components/invoice-management";
+import CompanyInvoices from "@/components/company-invoices";
 import ErrorLogs from "@/components/error-logs";
 import { PlanManagement } from "@/components/plan-management";
 import PlatformSettings from "@/components/platform-settings";
@@ -446,6 +448,7 @@ export default function AdminDashboard() {
                   <TabsTrigger value="plans" data-testid="tab-plans" className="text-xs sm:text-sm whitespace-nowrap">Plans</TabsTrigger>
                   <TabsTrigger value="messages" data-testid="tab-messages" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('messages') ? 'tab-has-new' : ''}`}>Messages</TabsTrigger>
                   <TabsTrigger value="subscription-billing" data-testid="tab-subscription-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
+                  <TabsTrigger value="invoices" data-testid="tab-invoices" className="text-xs sm:text-sm whitespace-nowrap">Invoices</TabsTrigger>
                   <TabsTrigger value="usage-reports" data-testid="tab-usage-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
                   <TabsTrigger value="error-logs" data-testid="tab-error-logs" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('error-logs') ? 'tab-has-new' : ''}`}>Error Logs</TabsTrigger>
                   <TabsTrigger value="platform-settings" data-testid="tab-platform-settings" className="text-xs sm:text-sm whitespace-nowrap">Settings</TabsTrigger>
@@ -467,6 +470,7 @@ export default function AdminDashboard() {
                   {hasTabAccess('partnerships') && <TabsTrigger value="partnerships" data-testid="tab-partnerships" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('partnerships') ? 'tab-has-new' : ''}`}>Partnerships</TabsTrigger>}
                   {hasTabAccess('job-sharing') && <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('job-sharing') ? 'tab-has-new' : ''}`}>Job Sharing</TabsTrigger>}
                   {hasTabAccess('billing') && <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>}
+                  <TabsTrigger value="company-invoices" data-testid="tab-company-invoices" className="text-xs sm:text-sm whitespace-nowrap">Invoices</TabsTrigger>
                   {hasTabAccess('activity') && <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>}
                   <TabsTrigger value="support" data-testid="tab-support" className="text-xs sm:text-sm whitespace-nowrap">Support</TabsTrigger>
                 </>
@@ -597,6 +601,10 @@ export default function AdminDashboard() {
             <BillingReports />
           </TabsContent>
 
+          <TabsContent value="company-invoices">
+            <CompanyInvoices />
+          </TabsContent>
+
           <TabsContent value="reports">
             <AdvancedReports />
           </TabsContent>
@@ -665,6 +673,10 @@ export default function AdminDashboard() {
 
               <TabsContent value="subscription-billing">
                 <SubscriptionBilling />
+              </TabsContent>
+
+              <TabsContent value="invoices">
+                <InvoiceManagement />
               </TabsContent>
 
               <TabsContent value="messages">

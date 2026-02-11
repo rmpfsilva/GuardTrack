@@ -84,6 +84,11 @@ import {
   type InsertErrorLog,
   type UpdateErrorLog,
   type ErrorLogWithDetails,
+  invoices,
+  type Invoice,
+  type InsertInvoice,
+  type UpdateInvoice,
+  type InvoiceWithDetails,
   errorLogs,
   subscriptionPlans,
   type SubscriptionPlan,
@@ -297,6 +302,14 @@ export interface IStorage {
   createSubscriptionPayment(payment: InsertSubscriptionPayment): Promise<SubscriptionPayment>;
   updateSubscriptionPayment(id: string, updates: UpdateSubscriptionPayment): Promise<SubscriptionPayment>;
   deleteSubscriptionPayment(id: string): Promise<void>;
+
+  // Invoice operations
+  getAllInvoices(): Promise<InvoiceWithDetails[]>;
+  getInvoicesByCompany(companyId: string): Promise<InvoiceWithDetails[]>;
+  getInvoice(id: string): Promise<InvoiceWithDetails | undefined>;
+  createInvoice(invoice: InsertInvoice): Promise<Invoice>;
+  updateInvoice(id: string, updates: UpdateInvoice): Promise<Invoice>;
+  deleteInvoice(id: string): Promise<void>;
 
   // Error log operations (Super Admin monitoring)
   getAllErrorLogs(limit?: number): Promise<ErrorLogWithDetails[]>;
@@ -3326,6 +3339,94 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSubscriptionPayment(id: string): Promise<void> {
     await db.delete(subscriptionPayments).where(eq(subscriptionPayments.id, id));
+  }
+
+  // Invoice operations
+  async getAllInvoices(): Promise<InvoiceWithDetails[]> {
+    const allInvoices = await db
+      .select()
+      .from(invoices)
+      .orderBy(desc(invoices.createdAt));
+    
+    const result: InvoiceWithDetails[] = [];
+    for (const invoice of allInvoices) {
+      const [company] = await db.select().from(companies).where(eq(companies.id, invoice.companyId));
+      const creator = invoice.createdBy 
+        ? (await db.select().from(users).where(eq(users.id, invoice.createdBy)))[0]
+        : undefined;
+      
+      result.push({
+        ...invoice,
+        company,
+        creator,
+      });
+    }
+    return result;
+  }
+
+  async getInvoicesByCompany(companyId: string): Promise<InvoiceWithDetails[]> {
+    const companyInvoices = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.companyId, companyId))
+      .orderBy(desc(invoices.createdAt));
+    
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+    
+    const result: InvoiceWithDetails[] = [];
+    for (const invoice of companyInvoices) {
+      const creator = invoice.createdBy 
+        ? (await db.select().from(users).where(eq(users.id, invoice.createdBy)))[0]
+        : undefined;
+      
+      result.push({
+        ...invoice,
+        company,
+        creator,
+      });
+    }
+    return result;
+  }
+
+  async getInvoice(id: string): Promise<InvoiceWithDetails | undefined> {
+    const [invoice] = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.id, id));
+    
+    if (!invoice) return undefined;
+
+    const [company] = await db.select().from(companies).where(eq(companies.id, invoice.companyId));
+    const creator = invoice.createdBy 
+      ? (await db.select().from(users).where(eq(users.id, invoice.createdBy)))[0]
+      : undefined;
+
+    return {
+      ...invoice,
+      company,
+      creator,
+    };
+  }
+
+  async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
+    const [newInvoice] = await db
+      .insert(invoices)
+      .values(invoice)
+      .returning();
+    return newInvoice;
+  }
+
+  async updateInvoice(id: string, updates: UpdateInvoice): Promise<Invoice> {
+    const [updatedInvoice] = await db
+      .update(invoices)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(invoices.id, id))
+      .returning();
+    return updatedInvoice;
+  }
+
+  async deleteInvoice(id: string): Promise<void> {
+    await db.delete(invoices).where(eq(invoices.id, id));
   }
 
   // Error log operations

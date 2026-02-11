@@ -1014,6 +1014,47 @@ export const updateSubscriptionPaymentSchema = createInsertSchema(subscriptionPa
   updatedAt: true,
 }).partial();
 
+// Invoices table - Super Admin sends invoices to companies for payment
+export const invoices = pgTable("invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  invoiceNumber: varchar("invoice_number", { length: 50 }).notNull(),
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).notNull().default('GBP'),
+  status: varchar("status").notNull().default('pending'),
+  dueDate: timestamp("due_date"),
+  periodStart: timestamp("period_start"),
+  periodEnd: timestamp("period_end"),
+  notes: text("notes"),
+  paidAt: timestamp("paid_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  dueDate: z.coerce.date().nullable().optional(),
+  periodStart: z.coerce.date().nullable().optional(),
+  periodEnd: z.coerce.date().nullable().optional(),
+  paidAt: z.coerce.date().nullable().optional(),
+});
+
+export const updateInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  dueDate: z.coerce.date().nullable().optional(),
+  periodStart: z.coerce.date().nullable().optional(),
+  periodEnd: z.coerce.date().nullable().optional(),
+  paidAt: z.coerce.date().nullable().optional(),
+}).partial();
+
 // Error Logs table - tracks application errors for Super Admin monitoring
 export const errorLogs = pgTable("error_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1170,6 +1211,10 @@ export type SubscriptionPayment = typeof subscriptionPayments.$inferSelect;
 export type InsertSubscriptionPayment = z.infer<typeof insertSubscriptionPaymentSchema>;
 export type UpdateSubscriptionPayment = z.infer<typeof updateSubscriptionPaymentSchema>;
 
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type UpdateInvoice = z.infer<typeof updateInvoiceSchema>;
+
 export type ErrorLog = typeof errorLogs.$inferSelect;
 export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
 export type UpdateErrorLog = z.infer<typeof updateErrorLogSchema>;
@@ -1229,6 +1274,11 @@ export type JobShareWithDetails = JobShare & {
 };
 
 export type SubscriptionPaymentWithDetails = SubscriptionPayment & {
+  company: Company;
+  creator?: User;
+};
+
+export type InvoiceWithDetails = Invoice & {
   company: Company;
   creator?: User;
 };
