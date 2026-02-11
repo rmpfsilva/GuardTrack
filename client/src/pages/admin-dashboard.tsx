@@ -71,6 +71,10 @@ export default function AdminDashboard() {
     setTimeout(() => setIsRefreshing(false), 500);
   };
   const [activeTab, setActiveTab] = useState<string>(user?.role === 'super_admin' ? 'clients' : 'overview');
+  const [jobSharingLastSeen, setJobSharingLastSeen] = useState<Date>(() => {
+    const stored = localStorage.getItem('jobSharingLastSeen');
+    return stored ? new Date(stored) : new Date(0);
+  });
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -209,14 +213,12 @@ export default function AdminDashboard() {
         return receivedPartnerships.filter(p => p.status === 'pending').length > 0;
       case 'job-sharing': {
         const hasPendingReceived = receivedJobShares.filter(j => j.status === 'pending').length > 0;
-        const hasRecentlyAccepted = offeredJobShares.filter(j => {
+        const hasUnseenAccepted = offeredJobShares.filter(j => {
           if (j.status !== 'accepted' || !j.reviewedAt) return false;
           const reviewedAt = new Date(j.reviewedAt);
-          const threeDaysAgo = new Date();
-          threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-          return reviewedAt > threeDaysAgo;
+          return reviewedAt > jobSharingLastSeen;
         }).length > 0;
-        return hasPendingReceived || hasRecentlyAccepted;
+        return hasPendingReceived || hasUnseenAccepted;
       }
       default:
         return false;
@@ -437,7 +439,14 @@ export default function AdminDashboard() {
         )}
 
         {/* Main Content Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={(val) => {
+          setActiveTab(val);
+          if (val === 'job-sharing') {
+            const now = new Date();
+            setJobSharingLastSeen(now);
+            localStorage.setItem('jobSharingLastSeen', now.toISOString());
+          }
+        }} className="space-y-6">
           <div className="w-full overflow-x-auto pb-2">
             <TabsList className="inline-flex min-w-min bg-muted">
               {user.role === 'super_admin' ? (
