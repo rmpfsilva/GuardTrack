@@ -150,39 +150,43 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      // Validate input
       const { username, password, firstName, lastName, invitationToken } = req.body;
+      const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString() || '';
+      const userAgent = req.headers['user-agent'] || '';
       
       if (!username || !password) {
+        storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, ipAddress, userAgent, errorReason: 'Missing username or password' }).catch(() => {});
         return res.status(400).send("Username and password are required");
       }
 
       if (!invitationToken) {
+        storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, ipAddress, userAgent, errorReason: 'Missing invitation token' }).catch(() => {});
         return res.status(400).send("Invitation token is required");
       }
 
-      // Validate invitation token
       const invitation = await storage.getInvitationByToken(invitationToken);
       
       if (!invitation) {
+        storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, email: undefined, ipAddress, userAgent, errorReason: 'Invalid invitation token' }).catch(() => {});
         return res.status(400).send("Invalid invitation token");
       }
 
       if (invitation.status !== 'pending') {
+        storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, email: invitation.email, companyId: invitation.companyId, ipAddress, userAgent, errorReason: 'Invitation already used' }).catch(() => {});
         return res.status(400).send("This invitation has already been used");
       }
 
       if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, email: invitation.email, companyId: invitation.companyId, ipAddress, userAgent, errorReason: 'Invitation expired' }).catch(() => {});
         return res.status(400).send("This invitation has expired");
       }
 
-      // Check username uniqueness within the company
       const existingUser = await storage.getUserByUsername(username, invitation.companyId);
       if (existingUser) {
+        storage.createAuthActivityLog({ eventType: 'register', status: 'failed', username, email: invitation.email, companyId: invitation.companyId, ipAddress, userAgent, errorReason: 'Username already exists in company' }).catch(() => {});
         return res.status(400).send("Username already exists in this company");
       }
 
-      // Create user with role from invitation and company assignment
       const user = await storage.createUser({
         username,
         password: await hashPassword(password),
@@ -190,11 +194,13 @@ export function setupAuth(app: Express) {
         lastName,
         role: invitation.role as 'guard' | 'steward' | 'supervisor' | 'admin',
         email: invitation.email,
-        companyId: invitation.companyId, // Assign user to the company from invitation
+        companyId: invitation.companyId,
       });
 
-      // Mark invitation as accepted
       await storage.acceptInvitation(invitationToken);
+
+      const company = invitation.companyId ? await storage.getCompany(invitation.companyId) : null;
+      storage.createAuthActivityLog({ eventType: 'register', status: 'success', username, email: invitation.email, userId: user.id, companyId: invitation.companyId, companyName: company?.name || undefined, ipAddress, userAgent }).catch(() => {});
 
       req.login(sanitizeUser(user), (err) => {
         if (err) return next(err);
@@ -208,44 +214,48 @@ export function setupAuth(app: Express) {
   app.post("/api/login", async (req, res, next) => {
     try {
       const { username, password, companyId, isSuperAdmin } = req.body;
+      const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString() || '';
+      const userAgent = req.headers['user-agent'] || '';
       
       if (!username || !password) {
+        storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Missing username or password' }).catch(() => {});
         return res.status(400).send("Username and password are required");
       }
       
       let user: SelectUser | undefined;
       
-      // If super admin login is explicitly requested
       if (isSuperAdmin) {
         user = await storage.getSuperAdminByUsername(username);
         if (!user) {
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Super admin not found' }).catch(() => {});
           return res.status(401).send("Invalid credentials");
         }
         const passwordMatch = await comparePasswords(password, user.password);
         if (!passwordMatch) {
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, userId: user.id, ipAddress, userAgent, errorReason: 'Invalid password (super admin)' }).catch(() => {});
           return res.status(401).send("Invalid credentials");
         }
       }
-      // If companyId is explicitly provided (user selected from conflict resolution)
       else if (companyId) {
         user = await storage.getUserByUsername(username, companyId);
         if (!user) {
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, companyId, ipAddress, userAgent, errorReason: 'User not found in company' }).catch(() => {});
           return res.status(401).send("Invalid credentials");
         }
         const passwordMatch = await comparePasswords(password, user.password);
         if (!passwordMatch) {
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, userId: user.id, companyId, ipAddress, userAgent, errorReason: 'Invalid password' }).catch(() => {});
           return res.status(401).send("Invalid credentials");
         }
       }
-      // Normal login - look up by username only
       else {
         const matchingUsers = await storage.getUsersByUsername(username);
         
         if (matchingUsers.length === 0) {
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Username not found' }).catch(() => {});
           return res.status(401).send("Invalid credentials");
         }
         
-        // Filter to users whose password matches
         const validUsers: SelectUser[] = [];
         for (const u of matchingUsers) {
           const passwordMatch = await comparePasswords(password, u.password);
@@ -255,12 +265,11 @@ export function setupAuth(app: Express) {
         }
         
         if (validUsers.length === 0) {
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Invalid password' }).catch(() => {});
           return res.status(401).send("Invalid credentials");
         }
         
-        // If multiple valid users (same username+password in different companies), ask for company selection
         if (validUsers.length > 1) {
-          // Get company info for each matching user
           const companyOptions = await Promise.all(
             validUsers.map(async (u) => {
               if (u.companyId) {
@@ -282,17 +291,14 @@ export function setupAuth(app: Express) {
           });
         }
         
-        // Exactly one match - use that user
         user = validUsers[0];
       }
       
-      // Check trial status for non-super-admin users with companies
       if (user.role !== 'super_admin' && user.companyId) {
         try {
           const trialStatus = await storage.checkTrialStatus(user.companyId);
           
           if (!trialStatus.isActive && trialStatus.status === 'expired') {
-            // Trial has expired - send email notification and block login
             const company = await storage.getCompany(user.companyId);
             if (company && company.email) {
               await sendTrialInvitationEmail(
@@ -302,6 +308,7 @@ export function setupAuth(app: Express) {
               );
             }
             
+            storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, userId: user.id, companyId: user.companyId, companyName: company?.name || undefined, ipAddress, userAgent, errorReason: 'Trial expired' }).catch(() => {});
             return res.status(403).json({ 
               message: "Your trial period has expired. An email has been sent to your company administrator. Please contact support to upgrade.",
               trialExpired: true 
@@ -309,7 +316,6 @@ export function setupAuth(app: Express) {
           }
         } catch (trialError) {
           console.error('Error checking trial on login:', trialError);
-          // Continue with login even if trial check fails
         }
       }
       
@@ -318,7 +324,6 @@ export function setupAuth(app: Express) {
           return next(loginErr);
         }
         
-        // Track user login for analytics
         try {
           await storage.createUserLogin({
             userId: user!.id,
@@ -326,8 +331,10 @@ export function setupAuth(app: Express) {
           });
         } catch (trackingError) {
           console.error('Error tracking user login:', trackingError);
-          // Continue with login even if tracking fails
         }
+        
+        const company = user!.companyId ? await storage.getCompany(user!.companyId) : null;
+        storage.createAuthActivityLog({ eventType: 'login', status: 'success', username, email: user!.email || undefined, userId: user!.id, companyId: user!.companyId || undefined, companyName: company?.name || undefined, ipAddress, userAgent }).catch(() => {});
         
         return res.status(200).json(sanitizeUser(user as SelectUser));
       });

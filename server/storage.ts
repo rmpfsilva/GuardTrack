@@ -89,6 +89,9 @@ import {
   type InsertInvoice,
   type UpdateInvoice,
   type InvoiceWithDetails,
+  authActivityLogs,
+  type AuthActivityLog,
+  type InsertAuthActivityLog,
   errorLogs,
   subscriptionPlans,
   type SubscriptionPlan,
@@ -310,6 +313,10 @@ export interface IStorage {
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   updateInvoice(id: string, updates: UpdateInvoice): Promise<Invoice>;
   deleteInvoice(id: string): Promise<void>;
+
+  // Auth activity log operations
+  getAuthActivityLogs(limit?: number): Promise<AuthActivityLog[]>;
+  createAuthActivityLog(log: InsertAuthActivityLog): Promise<AuthActivityLog>;
 
   // Error log operations (Super Admin monitoring)
   getAllErrorLogs(limit?: number): Promise<ErrorLogWithDetails[]>;
@@ -3427,6 +3434,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInvoice(id: string): Promise<void> {
     await db.delete(invoices).where(eq(invoices.id, id));
+  }
+
+  // Auth activity log operations
+  async getAuthActivityLogs(limit: number = 200): Promise<AuthActivityLog[]> {
+    return db
+      .select()
+      .from(authActivityLogs)
+      .orderBy(desc(authActivityLogs.createdAt))
+      .limit(limit);
+  }
+
+  async createAuthActivityLog(log: InsertAuthActivityLog): Promise<AuthActivityLog> {
+    const [newLog] = await db
+      .insert(authActivityLogs)
+      .values(log)
+      .returning();
+    return newLog;
   }
 
   // Error log operations

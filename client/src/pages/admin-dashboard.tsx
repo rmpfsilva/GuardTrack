@@ -46,6 +46,8 @@ import ErrorLogs from "@/components/error-logs";
 import { PlanManagement } from "@/components/plan-management";
 import PlatformSettings from "@/components/platform-settings";
 import SuperAdminUserManagement from "@/components/super-admin-user-management";
+import AuthActivityLogs from "@/components/auth-activity-logs";
+import SuperAdminCreateUser from "@/components/super-admin-create-user";
 
 interface DashboardStats {
   activeGuards: number;
@@ -459,6 +461,8 @@ export default function AdminDashboard() {
                   <TabsTrigger value="subscription-billing" data-testid="tab-subscription-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
                   <TabsTrigger value="invoices" data-testid="tab-invoices" className="text-xs sm:text-sm whitespace-nowrap">Invoices</TabsTrigger>
                   <TabsTrigger value="usage-reports" data-testid="tab-usage-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
+                  <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>
+                  <TabsTrigger value="auth-activity" data-testid="tab-auth-activity" className="text-xs sm:text-sm whitespace-nowrap">Auth Logs</TabsTrigger>
                   <TabsTrigger value="error-logs" data-testid="tab-error-logs" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('error-logs') ? 'tab-has-new' : ''}`}>Error Logs</TabsTrigger>
                   <TabsTrigger value="platform-settings" data-testid="tab-platform-settings" className="text-xs sm:text-sm whitespace-nowrap">Settings</TabsTrigger>
                 </>
@@ -690,6 +694,13 @@ export default function AdminDashboard() {
 
               <TabsContent value="messages">
                 <SupportMessages />
+              </TabsContent>
+
+              <TabsContent value="auth-activity">
+                <div className="space-y-6">
+                  <SuperAdminCreateUser />
+                  <AuthActivityLogs />
+                </div>
               </TabsContent>
 
               <TabsContent value="error-logs">

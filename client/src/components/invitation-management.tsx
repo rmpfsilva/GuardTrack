@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Mail, UserPlus, Ban, Trash2, CheckCircle2, Clock, XCircle } from "lucide-react";
@@ -20,12 +21,15 @@ const invitationFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   role: z.enum(["guard", "steward", "supervisor", "admin"]),
   expiresAt: z.string().optional(),
+  companyId: z.string().optional(),
 });
 
 type InvitationFormData = z.infer<typeof invitationFormSchema>;
 
 export default function InvitationManagement() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
 
   const form = useForm<InvitationFormData>({
     resolver: zodResolver(invitationFormSchema),
@@ -33,10 +37,15 @@ export default function InvitationManagement() {
       email: "",
       role: "guard",
       expiresAt: "",
+      companyId: "",
     },
   });
 
-  // Fetch all invitations
+  const { data: companies = [] } = useQuery<any[]>({
+    queryKey: ["/api/super-admin/clients"],
+    enabled: isSuperAdmin,
+  });
+
   const { data: invitations = [], isLoading } = useQuery<Invitation[]>({
     queryKey: ["/api/admin/invitations"],
   });
@@ -197,6 +206,33 @@ export default function InvitationManagement() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              {isSuperAdmin && (
+                <FormField
+                  control={form.control}
+                  name="companyId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-invitation-company">
+                            <SelectValue placeholder="Select a company" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {companies.map((c: any) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name} ({c.companyId})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               <FormField
                 control={form.control}
                 name="email"

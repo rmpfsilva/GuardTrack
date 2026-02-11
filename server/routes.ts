@@ -3495,6 +3495,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Super Admin - Directly create a user for any company
+  app.post('/api/super-admin/users', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { z } = await import("zod");
+      const { hashPassword } = await import("./auth");
+
+      const createUserSchema = z.object({
+        username: z.string().min(1, "Username is required"),
+        password: z.string().min(6, "Password must be at least 6 characters"),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+        email: z.string().email("Invalid email").optional(),
+        phone: z.string().optional(),
+        role: z.enum(['guard', 'steward', 'supervisor', 'admin']),
+        companyId: z.string().min(1, "Company is required"),
+        jobTitle: z.string().optional(),
+      });
+
+      const validationResult = createUserSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ message: validationResult.error.errors[0].message });
+      }
+
+      const data = validationResult.data;
+
+      // Check company exists
+      const company = await storage.getCompany(data.companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      // Check username uniqueness within company
+      const existingUser = await storage.getUserByUsername(data.username, data.companyId);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists in this company" });
+      }
+
+      const hashedPassword = await hashPassword(data.password);
+
+      const user = await storage.createUser({
+        username: data.username,
+        password: hashedPassword,
+        firstName: data.firstName || null,
+        lastName: data.lastName || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        role: data.role,
+        companyId: data.companyId,
+        jobTitle: data.jobTitle || null,
+      });
+
+      // Remove password from response
+      const { password, ...safeUser } = user;
+      res.status(201).json(safeUser);
+    } catch (error: any) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: error.message || "Failed to create user" });
+    }
+  });
+
   app.get('/api/super-admin/clients', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
       const allCompanies = await storage.getAllCompanies();
@@ -4182,6 +4242,18 @@ GuardTrack Team`;
     } catch (error: any) {
       console.error("Error fetching company invoices:", error);
       res.status(500).json({ message: error.message || "Failed to fetch invoices" });
+    }
+  });
+
+  // Auth Activity Log Routes (Super Admin only)
+  app.get('/api/super-admin/auth-activity', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit) : 200;
+      const logs = await storage.getAuthActivityLogs(limit);
+      res.json(logs);
+    } catch (error: any) {
+      console.error("Error fetching auth activity logs:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch auth activity logs" });
     }
   });
 

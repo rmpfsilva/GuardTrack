@@ -1055,6 +1055,27 @@ export const updateInvoiceSchema = createInsertSchema(invoices).omit({
   paidAt: z.coerce.date().nullable().optional(),
 }).partial();
 
+// Auth Activity Logs table - tracks all login and registration attempts for Super Admin monitoring
+export const authActivityLogs = pgTable("auth_activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventType: varchar("event_type", { length: 30 }).notNull(), // 'login' | 'register'
+  status: varchar("status", { length: 20 }).notNull(), // 'success' | 'failed'
+  username: varchar("username", { length: 255 }),
+  email: varchar("email", { length: 255 }),
+  userId: varchar("user_id"), // nullable - may not exist for failed attempts
+  companyId: varchar("company_id"), // nullable
+  companyName: varchar("company_name", { length: 255 }),
+  ipAddress: varchar("ip_address", { length: 100 }),
+  userAgent: text("user_agent"),
+  errorReason: text("error_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAuthActivityLogSchema = createInsertSchema(authActivityLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Error Logs table - tracks application errors for Super Admin monitoring
 export const errorLogs = pgTable("error_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1214,6 +1235,9 @@ export type UpdateSubscriptionPayment = z.infer<typeof updateSubscriptionPayment
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type UpdateInvoice = z.infer<typeof updateInvoiceSchema>;
+
+export type AuthActivityLog = typeof authActivityLogs.$inferSelect;
+export type InsertAuthActivityLog = z.infer<typeof insertAuthActivityLogSchema>;
 
 export type ErrorLog = typeof errorLogs.$inferSelect;
 export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
