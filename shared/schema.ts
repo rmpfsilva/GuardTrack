@@ -193,6 +193,7 @@ export const scheduledShifts = pgTable("scheduled_shifts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: 'cascade' }),
+  jobTitle: varchar("job_title").notNull().default('Guard'),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),
   recurrence: varchar("recurrence").notNull().default('none'), // 'none' | 'daily' | 'weekly' | 'monthly'
