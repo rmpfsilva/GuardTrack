@@ -365,7 +365,7 @@ export const companyPartnerships = pgTable("company_partnerships", {
 });
 
 // Job shares table - for inter-company job sharing
-export const JOB_SHARE_ROLES = ['guard', 'steward', 'supervisor', 'call_out'] as const;
+export const JOB_SHARE_ROLES = ['sia', 'steward', 'supervisor', 'response', 'dog_handler', 'call_out'] as const;
 export type JobShareRole = typeof JOB_SHARE_ROLES[number];
 
 export interface JobSharePosition {

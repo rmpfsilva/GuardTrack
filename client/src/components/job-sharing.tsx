@@ -17,11 +17,20 @@ import type { JobShareWithDetails, Company, Site, JobSharePosition, JobShareRole
 import { JOB_SHARE_ROLES } from "@shared/schema";
 import { UserPlus, Phone, Mail, Shield } from "lucide-react";
 
-const ROLE_LABELS: Record<JobShareRole, string> = {
-  guard: "SIA Guard",
+const ROLE_LABELS: Record<string, string> = {
+  sia: "SIA",
   steward: "Steward",
   supervisor: "Supervisor",
+  response: "Response",
+  dog_handler: "Dog Handler",
   call_out: "Call Out",
+  guard: "SIA",
+};
+
+const normalizeLegacyRole = (role: string): JobShareRole => {
+  if (role === 'guard') return 'sia';
+  if (JOB_SHARE_ROLES.includes(role as JobShareRole)) return role as JobShareRole;
+  return 'sia';
 };
 
 interface PositionRow {
@@ -30,7 +39,7 @@ interface PositionRow {
   hourlyRate: string;
 }
 
-const emptyPosition = (): PositionRow => ({ role: "guard", count: 1, hourlyRate: "15.00" });
+const emptyPosition = (): PositionRow => ({ role: "sia", count: 1, hourlyRate: "15.00" });
 
 export default function JobSharing() {
   const { user } = useAuth();
@@ -169,9 +178,9 @@ export default function JobSharing() {
     });
     const sharePositions = (share.positions as JobSharePosition[] | null);
     if (sharePositions && sharePositions.length > 0) {
-      setPositions(sharePositions.map(p => ({ role: p.role, count: Number(p.count), hourlyRate: p.hourlyRate })));
+      setPositions(sharePositions.map(p => ({ role: normalizeLegacyRole(p.role), count: Number(p.count), hourlyRate: p.hourlyRate })));
     } else {
-      setPositions([{ role: (share.workingRole || 'guard') as JobShareRole, count: Number(share.numberOfJobs), hourlyRate: String(share.hourlyRate) }]);
+      setPositions([{ role: normalizeLegacyRole(share.workingRole || 'sia'), count: Number(share.numberOfJobs), hourlyRate: String(share.hourlyRate) }]);
     }
     setIsEditDialogOpen(true);
   };
@@ -231,7 +240,7 @@ export default function JobSharing() {
   };
 
   const addWorker = () => {
-    setAssignedWorkers(prev => [...prev, { name: "", role: "guard", phone: "", email: "", siaLicense: "" }]);
+    setAssignedWorkers(prev => [...prev, { name: "", role: "sia", phone: "", email: "", siaLicense: "" }]);
   };
 
   const removeWorker = (index: number) => {
@@ -260,17 +269,19 @@ export default function JobSharing() {
 
   const getPositionsForShare = (share: JobShareWithDetails): JobSharePosition[] => {
     const sharePositions = share.positions as JobSharePosition[] | null;
-    if (sharePositions && sharePositions.length > 0) return sharePositions;
-    return [{ role: (share.workingRole || 'guard') as JobShareRole, count: Number(share.numberOfJobs), hourlyRate: String(share.hourlyRate) }];
+    if (sharePositions && sharePositions.length > 0) {
+      return sharePositions.map(p => ({ ...p, role: normalizeLegacyRole(p.role) }));
+    }
+    return [{ role: normalizeLegacyRole(share.workingRole || 'sia'), count: Number(share.numberOfJobs), hourlyRate: String(share.hourlyRate) }];
   };
 
   const getTotalPositions = (positions: JobSharePosition[]) => {
     return positions.reduce((sum, p) => sum + Number(p.count), 0);
   };
 
-  const PositionsEditor = () => (
+  const positionsEditorJSX = (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <Label className="text-sm font-medium">Positions</Label>
         <Button type="button" variant="outline" size="sm" onClick={addPosition} data-testid="button-add-position">
           <Plus className="h-3 w-3 mr-1" />Add Position
@@ -443,7 +454,7 @@ export default function JobSharing() {
                 </div>
               </div>
 
-              <PositionsEditor />
+              {positionsEditorJSX}
 
               <div>
                 <Label>Requirements (Optional)</Label>
@@ -807,7 +818,7 @@ export default function JobSharing() {
               </div>
             </div>
 
-            <PositionsEditor />
+            {positionsEditorJSX}
 
             <div>
               <Label>Requirements (Optional)</Label>

@@ -3029,10 +3029,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "At least one position is required" });
       }
 
-      const validRoles = JOB_SHARE_ROLES as readonly string[];
+      const validRoles = [...JOB_SHARE_ROLES, 'guard'] as string[];
       for (const pos of positions) {
         if (!pos.role || !validRoles.includes(pos.role)) {
-          return res.status(400).json({ message: `Invalid role: ${pos.role}. Valid roles: ${validRoles.join(', ')}` });
+          return res.status(400).json({ message: `Invalid role: ${pos.role}. Valid roles: ${JOB_SHARE_ROLES.join(', ')}` });
         }
         if (!pos.count || Number(pos.count) < 1) {
           return res.status(400).json({ message: "Each position must have a count of at least 1" });
@@ -3043,7 +3043,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const sanitizedPositions = positions.map((p: any) => ({
-        role: p.role,
+        role: p.role === 'guard' ? 'sia' : p.role,
         count: Number(p.count),
         hourlyRate: String(p.hourlyRate),
       }));
@@ -3103,7 +3103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .filter((w: any) => w.name && w.name.trim())
             .map((w: any) => ({
               name: w.name.trim(),
-              role: validRoles.includes(w.role) ? w.role : 'guard',
+              role: validRoles.includes(w.role) ? w.role : 'sia',
               phone: w.phone?.trim() || undefined,
               email: w.email?.trim() || undefined,
               siaLicense: w.siaLicense?.trim() || undefined,
@@ -3121,14 +3121,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (updates.positions && Array.isArray(updates.positions) && updates.positions.length > 0) {
-          const validRoles = JOB_SHARE_ROLES as readonly string[];
+          const validRoles = [...JOB_SHARE_ROLES, 'guard'] as string[];
           for (const pos of updates.positions) {
             if (!pos.role || !validRoles.includes(pos.role)) {
               return res.status(400).json({ message: `Invalid role: ${pos.role}` });
             }
           }
           const cleanPositions = updates.positions.map((p: any) => ({
-            role: p.role,
+            role: p.role === 'guard' ? 'sia' : p.role,
             count: Number(p.count),
             hourlyRate: String(p.hourlyRate),
           }));
