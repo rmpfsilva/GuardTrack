@@ -26,6 +26,7 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Approval System**: Admin interface for approving extended breaks and overtime requests.
 - **Leave Management**: System for requesting, approving, and canceling leave.
 - **Mobile Responsiveness**: Fully responsive design with PWA functionality.
+- **PWA Install Onboarding**: Dedicated `/install` page with smart device/browser detection, device-specific animated install instructions (iOS Safari, iOS Chrome, Android, Desktop), and force-install-before-login for mobile users. Mobile users hitting auth routes are redirected to /install if not in standalone mode. Desktop users get a bypass option. Already-installed users are auto-redirected to login.
 - **Email Invitation System**: Admins can invite new users via email; Super Admins can invite trial clients.
 - **Password Management**: User password changes and secure token-based recovery.
 - **Notice Board**: Admins can post opportunities, with push notifications and application functionality for guards.

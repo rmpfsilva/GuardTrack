@@ -1,0 +1,200 @@
+You are working on a live production PWA (GuardTrack).
+
+Your objective is to reduce installation friction and support requests by implementing a structured installation onboarding system.
+
+⚠️ This is NOT a redesign of the app.
+Do NOT modify core functionality, dashboards, authentication logic, or UI outside of install flow.
+
+This is a controlled enhancement only.
+
+🎯 OBJECTIVE
+
+Implement the following immediately:
+
+Smart Install Detection Page
+
+Device-Based Messaging
+
+Animated Visual Install Instructions
+
+Force Install Before Login
+
+The goal is to eliminate user confusion when installing the PWA on Android and iOS.
+
+🧠 PART 1 – SMART INSTALL DETECTION
+
+Create a dedicated route:
+
+/install
+
+This page must:
+
+Detect device type:
+
+iOS
+
+Android
+
+Desktop
+
+Detect browser:
+
+Safari
+
+Chrome
+
+Other
+
+Detect if app is already running in standalone mode:
+
+window.matchMedia('(display-mode: standalone)')
+
+navigator.standalone (for iOS)
+
+If already installed:
+→ Automatically redirect to login
+
+If not installed:
+→ Show device-specific install instructions
+
+📱 PART 2 – DEVICE-BASED MESSAGING
+iOS + Safari
+
+Display:
+
+Clear message: “Install GuardTrack to continue”
+
+Visual guide:
+
+Tap Share icon
+
+Scroll and tap “Add to Home Screen”
+
+Confirm
+
+Use:
+
+Icons
+
+Highlighted images
+
+Simple step visuals (not long text)
+
+iOS + Chrome
+
+Display message:
+“To install GuardTrack, open this page in Safari.”
+
+Provide:
+
+Clear explanation
+
+Visual showing Safari icon
+
+Do NOT allow login from Chrome on iOS
+
+Android (Chrome)
+
+Use:
+
+beforeinstallprompt event
+
+Trigger native install prompt
+
+Provide fallback:
+
+If prompt not available, show “Install App” button
+
+🎥 PART 3 – ANIMATED VISUAL INSTRUCTIONS
+
+Add:
+
+Simple lightweight animation or GIF-style visual
+
+Not heavy video
+
+No external embeds
+
+Goal:
+Users should understand install in under 15 seconds visually.
+
+Do not over-design.
+
+🔐 PART 4 – FORCE INSTALL BEFORE LOGIN
+
+Modify login routing logic as follows:
+
+If NOT in standalone mode:
+→ Redirect to /install
+→ Disable login form
+
+Only allow login if:
+
+App is running as installed PWA (standalone mode)
+
+This ensures:
+
+No browser usage
+
+No confusion later
+
+Cleaner support load
+
+⚠️ IMPORTANT CONSTRAINTS
+
+Do NOT:
+
+Change authentication logic
+
+Refactor service worker
+
+Redesign UI theme
+
+Modify existing app layout
+
+Change database
+
+Add unnecessary dependencies
+
+This feature must be isolated to:
+
+Routing
+
+Detection logic
+
+Install overlay
+
+Nothing else.
+
+✅ SUCCESS CONDITIONS
+
+Android users see native install prompt
+
+iOS users see clear visual guide
+
+Login only works when installed
+
+Support requests reduce significantly
+
+Existing app behaviour remains untouched
+
+🧪 BEFORE DEPLOYING
+
+Confirm:
+
+Standalone detection works correctly on:
+
+iOS Safari
+
+Android Chrome
+
+Login redirect does not cause loop errors
+
+Already-installed users are not blocked
+
+Test thoroughly before production push.
+
+If any implementation risks breaking existing flows, stop and ask.
+
+This is a stability and scalability upgrade.
+Keep it clean. Keep it isolated. No creativity outside scope.
