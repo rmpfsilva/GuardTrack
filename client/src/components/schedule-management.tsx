@@ -197,7 +197,7 @@ export default function ScheduleManagement() {
     setShiftEntries(shiftEntries.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
   };
 
-  const filteredEmployees = formData.role
+  const filteredEmployees = formData.role && formData.role !== "all"
     ? employees.filter((e) => e.role === formData.role)
     : employees;
 
@@ -229,7 +229,7 @@ export default function ScheduleManagement() {
     setEditFormData({
       userId: shift.userId,
       siteId: shift.siteId,
-      jobTitle: (shift as any).jobTitle || "Guard",
+      jobTitle: shift.jobTitle || "Guard",
       role: shift.user?.role || "",
       startTime: format(new Date(shift.startTime), "yyyy-MM-dd'T'HH:mm"),
       endTime: format(new Date(shift.endTime), "yyyy-MM-dd'T'HH:mm"),
@@ -275,7 +275,7 @@ export default function ScheduleManagement() {
     return <div className="p-4" data-testid="loading-schedule">Loading schedule...</div>;
   }
 
-  const editFilteredEmployees = editFormData.role
+  const editFilteredEmployees = editFormData.role && editFormData.role !== "all"
     ? employees.filter((e) => e.role === editFormData.role)
     : employees;
 
@@ -349,7 +349,7 @@ export default function ScheduleManagement() {
                       <SelectValue placeholder="Select employee" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(formData.role && formData.role !== "all" ? filteredEmployees : employees).map((emp) => (
+                      {filteredEmployees.map((emp) => (
                         <SelectItem key={emp.id} value={emp.id}>
                           {emp.firstName} {emp.lastName}
                           <span className="ml-2 text-muted-foreground text-xs">({JOB_ROLE_LABELS[emp.role] || emp.role})</span>
@@ -556,10 +556,10 @@ export default function ScheduleManagement() {
                             </Button>
                           </div>
                         </div>
-                        {(shift as any).jobTitle && (
+                        {shift.jobTitle && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Briefcase className="w-3 h-3" />
-                            <span className="truncate" data-testid={`text-shift-jobtitle-${shift.id}`}>{(shift as any).jobTitle}</span>
+                            <span className="truncate" data-testid={`text-shift-jobtitle-${shift.id}`}>{shift.jobTitle}</span>
                           </div>
                         )}
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -655,7 +655,7 @@ export default function ScheduleManagement() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(editFormData.role && editFormData.role !== "all" ? editFilteredEmployees : employees).map((emp) => (
+                  {editFilteredEmployees.map((emp) => (
                     <SelectItem key={emp.id} value={emp.id}>
                       {emp.firstName} {emp.lastName}
                       <span className="ml-2 text-muted-foreground text-xs">({JOB_ROLE_LABELS[emp.role] || emp.role})</span>
