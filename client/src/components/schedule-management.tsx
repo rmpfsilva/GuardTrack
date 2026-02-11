@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ScheduledShiftWithDetails, Site, User as UserType } from "@shared/schema";
 
 const JOB_TITLES = [
@@ -293,12 +292,12 @@ export default function ScheduleManagement() {
               Schedule Shift
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] flex flex-col" data-testid="dialog-add-shift">
-            <DialogHeader>
+          <DialogContent className="max-w-lg max-h-[85vh] !flex !flex-col" data-testid="dialog-add-shift">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>Schedule New Shifts</DialogTitle>
               <DialogDescription>Assign an employee to a site with one or more shift times</DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 pr-4">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2">
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="jobTitle">Job Title</Label>
@@ -467,8 +466,8 @@ export default function ScheduleManagement() {
                   />
                 </div>
               </div>
-            </ScrollArea>
-            <DialogFooter>
+            </div>
+            <DialogFooter className="flex-shrink-0">
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} data-testid="button-cancel-add">
                 Cancel
               </Button>
