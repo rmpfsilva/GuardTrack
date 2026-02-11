@@ -161,9 +161,13 @@ export default function AdminDashboard() {
     enabled: !!user && isCompanyAdmin,
   });
 
-  // Fetch incoming job shares (for job sharing tab notification)
-  const { data: incomingJobShares = [] } = useQuery<JobShareWithDetails[]>({
-    queryKey: ["/api/job-shares/incoming"],
+  const { data: receivedJobShares = [] } = useQuery<JobShareWithDetails[]>({
+    queryKey: ["/api/job-shares/received"],
+    enabled: !!user && isCompanyAdmin,
+  });
+
+  const { data: offeredJobShares = [] } = useQuery<JobShareWithDetails[]>({
+    queryKey: ["/api/job-shares/offered"],
     enabled: !!user && isCompanyAdmin,
   });
 
@@ -182,8 +186,17 @@ export default function AdminDashboard() {
         return errorLogs.filter(e => !e.isResolved).length > 0;
       case 'partnerships':
         return receivedPartnerships.filter(p => p.status === 'pending').length > 0;
-      case 'job-sharing':
-        return incomingJobShares.filter(j => j.status === 'pending').length > 0;
+      case 'job-sharing': {
+        const hasPendingReceived = receivedJobShares.filter(j => j.status === 'pending').length > 0;
+        const hasRecentlyAccepted = offeredJobShares.filter(j => {
+          if (j.status !== 'accepted' || !j.reviewedAt) return false;
+          const reviewedAt = new Date(j.reviewedAt);
+          const threeDaysAgo = new Date();
+          threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+          return reviewedAt > threeDaysAgo;
+        }).length > 0;
+        return hasPendingReceived || hasRecentlyAccepted;
+      }
       default:
         return false;
     }

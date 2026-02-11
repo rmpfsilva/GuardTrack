@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Briefcase, Building2, Calendar, DollarSign, Users, Plus, Check, X, Clock, MapPin, Trash2, Pencil, PoundSterling } from "lucide-react";
+import { Briefcase, Building2, Calendar, DollarSign, Users, Plus, Check, X, Clock, MapPin, Trash2, Pencil, PoundSterling, Minus } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +54,7 @@ export default function JobSharing() {
   const [assignedWorkers, setAssignedWorkers] = useState<Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }>>([]);
   const [editWorkers, setEditWorkers] = useState<Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }>>([]);
   const [acceptNotes, setAcceptNotes] = useState("");
+  const [acceptedCounts, setAcceptedCounts] = useState<Array<{ role: JobShareRole; maxCount: number; acceptCount: number; hourlyRate: string }>>([]);
   const [selectedTab, setSelectedTab] = useState<'offered' | 'received'>('offered');
 
   const [formData, setFormData] = useState({
@@ -127,8 +128,8 @@ export default function JobSharing() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status, notes, assignedWorkers: workers }: { id: string; status: string; notes?: string; assignedWorkers?: any[] }) => {
-      return await apiRequest('PATCH', `/api/job-shares/${id}`, { status, reviewNotes: notes, assignedWorkers: workers });
+    mutationFn: async ({ id, status, notes, assignedWorkers: workers, acceptedPositions }: { id: string; status: string; notes?: string; assignedWorkers?: any[]; acceptedPositions?: any[] }) => {
+      return await apiRequest('PATCH', `/api/job-shares/${id}`, { status, reviewNotes: notes, assignedWorkers: workers, acceptedPositions });
     },
     onSuccess: (_, variables) => {
       toast({ title: "Success", description: `Job share ${variables.status}` });
@@ -168,9 +169,10 @@ export default function JobSharing() {
         siaLicense: w.siaLicense || "",
       })));
     } else {
-      const sharePositions = getPositionsForShare(share);
+      const accepted = share.acceptedPositions as JobSharePosition[] | null;
+      const positionsToUse = (accepted && accepted.length > 0) ? accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)})) : getPositionsForShare(share);
       const workers: Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }> = [];
-      for (const pos of sharePositions) {
+      for (const pos of positionsToUse) {
         for (let i = 0; i < Number(pos.count); i++) {
           workers.push({ name: "", role: pos.role, phone: "", email: "", siaLicense: "" });
         }
@@ -270,7 +272,13 @@ export default function JobSharing() {
   const openAcceptDialog = (share: JobShareWithDetails) => {
     setAcceptingShare(share);
     const sharePositions = getPositionsForShare(share);
-    const totalWorkers = sharePositions.reduce((sum, p) => sum + Number(p.count), 0);
+    const counts = sharePositions.map(p => ({
+      role: p.role,
+      maxCount: Number(p.count),
+      acceptCount: Number(p.count),
+      hourlyRate: p.hourlyRate,
+    }));
+    setAcceptedCounts(counts);
     const workers: Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }> = [];
     for (const pos of sharePositions) {
       for (let i = 0; i < Number(pos.count); i++) {
@@ -282,18 +290,41 @@ export default function JobSharing() {
     setIsAcceptDialogOpen(true);
   };
 
+  const updateAcceptedCount = (index: number, newCount: number) => {
+    setAcceptedCounts(prev => {
+      const updated = prev.map((c, i) => i === index ? { ...c, acceptCount: Math.max(0, Math.min(newCount, c.maxCount)) } : c);
+      const workers: Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }> = [];
+      for (const pos of updated) {
+        for (let i = 0; i < pos.acceptCount; i++) {
+          workers.push({ name: "", role: pos.role, phone: "", email: "", siaLicense: "" });
+        }
+      }
+      setAssignedWorkers(workers);
+      return updated;
+    });
+  };
+
   const handleAccept = () => {
     if (!acceptingShare) return;
+    const totalAccepted = acceptedCounts.reduce((sum, c) => sum + c.acceptCount, 0);
+    if (totalAccepted === 0) {
+      toast({ title: "Validation Error", description: "Please accept at least one position", variant: "destructive" });
+      return;
+    }
     const filledWorkers = assignedWorkers.filter(w => w.name.trim());
     if (filledWorkers.length === 0) {
       toast({ title: "Validation Error", description: "Please add at least one worker name", variant: "destructive" });
       return;
     }
+    const acceptedPositions = acceptedCounts
+      .filter(c => c.acceptCount > 0)
+      .map(c => ({ role: c.role, count: c.acceptCount, hourlyRate: c.hourlyRate }));
     updateStatusMutation.mutate({
       id: acceptingShare.id,
       status: 'accepted',
       notes: acceptNotes || undefined,
       assignedWorkers: filledWorkers,
+      acceptedPositions,
     });
     setIsAcceptDialogOpen(false);
     setAcceptingShare(null);
@@ -541,11 +572,21 @@ export default function JobSharing() {
       </div>
 
       <div className="flex gap-2 border-b">
-        <Button variant={selectedTab === 'offered' ? 'default' : 'ghost'} onClick={() => setSelectedTab('offered')} data-testid="tab-offered-shares">
+        <Button variant={selectedTab === 'offered' ? 'default' : 'ghost'} onClick={() => setSelectedTab('offered')} data-testid="tab-offered-shares" className="relative">
           Offered to Others
+          {offeredShares.filter(s => s.status === 'accepted' && s.reviewedAt && new Date(s.reviewedAt) > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)).length > 0 && selectedTab !== 'offered' && (
+            <Badge variant="destructive" className="ml-2 text-[10px] leading-none px-1.5 py-0.5">
+              {offeredShares.filter(s => s.status === 'accepted' && s.reviewedAt && new Date(s.reviewedAt) > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)).length}
+            </Badge>
+          )}
         </Button>
-        <Button variant={selectedTab === 'received' ? 'default' : 'ghost'} onClick={() => setSelectedTab('received')} data-testid="tab-received-shares">
+        <Button variant={selectedTab === 'received' ? 'default' : 'ghost'} onClick={() => setSelectedTab('received')} data-testid="tab-received-shares" className="relative">
           Received from Others
+          {receivedShares.filter(s => s.status === 'pending').length > 0 && selectedTab !== 'received' && (
+            <Badge variant="destructive" className="ml-2 text-[10px] leading-none px-1.5 py-0.5">
+              {receivedShares.filter(s => s.status === 'pending').length}
+            </Badge>
+          )}
         </Button>
       </div>
 
@@ -560,6 +601,8 @@ export default function JobSharing() {
           ) : (
             offeredShares.map(share => {
               const sharePositions = getPositionsForShare(share);
+              const accepted = share.acceptedPositions as JobSharePosition[] | null;
+              const isPartial = accepted && accepted.length > 0 && getTotalPositions(accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))) < getTotalPositions(sharePositions);
               return (
                 <Card key={share.id} data-testid={`job-share-${share.id}`}>
                   <CardHeader>
@@ -576,6 +619,11 @@ export default function JobSharing() {
                       </div>
                       <div className="flex items-center gap-2">
                         {getStatusBadge(share.status)}
+                        {isPartial && (
+                          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20" data-testid={`badge-partial-${share.id}`}>
+                            Partial
+                          </Badge>
+                        )}
                         {share.status === 'pending' && (
                           <>
                             <Button size="icon" variant="ghost" onClick={() => openEditDialog(share)} data-testid={`button-edit-${share.id}`}>
@@ -601,9 +649,10 @@ export default function JobSharing() {
                   <CardContent className="space-y-3">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total Positions</p>
+                        <p className="text-sm text-muted-foreground">{isPartial ? "Accepted / Requested" : "Total Positions"}</p>
                         <p className="font-semibold flex items-center gap-1">
-                          <Users className="h-4 w-4" />{getTotalPositions(sharePositions)}
+                          <Users className="h-4 w-4" />
+                          {isPartial ? `${getTotalPositions(accepted!.map(p => ({...p, role: normalizeLegacyRole(p.role)})))} / ${getTotalPositions(sharePositions)}` : getTotalPositions(sharePositions)}
                         </p>
                       </div>
                       <div>
@@ -613,10 +662,19 @@ export default function JobSharing() {
                         </p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">Positions & Rates</p>
-                      <PositionsDisplay positions={sharePositions} />
-                    </div>
+                    {isPartial && accepted ? (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">Accepted Positions</p>
+                        <PositionsDisplay positions={accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))} />
+                        <p className="text-sm text-muted-foreground mb-2 mt-3">Originally Requested</p>
+                        <PositionsDisplay positions={sharePositions} />
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">Positions & Rates</p>
+                        <PositionsDisplay positions={sharePositions} />
+                      </div>
+                    )}
                     {share.requirements && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">Requirements</p>
@@ -656,6 +714,8 @@ export default function JobSharing() {
           ) : (
             receivedShares.map(share => {
               const sharePositions = getPositionsForShare(share);
+              const accepted = share.acceptedPositions as JobSharePosition[] | null;
+              const isPartial = accepted && accepted.length > 0 && getTotalPositions(accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))) < getTotalPositions(sharePositions);
               return (
                 <Card key={share.id} data-testid={`received-share-${share.id}`}>
                   <CardHeader>
@@ -670,15 +730,23 @@ export default function JobSharing() {
                           {share.site?.name || "Unknown Site"}
                         </CardDescription>
                       </div>
-                      {getStatusBadge(share.status)}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {getStatusBadge(share.status)}
+                        {isPartial && (
+                          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20" data-testid={`badge-partial-received-${share.id}`}>
+                            Partial
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total Positions</p>
+                        <p className="text-sm text-muted-foreground">{isPartial ? "Accepted / Requested" : "Total Positions"}</p>
                         <p className="font-semibold flex items-center gap-1">
-                          <Users className="h-4 w-4" />{getTotalPositions(sharePositions)}
+                          <Users className="h-4 w-4" />
+                          {isPartial ? `${getTotalPositions(accepted!.map(p => ({...p, role: normalizeLegacyRole(p.role)})))} / ${getTotalPositions(sharePositions)}` : getTotalPositions(sharePositions)}
                         </p>
                       </div>
                       <div>
@@ -688,10 +756,19 @@ export default function JobSharing() {
                         </p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">Positions & Rates</p>
-                      <PositionsDisplay positions={sharePositions} />
-                    </div>
+                    {isPartial && accepted ? (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">Accepted Positions</p>
+                        <PositionsDisplay positions={accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))} />
+                        <p className="text-sm text-muted-foreground mb-2 mt-3">Originally Requested</p>
+                        <PositionsDisplay positions={sharePositions} />
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">Positions & Rates</p>
+                        <PositionsDisplay positions={sharePositions} />
+                      </div>
+                    )}
                     {share.requirements && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">Requirements</p>
@@ -753,11 +830,11 @@ export default function JobSharing() {
       )}
 
       <Dialog open={isAcceptDialogOpen} onOpenChange={(open) => { setIsAcceptDialogOpen(open); if (!open) { setAcceptingShare(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[85vh] !flex !flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Accept Job Share</DialogTitle>
             <DialogDescription>
-              Provide the names and details of workers you are assigning to this job share.
+              Choose how many positions to accept and assign workers.
               {acceptingShare && (
                 <span className="block mt-1 text-xs">
                   From: {acceptingShare.fromCompany?.name} | Site: {acceptingShare.site?.name}
@@ -765,8 +842,50 @@ export default function JobSharing() {
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-4">
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Positions to Accept</Label>
+              <div className="space-y-2">
+                {acceptedCounts.map((pos, index) => (
+                  <div key={index} className="flex items-center justify-between gap-3 p-3 rounded-md border bg-muted/30" data-testid={`accept-position-row-${index}`}>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Badge variant="outline">{ROLE_LABELS[pos.role] || pos.role}</Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {pos.maxCount} requested at {pos.hourlyRate}/hr
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => updateAcceptedCount(index, pos.acceptCount - 1)}
+                        disabled={pos.acceptCount <= 0}
+                        data-testid={`button-decrease-${index}`}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-8 text-center font-semibold" data-testid={`text-accept-count-${index}`}>{pos.acceptCount}</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => updateAcceptedCount(index, pos.acceptCount + 1)}
+                        disabled={pos.acceptCount >= pos.maxCount}
+                        data-testid={`button-increase-${index}`}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Accepting {acceptedCounts.reduce((sum, c) => sum + c.acceptCount, 0)} of {acceptedCounts.reduce((sum, c) => sum + c.maxCount, 0)} total positions
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <Label className="text-sm font-medium">Workers to Assign</Label>
               <Button type="button" variant="outline" size="sm" onClick={addWorker} data-testid="button-add-worker">
                 <Plus className="h-3 w-3 mr-1" />Add Worker
@@ -846,10 +965,10 @@ export default function JobSharing() {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button variant="outline" onClick={() => setIsAcceptDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleAccept} disabled={updateStatusMutation.isPending} data-testid="button-confirm-accept">
-              {updateStatusMutation.isPending ? "Accepting..." : "Accept & Assign Workers"}
+              {updateStatusMutation.isPending ? "Accepting..." : `Accept ${acceptedCounts.reduce((sum, c) => sum + c.acceptCount, 0)} Position${acceptedCounts.reduce((sum, c) => sum + c.acceptCount, 0) !== 1 ? 's' : ''}`}
             </Button>
           </DialogFooter>
         </DialogContent>

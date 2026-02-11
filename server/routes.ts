@@ -3097,19 +3097,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sanitizedUpdates.reviewedAt = new Date();
         if (updates.reviewNotes) sanitizedUpdates.reviewNotes = updates.reviewNotes;
 
-        if (updates.status === 'accepted' && updates.assignedWorkers && Array.isArray(updates.assignedWorkers)) {
-          const validRoles = JOB_SHARE_ROLES as readonly string[];
-          const cleanWorkers = updates.assignedWorkers
-            .filter((w: any) => w.name && w.name.trim())
-            .map((w: any) => ({
-              name: w.name.trim(),
-              role: validRoles.includes(w.role) ? w.role : 'sia',
-              phone: w.phone?.trim() || undefined,
-              email: w.email?.trim() || undefined,
-              siaLicense: w.siaLicense?.trim() || undefined,
+        if (updates.status === 'accepted') {
+          if (updates.assignedWorkers && Array.isArray(updates.assignedWorkers)) {
+            const validRoles = JOB_SHARE_ROLES as readonly string[];
+            const cleanWorkers = updates.assignedWorkers
+              .filter((w: any) => w.name && w.name.trim())
+              .map((w: any) => ({
+                name: w.name.trim(),
+                role: validRoles.includes(w.role) ? w.role : 'sia',
+                phone: w.phone?.trim() || undefined,
+                email: w.email?.trim() || undefined,
+                siaLicense: w.siaLicense?.trim() || undefined,
+              }));
+            if (cleanWorkers.length > 0) {
+              sanitizedUpdates.assignedWorkers = cleanWorkers;
+            }
+          }
+          if (updates.acceptedPositions && Array.isArray(updates.acceptedPositions) && updates.acceptedPositions.length > 0) {
+            const acceptedPositions = updates.acceptedPositions.map((p: any) => ({
+              role: p.role === 'guard' ? 'sia' : p.role,
+              count: Number(p.count),
+              hourlyRate: String(p.hourlyRate),
             }));
-          if (cleanWorkers.length > 0) {
-            sanitizedUpdates.assignedWorkers = cleanWorkers;
+            sanitizedUpdates.acceptedPositions = acceptedPositions;
+            const totalAccepted = acceptedPositions.reduce((sum: number, p: any) => sum + p.count, 0);
+            sanitizedUpdates.numberOfJobs = String(totalAccepted);
           }
         }
       } else if (!updates.status && updates.assignedWorkers && Array.isArray(updates.assignedWorkers)) {

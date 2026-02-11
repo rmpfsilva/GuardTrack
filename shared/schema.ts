@@ -393,6 +393,7 @@ export const jobShares = pgTable("job_shares", {
   workingRole: varchar("working_role").notNull().default('guard'),
   hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull(),
   positions: jsonb("positions").$type<JobSharePosition[]>(),
+  acceptedPositions: jsonb("accepted_positions").$type<JobSharePosition[]>(),
   assignedWorkers: jsonb("assigned_workers").$type<JobShareAssignedWorker[]>(),
   requirements: text("requirements"),
   status: varchar("status").notNull().default('pending'),
