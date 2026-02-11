@@ -220,17 +220,17 @@ export default function ScheduleManagement() {
           <DialogContent data-testid="dialog-add-shift">
             <DialogHeader>
               <DialogTitle>Schedule New Shift</DialogTitle>
-              <DialogDescription>Assign a guard to a site for a specific time period</DialogDescription>
+              <DialogDescription>Assign an employee to a site for a specific time period</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="guard">Guard</Label>
+                <Label htmlFor="guard">Employee</Label>
                 <Select
                   value={formData.userId}
                   onValueChange={(value) => setFormData({ ...formData, userId: value })}
                 >
                   <SelectTrigger id="guard" data-testid="select-guard">
-                    <SelectValue placeholder="Select guard" />
+                    <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
                   <SelectContent>
                     {guards.map((guard) => (
@@ -441,7 +441,7 @@ export default function ScheduleManagement() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-guard">Guard</Label>
+              <Label htmlFor="edit-guard">Employee</Label>
               <Select
                 value={formData.userId}
                 onValueChange={(value) => setFormData({ ...formData, userId: value })}

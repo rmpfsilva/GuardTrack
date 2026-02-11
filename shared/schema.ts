@@ -373,6 +373,14 @@ export interface JobSharePosition {
   hourlyRate: string;
 }
 
+export interface JobShareAssignedWorker {
+  name: string;
+  role: JobShareRole;
+  phone?: string;
+  email?: string;
+  siaLicense?: string;
+}
+
 export const jobShares = pgTable("job_shares", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   fromCompanyId: varchar("from_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
@@ -384,6 +392,7 @@ export const jobShares = pgTable("job_shares", {
   workingRole: varchar("working_role").notNull().default('guard'),
   hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull(),
   positions: jsonb("positions").$type<JobSharePosition[]>(),
+  assignedWorkers: jsonb("assigned_workers").$type<JobShareAssignedWorker[]>(),
   requirements: text("requirements"),
   status: varchar("status").notNull().default('pending'),
   createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -1213,6 +1222,7 @@ export type JobShareWithDetails = JobShare & {
   site: Site;
   creator: User;
   reviewer?: User;
+  assignedWorkers?: JobShareAssignedWorker[] | null;
 };
 
 export type SubscriptionPaymentWithDetails = SubscriptionPayment & {

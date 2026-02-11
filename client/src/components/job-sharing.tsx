@@ -13,8 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { JobShareWithDetails, Company, Site, JobSharePosition, JobShareRole } from "@shared/schema";
+import type { JobShareWithDetails, Company, Site, JobSharePosition, JobShareRole, JobShareAssignedWorker } from "@shared/schema";
 import { JOB_SHARE_ROLES } from "@shared/schema";
+import { UserPlus, Phone, Mail, Shield } from "lucide-react";
 
 const ROLE_LABELS: Record<JobShareRole, string> = {
   guard: "SIA Guard",
@@ -36,7 +37,11 @@ export default function JobSharing() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAcceptDialogOpen, setIsAcceptDialogOpen] = useState(false);
   const [editingShare, setEditingShare] = useState<JobShareWithDetails | null>(null);
+  const [acceptingShare, setAcceptingShare] = useState<JobShareWithDetails | null>(null);
+  const [assignedWorkers, setAssignedWorkers] = useState<Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }>>([]);
+  const [acceptNotes, setAcceptNotes] = useState("");
   const [selectedTab, setSelectedTab] = useState<'offered' | 'received'>('offered');
 
   const [formData, setFormData] = useState({
@@ -110,8 +115,8 @@ export default function JobSharing() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
-      return await apiRequest('PATCH', `/api/job-shares/${id}`, { status, reviewNotes: notes });
+    mutationFn: async ({ id, status, notes, assignedWorkers: workers }: { id: string; status: string; notes?: string; assignedWorkers?: any[] }) => {
+      return await apiRequest('PATCH', `/api/job-shares/${id}`, { status, reviewNotes: notes, assignedWorkers: workers });
     },
     onSuccess: (_, variables) => {
       toast({ title: "Success", description: `Job share ${variables.status}` });
@@ -187,6 +192,51 @@ export default function JobSharing() {
         positions,
       }
     });
+  };
+
+  const openAcceptDialog = (share: JobShareWithDetails) => {
+    setAcceptingShare(share);
+    const sharePositions = getPositionsForShare(share);
+    const totalWorkers = sharePositions.reduce((sum, p) => sum + Number(p.count), 0);
+    const workers: Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }> = [];
+    for (const pos of sharePositions) {
+      for (let i = 0; i < Number(pos.count); i++) {
+        workers.push({ name: "", role: pos.role, phone: "", email: "", siaLicense: "" });
+      }
+    }
+    setAssignedWorkers(workers);
+    setAcceptNotes("");
+    setIsAcceptDialogOpen(true);
+  };
+
+  const handleAccept = () => {
+    if (!acceptingShare) return;
+    const filledWorkers = assignedWorkers.filter(w => w.name.trim());
+    if (filledWorkers.length === 0) {
+      toast({ title: "Validation Error", description: "Please add at least one worker name", variant: "destructive" });
+      return;
+    }
+    updateStatusMutation.mutate({
+      id: acceptingShare.id,
+      status: 'accepted',
+      notes: acceptNotes || undefined,
+      assignedWorkers: filledWorkers,
+    });
+    setIsAcceptDialogOpen(false);
+    setAcceptingShare(null);
+  };
+
+  const updateWorker = (index: number, field: string, value: string) => {
+    setAssignedWorkers(prev => prev.map((w, i) => i === index ? { ...w, [field]: value } : w));
+  };
+
+  const addWorker = () => {
+    setAssignedWorkers(prev => [...prev, { name: "", role: "guard", phone: "", email: "", siaLicense: "" }]);
+  };
+
+  const removeWorker = (index: number) => {
+    if (assignedWorkers.length <= 1) return;
+    setAssignedWorkers(prev => prev.filter((_, i) => i !== index));
   };
 
   const getStatusBadge = (status: string) => {
@@ -278,6 +328,30 @@ export default function JobSharing() {
       <div className="text-sm text-muted-foreground">
         Total: {positions.reduce((sum, p) => sum + (p.count || 0), 0)} positions across {positions.length} role{positions.length > 1 ? 's' : ''}
       </div>
+    </div>
+  );
+
+  const AssignedWorkersDisplay = ({ workers }: { workers: JobShareAssignedWorker[] }) => (
+    <div className="space-y-2">
+      {workers.map((worker, index) => (
+        <div key={index} className="flex items-center justify-between p-2 rounded-md bg-muted/40" data-testid={`assigned-worker-${index}`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">{worker.name}</span>
+            <Badge variant="secondary" className="text-xs">{ROLE_LABELS[worker.role] || worker.role}</Badge>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            {worker.phone && (
+              <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{worker.phone}</span>
+            )}
+            {worker.email && (
+              <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{worker.email}</span>
+            )}
+            {worker.siaLicense && (
+              <span className="flex items-center gap-1"><Shield className="h-3 w-3" />{worker.siaLicense}</span>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 
@@ -480,6 +554,14 @@ export default function JobSharing() {
                         <p className="text-sm">{share.reviewNotes}</p>
                       </div>
                     )}
+                    {share.status === 'accepted' && share.assignedWorkers && share.assignedWorkers.length > 0 && (
+                      <div className="pt-2 border-t">
+                        <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                          <UserPlus className="h-4 w-4" />Assigned Workers ({share.assignedWorkers.length})
+                        </p>
+                        <AssignedWorkersDisplay workers={share.assignedWorkers} />
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -546,7 +628,7 @@ export default function JobSharing() {
                       <div className="flex gap-2 pt-2 border-t">
                         <Button
                           size="sm"
-                          onClick={() => updateStatusMutation.mutate({ id: share.id, status: 'accepted' })}
+                          onClick={() => openAcceptDialog(share)}
                           disabled={updateStatusMutation.isPending}
                           data-testid={`button-accept-${share.id}`}
                         >
@@ -563,6 +645,15 @@ export default function JobSharing() {
                         </Button>
                       </div>
                     )}
+
+                    {share.status === 'accepted' && share.assignedWorkers && share.assignedWorkers.length > 0 && (
+                      <div className="pt-2 border-t">
+                        <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                          <UserPlus className="h-4 w-4" />Assigned Workers
+                        </p>
+                        <AssignedWorkersDisplay workers={share.assignedWorkers} />
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -570,6 +661,109 @@ export default function JobSharing() {
           )}
         </div>
       )}
+
+      <Dialog open={isAcceptDialogOpen} onOpenChange={(open) => { setIsAcceptDialogOpen(open); if (!open) { setAcceptingShare(null); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Accept Job Share</DialogTitle>
+            <DialogDescription>
+              Provide the names and details of workers you are assigning to this job share.
+              {acceptingShare && (
+                <span className="block mt-1 text-xs">
+                  From: {acceptingShare.fromCompany?.name} | Site: {acceptingShare.site?.name}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Workers to Assign</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addWorker} data-testid="button-add-worker">
+                <Plus className="h-3 w-3 mr-1" />Add Worker
+              </Button>
+            </div>
+            {assignedWorkers.map((worker, index) => (
+              <div key={index} className="p-3 rounded-md border bg-muted/30 space-y-3" data-testid={`accept-worker-row-${index}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground font-medium">Worker {index + 1}</span>
+                  {assignedWorkers.length > 1 && (
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeWorker(index)} data-testid={`button-remove-worker-${index}`}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Full Name *</Label>
+                    <Input
+                      placeholder="e.g. John Smith"
+                      value={worker.name}
+                      onChange={(e) => updateWorker(index, 'name', e.target.value)}
+                      data-testid={`input-worker-name-${index}`}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Role</Label>
+                    <Select value={worker.role} onValueChange={(v) => updateWorker(index, 'role', v)}>
+                      <SelectTrigger data-testid={`select-worker-role-${index}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {JOB_SHARE_ROLES.map(role => (
+                          <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Phone</Label>
+                    <Input
+                      placeholder="Phone number"
+                      value={worker.phone}
+                      onChange={(e) => updateWorker(index, 'phone', e.target.value)}
+                      data-testid={`input-worker-phone-${index}`}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Email</Label>
+                    <Input
+                      type="email"
+                      placeholder="Email address"
+                      value={worker.email}
+                      onChange={(e) => updateWorker(index, 'email', e.target.value)}
+                      data-testid={`input-worker-email-${index}`}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">SIA License Number</Label>
+                    <Input
+                      placeholder="SIA license (optional)"
+                      value={worker.siaLicense}
+                      onChange={(e) => updateWorker(index, 'siaLicense', e.target.value)}
+                      data-testid={`input-worker-sia-${index}`}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div>
+              <Label>Notes (Optional)</Label>
+              <Textarea
+                placeholder="Any additional notes..."
+                value={acceptNotes}
+                onChange={(e) => setAcceptNotes(e.target.value)}
+                data-testid="textarea-accept-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAcceptDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleAccept} disabled={updateStatusMutation.isPending} data-testid="button-confirm-accept">
+              {updateStatusMutation.isPending ? "Accepting..." : "Accept & Assign Workers"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if (!open) { setEditingShare(null); resetForm(); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

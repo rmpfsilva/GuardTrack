@@ -1183,19 +1183,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.user;
       const activeCheckIns = await storage.getAllActiveCheckIns();
       const allSites = await storage.getAllSites();
-      const allGuards = await storage.getUsersByRole('guard');
+      const allUsers = await storage.getAllUsers();
       const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
 
       // Filter by company for regular admins
       let filteredCheckIns = activeCheckIns;
       let filteredSites = allSites;
-      let filteredGuards = allGuards;
+      let filteredGuards = allUsers;
       let filteredWeeklyHours = 0;
       
       if (user.role !== 'super_admin' && user.companyId) {
         filteredCheckIns = activeCheckIns.filter(ci => ci.user.companyId === user.companyId);
         filteredSites = allSites.filter(s => s.companyId === user.companyId);
-        filteredGuards = allGuards.filter(g => g.companyId === user.companyId);
+        filteredGuards = allUsers.filter(g => g.companyId === user.companyId);
         
         // Calculate weekly hours for company users only
         for (const guard of filteredGuards) {
@@ -1259,15 +1259,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/guards', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const user = req.user;
-      const allGuards = await storage.getUsersByRole('guard');
+      const allUsers = await storage.getAllUsers();
       
-      // Filter by company for regular admins
-      let guards = allGuards;
-      if (user.role !== 'super_admin' && user.companyId) {
-        guards = allGuards.filter(g => g.companyId === user.companyId);
+      // Always filter by company - super admins must use companyId query param or their own company
+      let guards = allUsers;
+      const targetCompanyId = req.query.companyId || user.companyId;
+      if (targetCompanyId) {
+        guards = allUsers.filter(g => g.companyId === targetCompanyId);
+      } else if (user.role !== 'super_admin') {
+        guards = [];
       }
       
-      console.log(`[DEBUG] Found ${guards.length} guards from database`);
+      console.log(`[DEBUG] Found ${guards.length} employees from database`);
       
       if (guards.length === 0) {
         return res.json([]);
@@ -3050,6 +3053,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sanitizedUpdates.reviewedBy = req.user.id;
         sanitizedUpdates.reviewedAt = new Date();
         if (updates.reviewNotes) sanitizedUpdates.reviewNotes = updates.reviewNotes;
+
+        if (updates.status === 'accepted' && updates.assignedWorkers && Array.isArray(updates.assignedWorkers)) {
+          const validRoles = JOB_SHARE_ROLES as readonly string[];
+          const cleanWorkers = updates.assignedWorkers
+            .filter((w: any) => w.name && w.name.trim())
+            .map((w: any) => ({
+              name: w.name.trim(),
+              role: validRoles.includes(w.role) ? w.role : 'guard',
+              phone: w.phone?.trim() || undefined,
+              email: w.email?.trim() || undefined,
+              siaLicense: w.siaLicense?.trim() || undefined,
+            }));
+          if (cleanWorkers.length > 0) {
+            sanitizedUpdates.assignedWorkers = cleanWorkers;
+          }
+        }
       } else if (updates.positions || updates.siteId || updates.startDate || updates.endDate || updates.requirements !== undefined) {
         if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId) {
           return res.status(403).json({ message: "Only the creator company can edit job share details" });
