@@ -3427,8 +3427,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { z } = await import("zod");
+      const { hashPassword } = await import("./auth");
       
-      // Validate request body with Zod
       const passwordSchema = z.object({
         password: z.string().min(6, "Password must be at least 6 characters")
       });
@@ -3439,14 +3439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { password } = validationResult.data;
+      const hashedPassword = await hashPassword(password);
       
-      // Hash the new password
-      const { scryptSync, randomBytes } = await import("crypto");
-      const salt = randomBytes(16).toString("hex");
-      const hash = scryptSync(password, salt, 64).toString("hex");
-      const hashedPassword = `${salt}:${hash}`;
-      
-      // Update the user's password
       await storage.updateUser(id, { password: hashedPassword });
       
       res.json({ message: "Password reset successfully" });

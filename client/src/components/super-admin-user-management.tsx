@@ -45,7 +45,12 @@ import {
   Eye,
   Key,
   AlertTriangle,
-  Wrench
+  Wrench,
+  Trash2,
+  Copy,
+  CheckCircle2,
+  UserX,
+  UserCheck
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -100,6 +105,10 @@ export default function SuperAdminUserManagement() {
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ username: string; password: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [showIssuesOnly, setShowIssuesOnly] = useState(false);
 
   const { data: users = [], isLoading: isLoadingUsers, refetch: refetchUsers } = useQuery<UserWithDetails[]>({
@@ -133,22 +142,45 @@ export default function SuperAdminUserManagement() {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
-      return apiRequest("POST", `/api/super-admin/users/${userId}/reset-password`, { password });
+    mutationFn: async ({ userId, password, username }: { userId: string; password: string; username: string }) => {
+      await apiRequest("POST", `/api/super-admin/users/${userId}/reset-password`, { password });
+      return { username, password };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast({
         title: "Password Reset",
-        description: "User password has been reset successfully.",
+        description: "Password has been reset. Credentials are shown below - copy them now.",
       });
-      setIsResetPasswordDialogOpen(false);
-      setNewPassword("");
-      setSelectedUser(null);
+      setResetPasswordResult(result);
     },
     onError: (error: any) => {
       toast({
         title: "Error",
         description: error.message || "Failed to reset password.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return apiRequest("DELETE", `/api/admin/users/${userId}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Account Deleted",
+        description: "The user account has been permanently deleted.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/all-users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/clients"] });
+      setIsDeleteDialogOpen(false);
+      setDeleteConfirmText("");
+      setSelectedUser(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user.",
         variant: "destructive",
       });
     },
@@ -211,7 +243,21 @@ export default function SuperAdminUserManagement() {
   const handleOpenResetPasswordDialog = (user: UserWithDetails) => {
     setSelectedUser(user);
     setNewPassword("");
+    setResetPasswordResult(null);
     setIsResetPasswordDialogOpen(true);
+  };
+
+  const handleOpenDeleteDialog = (user: UserWithDetails) => {
+    setSelectedUser(user);
+    setDeleteConfirmText("");
+    setIsDeleteDialogOpen(true);
+  };
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
   };
 
   const handleViewDetails = (user: UserWithDetails) => {
@@ -237,7 +283,7 @@ export default function SuperAdminUserManagement() {
 
   const handleResetPassword = () => {
     if (selectedUser && newPassword.length >= 6) {
-      resetPasswordMutation.mutate({ userId: selectedUser.id, password: newPassword });
+      resetPasswordMutation.mutate({ userId: selectedUser.id, password: newPassword, username: selectedUser.username });
     }
   };
 
@@ -454,6 +500,17 @@ export default function SuperAdminUserManagement() {
                           >
                             <Key className="h-4 w-4" />
                           </Button>
+                          {user.role !== 'super_admin' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenDeleteDialog(user)}
+                              title="Delete Account"
+                              data-testid={`button-delete-user-${user.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -569,7 +626,7 @@ export default function SuperAdminUserManagement() {
               )}
             </div>
           )}
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 flex-wrap">
             <Button
               variant="outline"
               onClick={() => {
@@ -592,6 +649,19 @@ export default function SuperAdminUserManagement() {
               <Key className="h-4 w-4 mr-2" />
               Reset Password
             </Button>
+            {selectedUser && selectedUser.role !== 'super_admin' && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setIsDetailsDialogOpen(false);
+                  if (selectedUser) handleOpenDeleteDialog(selectedUser);
+                }}
+                data-testid="button-delete-from-details"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Account
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -661,7 +731,13 @@ export default function SuperAdminUserManagement() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+      <Dialog open={isResetPasswordDialogOpen} onOpenChange={(open) => {
+        setIsResetPasswordDialogOpen(open);
+        if (!open) {
+          setResetPasswordResult(null);
+          setNewPassword("");
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -669,35 +745,148 @@ export default function SuperAdminUserManagement() {
               Reset Password
             </DialogTitle>
             <DialogDescription>
-              Set a new password for {selectedUser?.firstName} {selectedUser?.lastName} ({selectedUser?.email})
+              Set a new password for {selectedUser?.firstName} {selectedUser?.lastName} ({selectedUser?.username})
+            </DialogDescription>
+          </DialogHeader>
+
+          {resetPasswordResult ? (
+            <div className="space-y-4">
+              <div className="p-4 rounded-md border border-green-500/50 bg-green-500/5">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  <p className="font-medium text-green-600">Password Reset Successfully</p>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Share these credentials with the user. Copy them now before closing.
+                </p>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium">Username</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm bg-muted px-2 py-1 rounded font-mono flex-1" data-testid="text-reset-username">
+                        {resetPasswordResult.username}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyToClipboard(resetPasswordResult.username, 'reset-username')}
+                        data-testid="button-copy-reset-username"
+                      >
+                        {copiedField === 'reset-username' ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium">New Password</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm bg-muted px-2 py-1 rounded font-mono flex-1" data-testid="text-reset-password">
+                        {resetPasswordResult.password}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyToClipboard(resetPasswordResult.password, 'reset-password')}
+                        data-testid="button-copy-reset-password"
+                      >
+                        {copiedField === 'reset-password' ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const text = `Username: ${resetPasswordResult.username}\nNew Password: ${resetPasswordResult.password}`;
+                      copyToClipboard(text, 'reset-all');
+                    }}
+                    data-testid="button-copy-reset-all"
+                  >
+                    {copiedField === 'reset-all' ? <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> : <Copy className="h-4 w-4 mr-2" />}
+                    {copiedField === 'reset-all' ? 'Copied!' : 'Copy All'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="new-password">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (min 6 characters)"
+                  data-testid="input-new-password"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Password must be at least 6 characters long. The password will be shown in plain text after reset so you can share it.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsResetPasswordDialogOpen(false);
+              setResetPasswordResult(null);
+              setNewPassword("");
+            }}>
+              {resetPasswordResult ? "Close" : "Cancel"}
+            </Button>
+            {!resetPasswordResult && (
+              <Button 
+                onClick={handleResetPassword}
+                disabled={newPassword.length < 6 || resetPasswordMutation.isPending}
+                data-testid="button-confirm-reset-password"
+              >
+                {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete User Account
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete the account for <strong>{selectedUser?.firstName} {selectedUser?.lastName}</strong> ({selectedUser?.username}). 
+              This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="new-password">New Password</Label>
-              <Input
-                id="new-password"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password (min 6 characters)"
-                data-testid="input-new-password"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Password must be at least 6 characters long.
+            <div className="p-3 rounded-md bg-destructive/10 border border-destructive/30">
+              <p className="text-sm">
+                Type <strong>DELETE</strong> to confirm you want to permanently remove this account and all associated data.
               </p>
+            </div>
+            <div>
+              <Label htmlFor="delete-confirm">Confirmation</Label>
+              <Input
+                id="delete-confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type DELETE to confirm"
+                data-testid="input-delete-confirm"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsResetPasswordDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
               Cancel
             </Button>
             <Button 
-              onClick={handleResetPassword}
-              disabled={newPassword.length < 6 || resetPasswordMutation.isPending}
-              data-testid="button-confirm-reset-password"
+              variant="destructive"
+              onClick={() => selectedUser && deleteUserMutation.mutate(selectedUser.id)}
+              disabled={deleteConfirmText !== "DELETE" || deleteUserMutation.isPending}
+              data-testid="button-confirm-delete-user"
             >
-              {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
+              {deleteUserMutation.isPending ? "Deleting..." : "Delete Account"}
             </Button>
           </DialogFooter>
         </DialogContent>
