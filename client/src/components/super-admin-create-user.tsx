@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Copy, CheckCircle2, X } from "lucide-react";
 
 const createUserSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -26,8 +28,26 @@ const createUserSchema = z.object({
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
 
+interface CreatedCredentials {
+  username: string;
+  password: string;
+  companyName: string;
+  role: string;
+  firstName?: string;
+  lastName?: string;
+}
+
 export default function SuperAdminCreateUser() {
   const { toast } = useToast();
+  const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
+  };
 
   const form = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
@@ -57,14 +77,27 @@ export default function SuperAdminCreateUser() {
       if (!payload.firstName) delete (payload as any).firstName;
       if (!payload.lastName) delete (payload as any).lastName;
       const res = await apiRequest("POST", "/api/super-admin/users", payload);
-      return res.json();
+      return { user: await res.json(), originalData: data };
     },
-    onSuccess: () => {
+    onSuccess: ({ user, originalData }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/all-users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+
+      const company = companies.find((c: any) => c.id === originalData.companyId);
+      setCreatedCredentials({
+        username: originalData.username,
+        password: originalData.password,
+        companyName: company?.name || 'Unknown',
+        role: originalData.role,
+        firstName: originalData.firstName,
+        lastName: originalData.lastName,
+      });
+
       toast({
-        title: "User created",
-        description: "The user account has been created successfully.",
+        title: "User created successfully",
+        description: "Credentials are displayed below. Make sure to copy them before creating another user.",
       });
       form.reset();
     },
@@ -83,6 +116,99 @@ export default function SuperAdminCreateUser() {
   };
 
   return (
+    <div className="space-y-4">
+      {createdCredentials && (
+        <Card className="border-green-500/50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <CardTitle className="flex items-center gap-2 text-green-600">
+                <CheckCircle2 className="h-5 w-5" />
+                User Created - Login Credentials
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCreatedCredentials(null)}
+                data-testid="button-dismiss-credentials"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <CardDescription>
+              Share these credentials with the user. This is the only time the password will be visible.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">Company</p>
+                  <p className="text-sm font-medium" data-testid="text-created-company">{createdCredentials.companyName}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">Role</p>
+                  <Badge variant="outline" data-testid="text-created-role">{createdCredentials.role}</Badge>
+                </div>
+              </div>
+              {(createdCredentials.firstName || createdCredentials.lastName) && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">Name</p>
+                  <p className="text-sm" data-testid="text-created-name">
+                    {createdCredentials.firstName} {createdCredentials.lastName}
+                  </p>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">Username</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-muted px-2 py-1 rounded font-mono flex-1" data-testid="text-created-username">
+                      {createdCredentials.username}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(createdCredentials.username, 'username')}
+                      data-testid="button-copy-username"
+                    >
+                      {copiedField === 'username' ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">Password</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-muted px-2 py-1 rounded font-mono flex-1" data-testid="text-created-password">
+                      {createdCredentials.password}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(createdCredentials.password, 'password')}
+                      data-testid="button-copy-password"
+                    >
+                      {copiedField === 'password' ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const text = `Company: ${createdCredentials.companyName}\nUsername: ${createdCredentials.username}\nPassword: ${createdCredentials.password}\nRole: ${createdCredentials.role}`;
+                  copyToClipboard(text, 'all');
+                }}
+                data-testid="button-copy-all-credentials"
+              >
+                {copiedField === 'all' ? <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> : <Copy className="h-4 w-4 mr-2" />}
+                {copiedField === 'all' ? 'Copied!' : 'Copy All Credentials'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -263,5 +389,6 @@ export default function SuperAdminCreateUser() {
         </Form>
       </CardContent>
     </Card>
+    </div>
   );
 }
