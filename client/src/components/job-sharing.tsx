@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -56,6 +56,16 @@ export default function JobSharing() {
   const [acceptNotes, setAcceptNotes] = useState("");
   const [acceptedCounts, setAcceptedCounts] = useState<Array<{ role: JobShareRole; maxCount: number; acceptCount: number; hourlyRate: string }>>([]);
   const [selectedTab, setSelectedTab] = useState<'offered' | 'received'>('offered');
+  const [offeredLastViewed, setOfferedLastViewed] = useState<number>(() => {
+    const stored = localStorage.getItem(`jobshare_offered_viewed_${user?.id}`);
+    return stored ? parseInt(stored, 10) : 0;
+  });
+
+  const markOfferedViewed = useCallback(() => {
+    const now = Date.now();
+    setOfferedLastViewed(now);
+    localStorage.setItem(`jobshare_offered_viewed_${user?.id}`, now.toString());
+  }, [user?.id]);
 
   const [formData, setFormData] = useState({
     toCompanyId: "",
@@ -82,6 +92,16 @@ export default function JobSharing() {
   const { data: receivedShares = [] } = useQuery<JobShareWithDetails[]>({
     queryKey: ['/api/job-shares/received'],
   });
+
+  useEffect(() => {
+    if (selectedTab === 'offered') {
+      markOfferedViewed();
+    }
+  }, [selectedTab, markOfferedViewed]);
+
+  const unviewedOfferedCount = offeredShares.filter(s =>
+    s.status === 'accepted' && s.reviewedAt && new Date(s.reviewedAt).getTime() > offeredLastViewed
+  ).length;
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -574,9 +594,9 @@ export default function JobSharing() {
       <div className="flex gap-2 border-b">
         <Button variant={selectedTab === 'offered' ? 'default' : 'ghost'} onClick={() => setSelectedTab('offered')} data-testid="tab-offered-shares" className="relative">
           Offered to Others
-          {offeredShares.filter(s => s.status === 'accepted' && s.reviewedAt && new Date(s.reviewedAt) > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)).length > 0 && selectedTab !== 'offered' && (
+          {unviewedOfferedCount > 0 && selectedTab !== 'offered' && (
             <Badge variant="destructive" className="ml-2 text-[10px] leading-none px-1.5 py-0.5">
-              {offeredShares.filter(s => s.status === 'accepted' && s.reviewedAt && new Date(s.reviewedAt) > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)).length}
+              {unviewedOfferedCount}
             </Badge>
           )}
         </Button>
