@@ -9,7 +9,7 @@ import { eq, desc } from "drizzle-orm";
 import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema, insertInvoiceSchema, updateInvoiceSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
-import { sendInvitationEmail } from './emailService';
+import { sendInvitationEmail, sendJobShareNotificationEmail } from './emailService';
 import { sendNoticeNotification } from './push-notifications';
 
 // Middleware to check if user is authenticated
@@ -3030,6 +3030,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/company-employees', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const allUsers = await storage.getAllUsers();
+      const companyId = user.companyId;
+      const employees = allUsers
+        .filter(u => u.companyId === companyId)
+        .map(u => ({
+          id: u.id,
+          username: u.username,
+          firstName: u.firstName || '',
+          lastName: u.lastName || '',
+          email: u.email || '',
+          role: u.role,
+          fullName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username,
+        }));
+      res.json(employees);
+    } catch (error: any) {
+      console.error("Error fetching company employees:", error);
+      res.status(500).json({ message: "Failed to fetch employees" });
+    }
+  });
+
   app.get('/api/job-shares/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -3137,11 +3160,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let sanitizedUpdates: any = {};
 
-      if (updates.status && ['accepted', 'rejected', 'cancelled'].includes(updates.status)) {
+      if (updates.status && ['accepted', 'rejected', 'cancelled', 'withdrawn'].includes(updates.status)) {
         sanitizedUpdates.status = updates.status;
         sanitizedUpdates.reviewedBy = req.user.id;
         sanitizedUpdates.reviewedAt = new Date();
         if (updates.reviewNotes) sanitizedUpdates.reviewNotes = updates.reviewNotes;
+
+        if (updates.status === 'withdrawn') {
+          if (jobShare.status !== 'accepted') {
+            return res.status(400).json({ message: "Can only withdraw from accepted job shares" });
+          }
+          if (user.role !== 'super_admin' && jobShare.toCompanyId !== user.companyId) {
+            return res.status(403).json({ message: "Only the accepting company can withdraw from a job share" });
+          }
+          sanitizedUpdates.assignedWorkers = [];
+          sanitizedUpdates.acceptedPositions = [];
+
+          try {
+            const existingShifts = await storage.getAllScheduledShifts();
+            const jobShareShifts = existingShifts.filter((s: any) => s.jobShareId === id);
+            const futureShifts = jobShareShifts.filter((s: any) => {
+              const shiftStart = new Date(s.startTime);
+              return shiftStart > new Date();
+            });
+            for (const shift of futureShifts) {
+              await storage.deleteScheduledShift(shift.id);
+            }
+            console.log(`Job share ${id} withdrawn: ${futureShifts.length} future shifts deleted`);
+          } catch (shiftError) {
+            console.error("Error deleting shifts on withdrawal:", shiftError);
+          }
+        }
+
+        if (updates.status === 'rejected' && jobShare.status === 'accepted') {
+          if (user.role !== 'super_admin' && jobShare.toCompanyId !== user.companyId) {
+            return res.status(403).json({ message: "Only the accepting company can reject an accepted job share" });
+          }
+          sanitizedUpdates.assignedWorkers = [];
+          sanitizedUpdates.acceptedPositions = [];
+
+          try {
+            const existingShifts = await storage.getAllScheduledShifts();
+            const jobShareShifts = existingShifts.filter((s: any) => s.jobShareId === id);
+            const futureShifts = jobShareShifts.filter((s: any) => {
+              const shiftStart = new Date(s.startTime);
+              return shiftStart > new Date();
+            });
+            for (const shift of futureShifts) {
+              await storage.deleteScheduledShift(shift.id);
+            }
+            console.log(`Job share ${id} rejected after acceptance: ${futureShifts.length} future shifts deleted`);
+          } catch (shiftError) {
+            console.error("Error deleting shifts on rejection:", shiftError);
+          }
+        }
 
         if (updates.status === 'accepted') {
           if (updates.assignedWorkers && Array.isArray(updates.assignedWorkers)) {
@@ -3221,6 +3293,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedJobShare = await storage.updateJobShare(id, sanitizedUpdates);
+
+      if (sanitizedUpdates.status && ['accepted', 'rejected', 'withdrawn', 'cancelled'].includes(sanitizedUpdates.status)) {
+        (async () => {
+          try {
+            const fromCompany = await storage.getCompany(jobShare.fromCompanyId);
+            const toCompany = await storage.getCompany(jobShare.toCompanyId);
+            const site = jobShare.siteId ? await storage.getSite(jobShare.siteId) : null;
+            
+            const adminsOfCreator = (await storage.getAllUsers()).filter(
+              u => u.companyId === jobShare.fromCompanyId && (u.role === 'admin' || u.role === 'super_admin') && u.email
+            );
+
+            const posSource = (sanitizedUpdates.acceptedPositions && sanitizedUpdates.acceptedPositions.length > 0)
+              ? sanitizedUpdates.acceptedPositions
+              : (jobShare.positions as any[] | null);
+            const positionsText = posSource 
+              ? posSource.map((p: any) => `${p.count} x ${p.role}`).join(', ')
+              : `${jobShare.numberOfJobs} x ${jobShare.workingRole}`;
+
+            for (const admin of adminsOfCreator) {
+              if (admin.email) {
+                sendJobShareNotificationEmail({
+                  toEmail: admin.email,
+                  fromCompanyName: fromCompany?.name || 'Unknown',
+                  toCompanyName: toCompany?.name || 'Unknown',
+                  siteName: site?.name || 'Unknown Site',
+                  status: sanitizedUpdates.status,
+                  startDate: new Date(jobShare.startDate).toLocaleDateString('en-GB'),
+                  endDate: new Date(jobShare.endDate).toLocaleDateString('en-GB'),
+                  positions: positionsText,
+                  notes: updates.reviewNotes || undefined,
+                }).catch(err => console.error(`[Job Share Email] Failed to notify ${admin.email}:`, err.message));
+              }
+            }
+          } catch (err: any) {
+            console.error('[Job Share Email] Error preparing notifications:', err.message);
+          }
+        })();
+      }
 
       const roleToJobTitle: Record<string, string> = {
         sia: 'SIA Guard', guard: 'SIA Guard', steward: 'Steward',

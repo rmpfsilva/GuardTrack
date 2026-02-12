@@ -123,6 +123,121 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
   }
 }
 
+interface JobShareNotificationData {
+  toEmail: string;
+  fromCompanyName: string;
+  toCompanyName: string;
+  siteName: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  positions?: string;
+  notes?: string;
+}
+
+export async function sendJobShareNotificationEmail(data: JobShareNotificationData): Promise<void> {
+  try {
+    console.log(`[Job Share Email] Sending notification to: ${data.toEmail} - Status: ${data.status}`);
+
+    const gmail = await getUncachableGmailClient();
+
+    let senderEmail = 'noreply@guardtrack.com';
+    try {
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      senderEmail = profile.data.emailAddress || senderEmail;
+    } catch (profileError) {
+      console.warn('[Job Share Email] Could not fetch user profile, using default sender');
+    }
+
+    const statusLabels: Record<string, string> = {
+      accepted: 'Accepted',
+      rejected: 'Rejected',
+      withdrawn: 'Withdrawn',
+      cancelled: 'Cancelled',
+    };
+
+    const statusColors: Record<string, string> = {
+      accepted: '#16a34a',
+      rejected: '#dc2626',
+      withdrawn: '#ea580c',
+      cancelled: '#dc2626',
+    };
+
+    const statusLabel = statusLabels[data.status] || data.status;
+    const statusColor = statusColors[data.status] || '#333';
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #f8f9fa; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+    <h2 style="color: #1e40af; margin-top: 0;">Job Share Update</h2>
+    <p>Your job share request has been <strong style="color: ${statusColor};">${statusLabel}</strong> by <strong>${data.toCompanyName}</strong>.</p>
+  </div>
+
+  <div style="margin-bottom: 24px;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr>
+        <td style="padding: 8px 0; color: #666; width: 140px;">Site:</td>
+        <td style="padding: 8px 0; font-weight: 600;">${data.siteName}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 0; color: #666;">Period:</td>
+        <td style="padding: 8px 0; font-weight: 600;">${data.startDate} - ${data.endDate}</td>
+      </tr>
+      ${data.positions ? `<tr>
+        <td style="padding: 8px 0; color: #666;">Positions:</td>
+        <td style="padding: 8px 0; font-weight: 600;">${data.positions}</td>
+      </tr>` : ''}
+    </table>
+  </div>
+
+  ${data.notes ? `<div style="background-color: #e0f2fe; border-radius: 6px; padding: 16px; margin-bottom: 16px;">
+    <p style="margin: 0; color: #0369a1;"><strong>Notes:</strong> ${data.notes}</p>
+  </div>` : ''}
+
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; color: #666; font-size: 14px;">
+    <p style="margin-bottom: 0;">Best regards,<br><strong>GuardTrack Team</strong></p>
+  </div>
+</body>
+</html>`;
+
+    const subject = `Job Share ${statusLabel} - ${data.siteName}`;
+
+    const message = [
+      `From: GuardTrack <${senderEmail}>`,
+      `To: ${data.toEmail}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage,
+      },
+    });
+
+    console.log(`[Job Share Email] Sent successfully to ${data.toEmail}`);
+  } catch (error: any) {
+    console.error('[Job Share Email] Error sending email:', error.message);
+    throw error;
+  }
+}
+
 export async function sendTrialInvitationEmail(toEmail: string, subject: string, body: string): Promise<void> {
   try {
     const bodyPreview = body.length > 100 ? body.substring(0, 100) + '...' : body;

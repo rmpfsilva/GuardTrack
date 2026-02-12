@@ -93,6 +93,20 @@ export default function JobSharing() {
     queryKey: ['/api/job-shares/received'],
   });
 
+  interface CompanyEmployee {
+    id: string;
+    username: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: string;
+    fullName: string;
+  }
+
+  const { data: companyEmployees = [] } = useQuery<CompanyEmployee[]>({
+    queryKey: ['/api/company-employees'],
+  });
+
   useEffect(() => {
     if (selectedTab === 'offered') {
       markOfferedViewed();
@@ -181,13 +195,23 @@ export default function JobSharing() {
     setEditingWorkersShare(share);
     const existing = (share.assignedWorkers || []) as JobShareAssignedWorker[];
     if (existing.length > 0) {
-      setEditWorkers(existing.map(w => ({
+      const workers = existing.map(w => ({
         name: w.name || "",
         role: normalizeLegacyRole(w.role || 'sia'),
         phone: w.phone || "",
         email: w.email || "",
         siaLicense: w.siaLicense || "",
-      })));
+      }));
+      setEditWorkers(workers);
+      const idMap: Record<number, string> = {};
+      workers.forEach((w, i) => {
+        const match = companyEmployees.find(e => 
+          (w.email && e.email && e.email.toLowerCase() === w.email.toLowerCase()) ||
+          e.fullName.toLowerCase() === w.name.toLowerCase()
+        );
+        if (match) idMap[i] = match.id;
+      });
+      setEditWorkerEmployeeIds(idMap);
     } else {
       const accepted = share.acceptedPositions as JobSharePosition[] | null;
       const positionsToUse = (accepted && accepted.length > 0) ? accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)})) : getPositionsForShare(share);
@@ -307,6 +331,7 @@ export default function JobSharing() {
     }
     setAssignedWorkers(workers);
     setAcceptNotes("");
+    setWorkerEmployeeIds({});
     setIsAcceptDialogOpen(true);
   };
 
@@ -350,6 +375,37 @@ export default function JobSharing() {
     setAcceptingShare(null);
   };
 
+  const [workerEmployeeIds, setWorkerEmployeeIds] = useState<Record<number, string>>({});
+  const [editWorkerEmployeeIds, setEditWorkerEmployeeIds] = useState<Record<number, string>>({});
+
+  const selectWorkerFromEmployee = (index: number, employeeId: string) => {
+    const emp = companyEmployees.find(e => e.id === employeeId);
+    if (emp) {
+      setWorkerEmployeeIds(prev => ({ ...prev, [index]: employeeId }));
+      setAssignedWorkers(prev => prev.map((w, i) => i === index ? {
+        ...w,
+        name: emp.fullName,
+        email: emp.email,
+        phone: w.phone,
+        siaLicense: w.siaLicense,
+      } : w));
+    }
+  };
+
+  const selectEditWorkerFromEmployee = (index: number, employeeId: string) => {
+    const emp = companyEmployees.find(e => e.id === employeeId);
+    if (emp) {
+      setEditWorkerEmployeeIds(prev => ({ ...prev, [index]: employeeId }));
+      setEditWorkers(prev => prev.map((w, i) => i === index ? {
+        ...w,
+        name: emp.fullName,
+        email: emp.email,
+        phone: w.phone,
+        siaLicense: w.siaLicense,
+      } : w));
+    }
+  };
+
   const updateWorker = (index: number, field: string, value: string) => {
     setAssignedWorkers(prev => prev.map((w, i) => i === index ? { ...w, [field]: value } : w));
   };
@@ -376,6 +432,14 @@ export default function JobSharing() {
       case 'rejected':
         return <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">
           <X className="h-3 w-3 mr-1" />Rejected
+        </Badge>;
+      case 'withdrawn':
+        return <Badge variant="outline" className="bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">
+          <X className="h-3 w-3 mr-1" />Withdrawn
+        </Badge>;
+      case 'cancelled':
+        return <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">
+          <X className="h-3 w-3 mr-1" />Cancelled
         </Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
@@ -820,25 +884,53 @@ export default function JobSharing() {
 
                     {share.status === 'accepted' && (
                       <div className="pt-2 border-t">
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
                             <UserPlus className="h-4 w-4" />Assigned Workers
                             {share.assignedWorkers && share.assignedWorkers.length > 0 && ` (${share.assignedWorkers.length})`}
                           </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openEditWorkersDialog(share)}
-                            data-testid={`button-edit-workers-${share.id}`}
-                          >
-                            <Pencil className="h-3 w-3 mr-1" />Edit Workers
-                          </Button>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditWorkersDialog(share)}
+                              data-testid={`button-edit-workers-${share.id}`}
+                            >
+                              <Pencil className="h-3 w-3 mr-1" />Edit Workers
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                if (confirm("Are you sure you want to withdraw from this job share? This will remove all assigned workers and cancel any future shifts.")) {
+                                  updateStatusMutation.mutate({ id: share.id, status: 'withdrawn', notes: 'Withdrawn by accepting company' });
+                                }
+                              }}
+                              disabled={updateStatusMutation.isPending}
+                              data-testid={`button-withdraw-${share.id}`}
+                            >
+                              <X className="h-3 w-3 mr-1" />Withdraw
+                            </Button>
+                          </div>
                         </div>
                         {share.assignedWorkers && share.assignedWorkers.length > 0 ? (
                           <AssignedWorkersDisplay workers={share.assignedWorkers} />
                         ) : (
                           <p className="text-sm text-muted-foreground italic">No workers assigned yet</p>
                         )}
+                      </div>
+                    )}
+
+                    {(share.status === 'withdrawn' || share.status === 'rejected') && (
+                      <div className="flex gap-2 pt-2 border-t">
+                        <Button
+                          size="sm"
+                          onClick={() => openAcceptDialog(share)}
+                          disabled={updateStatusMutation.isPending}
+                          data-testid={`button-reaccept-${share.id}`}
+                        >
+                          <Check className="h-4 w-4 mr-1" />Re-accept
+                        </Button>
                       </div>
                     )}
                   </CardContent>
@@ -911,70 +1003,71 @@ export default function JobSharing() {
                 <Plus className="h-3 w-3 mr-1" />Add Worker
               </Button>
             </div>
-            {assignedWorkers.map((worker, index) => (
-              <div key={index} className="p-3 rounded-md border bg-muted/30 space-y-3" data-testid={`accept-worker-row-${index}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground font-medium">Worker {index + 1}</span>
-                  {assignedWorkers.length > 1 && (
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeWorker(index)} data-testid={`button-remove-worker-${index}`}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
+            {assignedWorkers.map((worker, index) => {
+              return (
+                <div key={index} className="p-3 rounded-md border bg-muted/30 space-y-3" data-testid={`accept-worker-row-${index}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground font-medium">Worker {index + 1}</span>
+                    {assignedWorkers.length > 1 && (
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeWorker(index)} data-testid={`button-remove-worker-${index}`}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Employee *</Label>
+                      <Select
+                        value={workerEmployeeIds[index] || ""}
+                        onValueChange={(v) => selectWorkerFromEmployee(index, v)}
+                      >
+                        <SelectTrigger data-testid={`select-worker-employee-${index}`}>
+                          <SelectValue placeholder="Select employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {companyEmployees.map(emp => (
+                            <SelectItem key={emp.id} value={emp.id}>
+                              {emp.fullName}{emp.email ? ` (${emp.email})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Role</Label>
+                      <Select value={worker.role} onValueChange={(v) => updateWorker(index, 'role', v)}>
+                        <SelectTrigger data-testid={`select-worker-role-${index}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {JOB_SHARE_ROLES.map(role => (
+                            <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Phone</Label>
+                      <Input
+                        placeholder="Phone number"
+                        value={worker.phone}
+                        onChange={(e) => updateWorker(index, 'phone', e.target.value)}
+                        data-testid={`input-worker-phone-${index}`}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Label className="text-xs text-muted-foreground">SIA License Number</Label>
+                      <Input
+                        placeholder="SIA license (optional)"
+                        value={worker.siaLicense}
+                        onChange={(e) => updateWorker(index, 'siaLicense', e.target.value)}
+                        data-testid={`input-worker-sia-${index}`}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Full Name *</Label>
-                    <Input
-                      placeholder="e.g. John Smith"
-                      value={worker.name}
-                      onChange={(e) => updateWorker(index, 'name', e.target.value)}
-                      data-testid={`input-worker-name-${index}`}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Role</Label>
-                    <Select value={worker.role} onValueChange={(v) => updateWorker(index, 'role', v)}>
-                      <SelectTrigger data-testid={`select-worker-role-${index}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {JOB_SHARE_ROLES.map(role => (
-                          <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Phone</Label>
-                    <Input
-                      placeholder="Phone number"
-                      value={worker.phone}
-                      onChange={(e) => updateWorker(index, 'phone', e.target.value)}
-                      data-testid={`input-worker-phone-${index}`}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Email</Label>
-                    <Input
-                      type="email"
-                      placeholder="Email address"
-                      value={worker.email}
-                      onChange={(e) => updateWorker(index, 'email', e.target.value)}
-                      data-testid={`input-worker-email-${index}`}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-xs text-muted-foreground">SIA License Number</Label>
-                    <Input
-                      placeholder="SIA license (optional)"
-                      value={worker.siaLicense}
-                      onChange={(e) => updateWorker(index, 'siaLicense', e.target.value)}
-                      data-testid={`input-worker-sia-${index}`}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
             <div>
               <Label>Notes (Optional)</Label>
               <Textarea
@@ -1078,56 +1171,64 @@ export default function JobSharing() {
                   <Plus className="h-3 w-3 mr-1" />Add Worker
                 </Button>
               </div>
-              {editWorkers.map((worker, index) => (
-                <div key={index} className="p-3 rounded-md border bg-muted/30 space-y-3" data-testid={`edit-worker-row-${index}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge variant="outline" className="text-xs">Worker {index + 1}</Badge>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Select value={worker.role} onValueChange={(val) => updateEditWorker(index, 'role', val)}>
-                        <SelectTrigger className="w-[140px]" data-testid={`edit-worker-role-${index}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {JOB_SHARE_ROLES.map(r => (
-                            <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {editWorkers.length > 1 && (
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeEditWorker(index)} data-testid={`button-remove-edit-worker-${index}`}>
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+              {editWorkers.map((worker, index) => {
+                return (
+                  <div key={index} className="p-3 rounded-md border bg-muted/30 space-y-3" data-testid={`edit-worker-row-${index}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant="outline" className="text-xs">Worker {index + 1}</Badge>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Select value={worker.role} onValueChange={(val) => updateEditWorker(index, 'role', val)}>
+                          <SelectTrigger className="w-[140px]" data-testid={`edit-worker-role-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {JOB_SHARE_ROLES.map(r => (
+                              <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {editWorkers.length > 1 && (
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeEditWorker(index)} data-testid={`button-remove-edit-worker-${index}`}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Employee *</Label>
+                        <Select
+                          value={editWorkerEmployeeIds[index] || ""}
+                          onValueChange={(v) => selectEditWorkerFromEmployee(index, v)}
+                        >
+                          <SelectTrigger data-testid={`edit-worker-employee-${index}`}>
+                            <SelectValue placeholder={worker.name || "Select employee"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {companyEmployees.map(emp => (
+                              <SelectItem key={emp.id} value={emp.id}>
+                                {emp.fullName}{emp.email ? ` (${emp.email})` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Input
+                        placeholder="Phone (optional)"
+                        value={worker.phone}
+                        onChange={(e) => updateEditWorker(index, 'phone', e.target.value)}
+                        data-testid={`edit-worker-phone-${index}`}
+                      />
+                      <Input
+                        placeholder="SIA license (optional)"
+                        value={worker.siaLicense}
+                        onChange={(e) => updateEditWorker(index, 'siaLicense', e.target.value)}
+                        data-testid={`edit-worker-sia-${index}`}
+                      />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Full name"
-                      value={worker.name}
-                      onChange={(e) => updateEditWorker(index, 'name', e.target.value)}
-                      data-testid={`edit-worker-name-${index}`}
-                    />
-                    <Input
-                      placeholder="Phone (optional)"
-                      value={worker.phone}
-                      onChange={(e) => updateEditWorker(index, 'phone', e.target.value)}
-                      data-testid={`edit-worker-phone-${index}`}
-                    />
-                    <Input
-                      placeholder="Email (optional)"
-                      value={worker.email}
-                      onChange={(e) => updateEditWorker(index, 'email', e.target.value)}
-                      data-testid={`edit-worker-email-${index}`}
-                    />
-                    <Input
-                      placeholder="SIA license (optional)"
-                      value={worker.siaLicense}
-                      onChange={(e) => updateEditWorker(index, 'siaLicense', e.target.value)}
-                      data-testid={`edit-worker-sia-${index}`}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           <DialogFooter className="flex-shrink-0">
