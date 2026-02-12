@@ -1537,22 +1537,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.user;
       const isAdminUser = user.role === 'admin' || user.role === 'super_admin';
       
+      let shifts;
       if (isAdminUser) {
-        // Admin can see all shifts
-        let shifts = await storage.getAllScheduledShifts();
-        
-        // Filter by company for regular admins
+        shifts = await storage.getAllScheduledShifts();
         if (user.role !== 'super_admin' && user.companyId) {
           shifts = shifts.filter(shift => shift.user.companyId === user.companyId);
         }
-        
-        res.json(shifts);
       } else {
-        // Guards see only their own shifts
         const userId = user.id;
-        const shifts = await storage.getUserScheduledShifts(userId);
-        res.json(shifts);
+        shifts = await storage.getUserScheduledShifts(userId);
       }
+
+      const jobShareIds = [...new Set(shifts.filter((s: any) => s.jobShareId).map((s: any) => s.jobShareId))];
+      if (jobShareIds.length > 0) {
+        const allCompanies = await storage.getAllCompanies();
+        const companyMap = new Map(allCompanies.map(c => [c.id, c.name]));
+
+        const jobShareCompanyMap = new Map<string, string>();
+        for (const jsId of jobShareIds) {
+          try {
+            const js = await storage.getJobShare(jsId);
+            if (js) {
+              jobShareCompanyMap.set(jsId, companyMap.get(js.fromCompanyId) || 'Partner Company');
+            }
+          } catch {}
+        }
+
+        const enriched = shifts.map((s: any) => {
+          if (s.jobShareId && jobShareCompanyMap.has(s.jobShareId)) {
+            return { ...s, jobShareFromCompany: jobShareCompanyMap.get(s.jobShareId) };
+          }
+          return s;
+        });
+        return res.json(enriched);
+      }
+
+      res.json(shifts);
     } catch (error) {
       console.error("Error fetching scheduled shifts:", error);
       res.status(500).json({ message: "Failed to fetch scheduled shifts" });
@@ -3338,6 +3358,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error updating job share:", error);
       res.status(400).json({ message: error.message || "Failed to update job share" });
+    }
+  });
+
+  app.post('/api/job-shares/backfill-shifts', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const allJobShares = user.role === 'super_admin'
+        ? await storage.getAllJobShares()
+        : [
+            ...await storage.getJobSharesReceivedByCompany(user.companyId),
+          ];
+
+      const acceptedWithWorkers = allJobShares.filter(
+        js => js.status === 'accepted' && js.assignedWorkers && (js.assignedWorkers as any[]).length > 0
+      );
+
+      const existingShifts = await storage.getAllScheduledShifts();
+      const allUsers = await storage.getAllUsers();
+
+      const roleToJobTitle: Record<string, string> = {
+        sia: 'SIA Guard', guard: 'SIA Guard', steward: 'Steward',
+        supervisor: 'Supervisor', response: 'Response Officer',
+        dog_handler: 'Dog Handler', call_out: 'Call Out',
+      };
+
+      const findMatchingUser = (worker: any, companyUsers: any[]) => {
+        const workerNameLower = worker.name.toLowerCase().trim();
+        if (worker.email) {
+          const emailMatch = companyUsers.find(u => u.email?.toLowerCase() === worker.email.toLowerCase());
+          if (emailMatch) return emailMatch;
+        }
+        return companyUsers.find(u => {
+          const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().trim();
+          const reverseName = `${u.lastName || ''} ${u.firstName || ''}`.toLowerCase().trim();
+          const usernameLower = u.username.toLowerCase().trim();
+          if (fullName === workerNameLower) return true;
+          if (reverseName === workerNameLower) return true;
+          if (usernameLower === workerNameLower) return true;
+          if (u.firstName && u.firstName.toLowerCase() === workerNameLower) return true;
+          if (u.lastName && u.lastName.toLowerCase() === workerNameLower) return true;
+          return false;
+        });
+      };
+
+      let totalCreated = 0;
+      let totalSkipped = 0;
+
+      for (const js of acceptedWithWorkers) {
+        const hasExistingShifts = existingShifts.some((s: any) => s.jobShareId === js.id);
+        if (hasExistingShifts) {
+          totalSkipped++;
+          continue;
+        }
+
+        const companyUsers = allUsers.filter(u => u.companyId === js.toCompanyId);
+        const workers = js.assignedWorkers as any[];
+
+        const startDate = new Date(js.startDate);
+        const endDate = new Date(js.endDate);
+        const startHour = startDate.getHours() || 8;
+        const startMin = startDate.getMinutes() || 0;
+        const endHour = endDate.getHours() || 20;
+        const endMin = endDate.getMinutes() || 0;
+
+        for (const worker of workers) {
+          const matchedUser = findMatchingUser(worker, companyUsers);
+          if (matchedUser) {
+            const jobTitle = roleToJobTitle[worker.role] || worker.role || 'Guard';
+            const currentDate = new Date(startDate);
+            currentDate.setHours(0, 0, 0, 0);
+            const lastDate = new Date(endDate);
+            lastDate.setHours(0, 0, 0, 0);
+
+            while (currentDate <= lastDate) {
+              const shiftStart = new Date(currentDate);
+              shiftStart.setHours(startHour, startMin, 0, 0);
+              const shiftEnd = new Date(currentDate);
+              shiftEnd.setHours(endHour, endMin, 0, 0);
+
+              await storage.createScheduledShift({
+                userId: matchedUser.id,
+                siteId: js.siteId,
+                jobTitle,
+                startTime: shiftStart,
+                endTime: shiftEnd,
+                recurrence: 'none',
+                isActive: true,
+                notes: `Auto-created from job share`,
+                jobShareId: js.id,
+              });
+              totalCreated++;
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+          }
+        }
+      }
+
+      res.json({
+        message: `Backfill complete`,
+        totalJobSharesProcessed: acceptedWithWorkers.length,
+        totalShiftsCreated: totalCreated,
+        totalSkipped,
+      });
+    } catch (error: any) {
+      console.error("Error backfilling job share shifts:", error);
+      res.status(500).json({ message: "Failed to backfill shifts" });
     }
   });
 

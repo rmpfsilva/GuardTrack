@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
-import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Handshake } from "lucide-react";
+import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Handshake, Building2 } from "lucide-react";
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ScheduledShiftWithDetails } from "@shared/schema";
 
 export default function MySchedule() {
@@ -83,10 +84,14 @@ export default function MySchedule() {
                   <p className="text-sm text-muted-foreground">No shifts scheduled</p>
                 ) : (
                   <div className="space-y-2">
-                    {dayShifts.map((shift) => (
+                    {dayShifts.map((shift) => {
+                      const isJobShare = !!(shift as any).jobShareId;
+                      const fromCompany = (shift as any).jobShareFromCompany;
+
+                      return (
                       <div 
                         key={shift.id} 
-                        className="flex items-start justify-between p-3 rounded-lg border border-border hover-elevate"
+                        className={`flex items-start justify-between p-3 rounded-lg border hover-elevate ${isJobShare ? "bg-accent/30 border-primary/40" : "border-border"}`}
                         data-testid={`guard-shift-${shift.id}`}
                       >
                         <div className="space-y-1">
@@ -120,15 +125,26 @@ export default function MySchedule() {
                               {shift.recurrence}
                             </Badge>
                           )}
-                          {(shift as any).jobShareId && (
-                            <Badge variant="outline" className="text-xs gap-1">
-                              <Handshake className="w-3 h-3" />
-                              Job Share
-                            </Badge>
+                          {isJobShare && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="text-xs gap-1 cursor-default border-primary/40 text-primary">
+                                  <Handshake className="w-3 h-3" />
+                                  Job Share
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <Building2 className="w-3.5 h-3.5" />
+                                  <span>Shared by <strong>{fromCompany || 'Partner Company'}</strong></span>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

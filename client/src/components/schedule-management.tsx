@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
-import { Calendar, Plus, Pencil, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Briefcase, X, Handshake } from "lucide-react";
+import { Calendar, Plus, Pencil, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Briefcase, X, Handshake, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ScheduledShiftWithDetails, Site, User as UserType } from "@shared/schema";
 
 const JOB_TITLES = [
@@ -526,8 +527,12 @@ export default function ScheduleManagement() {
                 {dayShifts.length === 0 ? (
                   <p className="text-xs text-muted-foreground">No shifts</p>
                 ) : (
-                  dayShifts.map((shift) => (
-                    <Card key={shift.id} className="p-2 hover-elevate" data-testid={`shift-${shift.id}`}>
+                  dayShifts.map((shift) => {
+                    const isJobShare = !!(shift as any).jobShareId;
+                    const fromCompany = (shift as any).jobShareFromCompany;
+
+                    return (
+                    <Card key={shift.id} className={`p-2 hover-elevate ${isJobShare ? "bg-accent/30 border-primary/40" : ""}`} data-testid={`shift-${shift.id}`}>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-medium truncate flex-1" data-testid={`text-shift-name-${shift.id}`}>
@@ -589,15 +594,26 @@ export default function ScheduleManagement() {
                             {getRecurrenceLabel(shift.recurrence)}
                           </Badge>
                         )}
-                        {(shift as any).jobShareId && (
-                          <Badge variant="outline" className="text-xs gap-1" data-testid={`badge-job-share-${shift.id}`}>
-                            <Handshake className="w-3 h-3" />
-                            Job Share
-                          </Badge>
+                        {isJobShare && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className="text-xs gap-1 cursor-default border-primary/40 text-primary" data-testid={`badge-job-share-${shift.id}`}>
+                                <Handshake className="w-3 h-3" />
+                                Job Share
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <Building2 className="w-3.5 h-3.5" />
+                                <span>Shared by <strong>{fromCompany || 'Partner Company'}</strong></span>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                     </Card>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>
