@@ -917,8 +917,10 @@ export class DatabaseStorage implements IStorage {
     const shiftDurationMs = effectiveCheckOutTime.getTime() - checkIn.checkInTime.getTime();
     let payableHours = shiftDurationMs / (1000 * 60 * 60);
 
-    // 4. Apply baseline 1-hour break deduction for all shifts
-    payableHours -= 1;
+    // 4. Apply baseline 1-hour break deduction only for shifts longer than 1 hour
+    if (payableHours > 1) {
+      payableHours -= 1;
+    }
 
     // 5. Get breaks and apply extended break deductions if approved
     const shiftsBreaks = await db
