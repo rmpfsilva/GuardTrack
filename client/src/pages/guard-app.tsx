@@ -152,13 +152,41 @@ export default function GuardApp() {
   }, []);
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.permissions?.query({ name: "geolocation" }).then((result) => {
-        setLocationStatus(result.state === "granted" ? "granted" : result.state === "denied" ? "denied" : "pending");
-      });
-    } else {
+    if (!navigator.geolocation) {
       setLocationStatus("unavailable");
+      return;
     }
+
+    const requestLocationPermission = async () => {
+      try {
+        const permResult = await navigator.permissions?.query({ name: "geolocation" });
+        if (permResult) {
+          setLocationStatus(permResult.state === "granted" ? "granted" : permResult.state === "denied" ? "denied" : "pending");
+
+          permResult.onchange = () => {
+            setLocationStatus(permResult.state === "granted" ? "granted" : permResult.state === "denied" ? "denied" : "pending");
+          };
+
+          if (permResult.state === "prompt") {
+            navigator.geolocation.getCurrentPosition(
+              () => setLocationStatus("granted"),
+              () => setLocationStatus("denied"),
+              { enableHighAccuracy: false, timeout: 10000 }
+            );
+          }
+        } else {
+          navigator.geolocation.getCurrentPosition(
+            () => setLocationStatus("granted"),
+            () => setLocationStatus("denied"),
+            { enableHighAccuracy: false, timeout: 10000 }
+          );
+        }
+      } catch {
+        setLocationStatus("pending");
+      }
+    };
+
+    requestLocationPermission();
   }, []);
 
   const { data: sites = [], isLoading: sitesLoading } = useQuery<Site[]>({
@@ -340,10 +368,16 @@ export default function GuardApp() {
             workingRole: selectedRole,
           });
         },
-        () => {
+        (error) => {
+          console.warn("Geolocation error on check-in:", error.message);
+          toast({
+            title: "Location Unavailable",
+            description: "Check-in will proceed without location data. Please enable location access in your device settings.",
+            variant: "destructive",
+          });
           checkInMutation.mutate({ siteId: selectedSiteId, workingRole: selectedRole });
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     } else {
       checkInMutation.mutate({ siteId: selectedSiteId, workingRole: selectedRole });
