@@ -917,31 +917,9 @@ export class DatabaseStorage implements IStorage {
     const shiftDurationMs = effectiveCheckOutTime.getTime() - checkIn.checkInTime.getTime();
     let payableHours = shiftDurationMs / (1000 * 60 * 60);
 
-    // 4. Apply baseline 1-hour break deduction only for shifts longer than 1 hour
-    if (payableHours > 1) {
-      payableHours -= 1;
-    }
+    // 4. Breaks are paid - no deductions applied for break time
 
-    // 5. Get breaks and apply extended break deductions if approved
-    const shiftsBreaks = await db
-      .select()
-      .from(breaks)
-      .where(eq(breaks.checkInId, checkIn.id));
-
-    for (const breakRecord of shiftsBreaks) {
-      if (breakRecord.breakEndTime) {
-        const breakDurationMs = breakRecord.breakEndTime.getTime() - breakRecord.breakStartTime.getTime();
-        const breakHours = breakDurationMs / (1000 * 60 * 60);
-        
-        // If break >1 hour and approved, deduct the extra time beyond baseline
-        if (breakHours > 1 && breakRecord.approvalStatus === 'approved') {
-          const extraBreakTime = breakHours - 1;
-          payableHours -= extraBreakTime;
-        }
-      }
-    }
-
-    // 6. Add approved overtime hours (already excluded from base by capping)
+    // 5. Add approved overtime hours (already excluded from base by capping)
     payableHours += approvedOvertimeHours;
 
     return Math.max(0, payableHours); // Never go negative
@@ -1762,9 +1740,8 @@ export class DatabaseStorage implements IStorage {
           // Calculate payable hours using the new approval-based logic
           const hoursWorked = await this.calculatePayableHours(checkIn);
           
-          // Get break information for display
+          // Get break information for display (breaks are paid, no deductions)
           let breakHours = 0;
-          let breakDeducted = false;
           if (checkIn.checkOutTime) {
             const breaksForCheckIn = await this.getBreaksForCheckIn(checkIn.id);
             for (const breakRecord of breaksForCheckIn) {
@@ -1773,8 +1750,6 @@ export class DatabaseStorage implements IStorage {
                 breakHours += breakMs / (1000 * 60 * 60);
               }
             }
-            // Always deduct at least 1 hour baseline
-            breakDeducted = true;
           }
 
           const role = checkIn.workingRole || 'guard';
@@ -1794,7 +1769,6 @@ export class DatabaseStorage implements IStorage {
             checkOutTime: checkIn.checkOutTime,
             hoursWorked,
             breakHours,
-            breakDeducted,
             hourlyRate,
             amount: hoursWorked * hourlyRate,
             status: checkIn.status,

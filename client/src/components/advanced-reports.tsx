@@ -398,7 +398,6 @@ export default function AdvancedReports() {
                           </TableCell>
                           <TableCell className="text-right">
                             {shift.hoursWorked.toFixed(1)}
-                            {shift.breakDeducted && <span className="text-xs text-muted-foreground ml-1">(1h break)</span>}
                           </TableCell>
                           <TableCell className="text-right">£{shift.amount.toFixed(2)}</TableCell>
                           <TableCell>

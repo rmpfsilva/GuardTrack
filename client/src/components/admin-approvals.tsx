@@ -75,7 +75,7 @@ export default function AdminApprovals() {
     onSuccess: () => {
       toast({
         title: "Break Approved",
-        description: "Extended break time will be deducted from payable hours.",
+        description: "Extended break has been approved and recorded.",
       });
       refetchBreaks();
       queryClient.invalidateQueries({ queryKey: ["/api/admin/billing"] });
@@ -99,7 +99,7 @@ export default function AdminApprovals() {
     onSuccess: () => {
       toast({
         title: "Break Rejected",
-        description: "Only baseline 1-hour break will be deducted.",
+        description: "Extended break has been rejected.",
       });
       refetchBreaks();
       queryClient.invalidateQueries({ queryKey: ["/api/admin/billing"] });
@@ -186,7 +186,7 @@ export default function AdminApprovals() {
           <CardHeader>
             <CardTitle>Extended Breaks Pending Approval</CardTitle>
             <CardDescription>
-              Guards took breaks longer than 1 hour. Approve to deduct full break time from payable hours, or reject to deduct only the baseline 1 hour.
+              Employees took breaks longer than 1 hour. Review and approve or reject extended break records.
             </CardDescription>
           </CardHeader>
           <CardContent>
