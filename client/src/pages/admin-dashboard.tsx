@@ -388,7 +388,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Guards</CardTitle>
+                <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -470,7 +470,7 @@ export default function AdminDashboard() {
                 <>
                   {/* Regular Admin Tabs - Filtered by Plan */}
                   {hasTabAccess('overview') && <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>}
-                  {hasTabAccess('guards') && <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Guards</TabsTrigger>}
+                  {hasTabAccess('guards') && <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Employees</TabsTrigger>}
                   {hasTabAccess('reports') && <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>}
                   {hasTabAccess('users') && <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>}
                   {hasTabAccess('schedule') && <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>}
@@ -500,11 +500,11 @@ export default function AdminDashboard() {
                     <Activity className="h-5 w-5" />
                     Currently On Duty
                   </CardTitle>
-                  <CardDescription>Guards actively checked in</CardDescription>
+                  <CardDescription>Employees actively checked in</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {activeCheckIns.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No guards on duty</p>
+                    <p className="text-center text-muted-foreground py-8">No employees on duty</p>
                   ) : (
                     <div className="space-y-3">
                       {activeCheckIns.map((checkIn) => (

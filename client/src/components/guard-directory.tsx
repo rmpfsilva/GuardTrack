@@ -36,17 +36,17 @@ export default function GuardDirectory() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Users className="h-5 w-5" />
-          Guard Directory
+          Employee Directory
         </CardTitle>
-        <CardDescription>View all guards and their shift history</CardDescription>
+        <CardDescription>View all employees and their shift history</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-center text-muted-foreground py-8">Loading guards...</p>
+          <p className="text-center text-muted-foreground py-8">Loading employees...</p>
         ) : guards.length === 0 ? (
           <div className="text-center py-12">
             <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No guards registered yet</p>
+            <p className="text-muted-foreground">No employees registered yet</p>
           </div>
         ) : (
           <div className="space-y-3">

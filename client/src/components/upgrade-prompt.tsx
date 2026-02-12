@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 const TAB_DISPLAY_INFO: Record<AdminTab, { label: string; description: string; icon: typeof Lock }> = {
   'overview': { label: 'Overview', description: 'Dashboard overview', icon: Activity },
-  'guards': { label: 'Guards', description: 'Guard management', icon: Users },
+  'guards': { label: 'Employees', description: 'Employee management', icon: Users },
   'reports': { label: 'Reports', description: 'View reports', icon: FileText },
   'users': { label: 'Users', description: 'User management', icon: Users },
   'schedule': { label: 'Schedule', description: 'Shift scheduling', icon: Calendar },
