@@ -3201,6 +3201,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedJobShare = await storage.updateJobShare(id, sanitizedUpdates);
+
+      const roleToJobTitle: Record<string, string> = {
+        sia: 'SIA Guard', guard: 'SIA Guard', steward: 'Steward',
+        supervisor: 'Supervisor', response: 'Response Officer',
+        dog_handler: 'Dog Handler', call_out: 'Call Out',
+      };
+
+      const findMatchingUser = (worker: any, companyUsers: any[]) => {
+        const workerNameLower = worker.name.toLowerCase().trim();
+
+        if (worker.email) {
+          const emailMatch = companyUsers.find(u => u.email?.toLowerCase() === worker.email.toLowerCase());
+          if (emailMatch) return emailMatch;
+        }
+
+        return companyUsers.find(u => {
+          const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().trim();
+          const reverseName = `${u.lastName || ''} ${u.firstName || ''}`.toLowerCase().trim();
+          const usernameLower = u.username.toLowerCase().trim();
+          if (fullName === workerNameLower) return true;
+          if (reverseName === workerNameLower) return true;
+          if (usernameLower === workerNameLower) return true;
+          if (u.firstName && u.firstName.toLowerCase() === workerNameLower) return true;
+          if (u.lastName && u.lastName.toLowerCase() === workerNameLower) return true;
+          return false;
+        });
+      };
+
+      const createShiftsForWorkers = async (workers: any[], companyUsers: any[], jsData: any, jsId: string) => {
+        const startDate = new Date(jsData.startDate);
+        const endDate = new Date(jsData.endDate);
+
+        const startHour = startDate.getHours() || 8;
+        const startMin = startDate.getMinutes() || 0;
+        const endHour = endDate.getHours() || 20;
+        const endMin = endDate.getMinutes() || 0;
+
+        const shiftsCreated: string[] = [];
+        const unmatchedWorkers: string[] = [];
+
+        for (const worker of workers) {
+          const matchedUser = findMatchingUser(worker, companyUsers);
+
+          if (matchedUser) {
+            const jobTitle = roleToJobTitle[worker.role] || worker.role || 'Guard';
+
+            const currentDate = new Date(startDate);
+            currentDate.setHours(0, 0, 0, 0);
+            const lastDate = new Date(endDate);
+            lastDate.setHours(0, 0, 0, 0);
+
+            while (currentDate <= lastDate) {
+              const shiftStart = new Date(currentDate);
+              shiftStart.setHours(startHour, startMin, 0, 0);
+              const shiftEnd = new Date(currentDate);
+              shiftEnd.setHours(endHour, endMin, 0, 0);
+
+              await storage.createScheduledShift({
+                userId: matchedUser.id,
+                siteId: jsData.siteId,
+                jobTitle,
+                startTime: shiftStart,
+                endTime: shiftEnd,
+                recurrence: 'none',
+                isActive: true,
+                notes: `Auto-created from job share`,
+                jobShareId: jsId,
+              });
+              shiftsCreated.push(`${worker.name} - ${currentDate.toISOString().split('T')[0]}`);
+
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+          } else {
+            unmatchedWorkers.push(worker.name);
+          }
+        }
+        return { shiftsCreated, unmatchedWorkers };
+      };
+
+      if (sanitizedUpdates.status === 'accepted' && sanitizedUpdates.assignedWorkers?.length > 0) {
+        try {
+          const allUsers = await storage.getAllUsers();
+          const companyUsers = allUsers.filter(u => u.companyId === jobShare.toCompanyId);
+
+          const { shiftsCreated, unmatchedWorkers } = await createShiftsForWorkers(
+            sanitizedUpdates.assignedWorkers, companyUsers, jobShare, updatedJobShare.id
+          );
+
+          console.log(`Job share ${id} accepted: ${shiftsCreated.length} shifts created`);
+          if (unmatchedWorkers.length > 0) {
+            console.log(`Unmatched workers (no user account found): ${unmatchedWorkers.join(', ')}`);
+          }
+
+          const response: any = { ...updatedJobShare, shiftsCreated: shiftsCreated.length };
+          if (unmatchedWorkers.length > 0) {
+            response.unmatchedWorkers = unmatchedWorkers;
+          }
+          return res.json(response);
+        } catch (shiftError) {
+          console.error("Error auto-creating shifts from job share:", shiftError);
+        }
+      }
+
+      if (sanitizedUpdates.assignedWorkers?.length > 0 && !sanitizedUpdates.status && jobShare.status === 'accepted') {
+        try {
+          const existingShifts = await storage.getAllScheduledShifts();
+          const jobShareShifts = existingShifts.filter((s: any) => s.jobShareId === id);
+
+          const futureShifts = jobShareShifts.filter((s: any) => {
+            const hasCheckIn = s.checkIn && s.checkIn.id;
+            return !hasCheckIn;
+          });
+          for (const shift of futureShifts) {
+            await storage.deleteScheduledShift(shift.id);
+          }
+
+          const allUsers = await storage.getAllUsers();
+          const companyUsers = allUsers.filter(u => u.companyId === jobShare.toCompanyId);
+
+          const { shiftsCreated, unmatchedWorkers } = await createShiftsForWorkers(
+            sanitizedUpdates.assignedWorkers, companyUsers, jobShare, updatedJobShare.id
+          );
+
+          const response: any = { ...updatedJobShare, shiftsCreated: shiftsCreated.length };
+          if (unmatchedWorkers.length > 0) {
+            response.unmatchedWorkers = unmatchedWorkers;
+          }
+          return res.json(response);
+        } catch (shiftError) {
+          console.error("Error re-syncing shifts from job share:", shiftError);
+        }
+      }
+
       res.json(updatedJobShare);
     } catch (error: any) {
       console.error("Error updating job share:", error);

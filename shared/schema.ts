@@ -196,9 +196,10 @@ export const scheduledShifts = pgTable("scheduled_shifts", {
   jobTitle: varchar("job_title").notNull().default('Guard'),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),
-  recurrence: varchar("recurrence").notNull().default('none'), // 'none' | 'daily' | 'weekly' | 'monthly'
+  recurrence: varchar("recurrence").notNull().default('none'),
   isActive: boolean("is_active").notNull().default(true),
   notes: text("notes"),
+  jobShareId: varchar("job_share_id").references(() => jobShares.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

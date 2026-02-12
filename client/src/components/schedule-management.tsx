@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
-import { Calendar, Plus, Pencil, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Briefcase, X } from "lucide-react";
+import { Calendar, Plus, Pencil, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Briefcase, X, Handshake } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -587,6 +587,12 @@ export default function ScheduleManagement() {
                         {shift.recurrence !== "none" && (
                           <Badge variant="secondary" className="text-xs">
                             {getRecurrenceLabel(shift.recurrence)}
+                          </Badge>
+                        )}
+                        {(shift as any).jobShareId && (
+                          <Badge variant="outline" className="text-xs gap-1" data-testid={`badge-job-share-${shift.id}`}>
+                            <Handshake className="w-3 h-3" />
+                            Job Share
                           </Badge>
                         )}
                       </div>

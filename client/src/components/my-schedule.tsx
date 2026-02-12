@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
-import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Handshake } from "lucide-react";
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -114,11 +114,19 @@ export default function MySchedule() {
                             <p className="text-xs text-muted-foreground mt-1">{shift.notes}</p>
                           )}
                         </div>
-                        {shift.recurrence !== 'none' && (
-                          <Badge variant="secondary" className="text-xs">
-                            {shift.recurrence}
-                          </Badge>
-                        )}
+                        <div className="flex flex-col gap-1 items-end shrink-0">
+                          {shift.recurrence !== 'none' && (
+                            <Badge variant="secondary" className="text-xs">
+                              {shift.recurrence}
+                            </Badge>
+                          )}
+                          {(shift as any).jobShareId && (
+                            <Badge variant="outline" className="text-xs gap-1">
+                              <Handshake className="w-3 h-3" />
+                              Job Share
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
