@@ -1,0 +1,299 @@
+🛡 GuardTrack – Job Sharing Enhancement Phase
+LIVE SYSTEM – DO NOT BREAK EXISTING FUNCTIONALITY
+🚨 CRITICAL INSTRUCTION
+
+This feature is live and used by multiple companies.
+
+You must:
+
+NOT rebuild Job Sharing
+
+NOT change existing logic flows
+
+NOT remove legacy fields
+
+NOT break automatic shift creation
+
+NOT modify partnership mechanics
+
+NOT alter existing status transitions
+
+All improvements must be additive and backward-compatible.
+
+If any change risks breaking existing shares or shift creation, stop and flag.
+
+🎯 OBJECTIVE
+
+Enhance the current Job Sharing system to:
+
+Improve visual clarity
+
+Improve speed of interaction
+
+Add structured in-app communication
+
+Add live fill visibility
+
+Add deadline control
+
+Add lightweight partner performance metrics
+
+Without changing the underlying operational logic.
+
+🧱 EXISTING STRUCTURE (REFERENCE – DO NOT REWRITE)
+
+Partnerships required before sharing
+
+jobShares table with JSONB fields:
+
+positions
+
+acceptedPositions
+
+assignedWorkers
+
+Automatic shift creation via jobShareId
+
+Email notifications on status change
+
+Status flow:
+
+pending → accepted / rejected / cancelled
+
+accepted → withdrawn / cancelled
+
+This must remain intact.
+
+🔧 PHASE 1 – Live Fill Visibility (No Schema Changes)
+
+Enhance UI only.
+
+From existing JSONB fields:
+
+Compute:
+
+totalRequired = sum(positions.count)
+totalAccepted = sum(acceptedPositions.count)
+remaining = totalRequired - totalAccepted
+fillPercentage = totalAccepted / totalRequired
+
+Add to job share cards:
+
+Progress bar
+
+“X of Y filled”
+
+Remaining number
+
+Colour indicator:
+
+Green = 100%
+
+Amber = 50–99%
+
+Red = <50%
+
+No database changes required.
+
+🔧 PHASE 2 – Response Deadline (Minimal Safe Schema Addition)
+
+Add new nullable field to jobShares table:
+
+responseDeadline TIMESTAMP NULL
+
+Default: NULL (to preserve old shares).
+
+Update Create Job Share dialog:
+
+Add optional deadline selector:
+
+2h / 6h / 12h / Custom
+
+If set:
+
+Show countdown timer on both sides
+
+Highlight amber at <2h remaining
+
+Highlight red when expired
+
+Do NOT auto-change status yet.
+Just visual indicator.
+
+🔧 PHASE 3 – Job Share Conversation Thread (New Table)
+
+Create new table:
+
+jobShareMessages
+
+id
+
+jobShareId (FK)
+
+senderCompanyId
+
+senderUserId
+
+message TEXT
+
+createdAt TIMESTAMP
+
+attachmentUrl NULLABLE
+
+Requirements:
+
+Linked to existing jobShareId
+
+Does not modify jobShares structure
+
+Display thread inside job share detail view
+
+Timestamped messages
+
+Basic text only (no emojis, no formatting complexity)
+
+Optional small file upload (max 5MB)
+
+Must not affect existing flows.
+
+🔧 PHASE 4 – Partner Performance Metrics (Computed Only)
+
+Do NOT create new tables.
+
+Compute dynamically from jobShares:
+
+For each partnership:
+
+Total shares sent
+
+Total accepted
+
+Acceptance rate %
+
+Average response time (createdAt → acceptedAt)
+
+If acceptedAt does not exist:
+
+Add nullable field:
+
+acceptedAt TIMESTAMP NULL
+
+Populate when status transitions to accepted.
+
+These metrics must be:
+
+Informational only
+
+Visible privately
+
+Not public ranking
+
+🔧 PHASE 5 – UI Refactor for Stability
+
+The file:
+client/src/components/job-sharing.tsx (1260 lines)
+
+Before adding new UI logic:
+
+Refactor into smaller internal components:
+
+JobShareCard
+
+JobShareProgress
+
+JobShareActions
+
+JobShareMessages
+
+JobShareDialogs
+
+Refactor only for structure.
+Do NOT change business logic.
+
+Goal: reduce future risk.
+
+🔔 PHASE 6 – Notification Enhancements (Non-Disruptive)
+
+Keep existing email logic intact.
+
+Add:
+
+In-app notification badge for new messages
+
+Optional reminder when deadline <1h
+
+Visual highlight for emergency shares (future-proof)
+
+Do not increase email frequency.
+
+🔐 PERMISSIONS & SAFETY
+
+Only Admin/Ops can share jobs
+
+Guards cannot initiate sharing
+
+Messaging visible only to involved companies
+
+Preserve all existing role permissions
+
+🧪 TESTING REQUIREMENTS
+
+Before deployment:
+
+Create new job share (normal)
+
+Accept partially
+
+Assign workers
+
+Confirm shifts created
+
+Cancel share
+
+Confirm future shifts removed
+
+Test with deadline set
+
+Test without deadline (legacy flow)
+
+Test messaging
+
+Test edit after acceptance
+
+Must pass all without regression.
+
+🚫 OUT OF SCOPE
+
+Marketplace logic
+
+Public partner browsing
+
+Payment processing
+
+Commission model
+
+Structural migration from JSONB
+
+Rewriting shift engine
+
+🎯 SUCCESS CRITERIA
+
+After deployment:
+
+Sharing takes under 30 seconds
+
+Accepting takes under 60 seconds
+
+Fill progress visible instantly
+
+Communication stays inside system
+
+No disruption to existing companies
+
+If any live functionality breaks, rollback immediately.
+
+⚠️ FINAL RULE
+
+Enhance. Do not replace.
+
+GuardTrack’s stability is more important than new features.
