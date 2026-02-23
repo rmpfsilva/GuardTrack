@@ -19,10 +19,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
 import GuardNoticeBoard from "@/components/guard-notice-board";
@@ -885,545 +897,559 @@ export default function GuardApp() {
 
   const userInitials = `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || 'G';
 
-  return (
-    <div className={`flex flex-col h-screen ${hasCustomBackground ? 'bg-transparent' : 'bg-background'}`}>
-      <header className="sticky top-0 z-50 bg-primary text-primary-foreground px-4 py-3 shadow-md">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={guardTrackLogo} alt="GuardTrack" className="h-8 w-8" />
-            <div>
-              <h1 className="text-lg font-bold" data-testid="text-company-name">{company?.name || 'GuardTrack'}</h1>
-              <p className="text-xs opacity-80">{format(currentTime, "EEE, MMM d • h:mm a")}</p>
+  const defaultNavItems = [
+    { key: 'home', label: 'Home', icon: 'Home' },
+    { key: 'schedule', label: 'Schedule', icon: 'Calendar' },
+    { key: 'leave', label: 'Annual Leave', icon: 'FileText' },
+    { key: 'notices', label: 'Notice Board', icon: 'Bell' },
+    { key: 'invoices', label: 'Invoices', icon: 'DollarSign' },
+    { key: 'settings', label: 'Settings', icon: 'Settings' },
+  ];
+
+  const navItems = visibleTabs.length > 0
+    ? [
+        ...visibleTabs.map(tab => ({ key: tab.tabKey, label: tab.label, icon: tab.icon })),
+        ...(!visibleTabs.some(t => t.tabKey === 'settings') ? [{ key: 'settings', label: 'Settings', icon: 'Settings' }] : []),
+      ]
+    : defaultNavItems;
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'home':
+        return (
+          <div className="space-y-4">
+            <div className="mb-4">
+              <p className="text-muted-foreground">Hello,</p>
+              <h2 className="text-2xl font-bold" data-testid="text-user-name">
+                {user.firstName} {user.lastName}
+              </h2>
+              <p className="text-sm text-muted-foreground">{format(currentTime, "EEEE, MMMM d, yyyy • h:mm a")}</p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="text-primary-foreground"
-              data-testid="button-refresh-guard"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
-            <Avatar className="h-9 w-9 border-2 border-primary-foreground/30">
-              <AvatarFallback className="bg-primary-foreground/20 text-primary-foreground text-sm">
-                {userInitials}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </div>
-      </header>
 
-      {isInstallable && !isInstalled && showInstallBanner && (
-        <div className="bg-primary/10 border-b border-primary/20 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Download className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-medium text-sm">Install GuardTrack</p>
-                <p className="text-xs text-muted-foreground">Quick access from home screen</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                size="sm" 
-                onClick={installApp}
-                data-testid="button-install-pwa"
-              >
-                Install
-              </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                className="h-8 w-8"
-                onClick={() => setShowInstallBanner(false)}
-                data-testid="button-dismiss-install"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+            {locationStatus === "denied" && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Location access is denied. Check-ins may not include location data.
+                </AlertDescription>
+              </Alert>
+            )}
 
-      <main className="flex-1 overflow-auto pb-24">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="h-full">
-          <div className="p-4">
-              <TabsContent value="home" className="mt-0 space-y-4">
-                <div className="text-center mb-4">
-                  <p className="text-muted-foreground">Hello,</p>
-                  <h2 className="text-2xl font-bold" data-testid="text-user-name">
-                    {user.firstName} {user.lastName}
-                  </h2>
-                </div>
-
-                {locationStatus === "denied" && (
-                  <Alert variant="destructive" className="mb-4">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Location access is denied. Check-ins may not include location data.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {activeCheckIn ? (
-                  <Card className="border-green-500 bg-green-50 dark:bg-green-950/20">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <CheckCircle2 className="h-5 w-5 text-green-600" />
-                          Currently Checked In
-                        </CardTitle>
-                        {activeBreak && (
-                          <Badge variant="secondary" className="bg-amber-100 text-amber-800">
-                            <Coffee className="h-3 w-3 mr-1" /> On Break
-                          </Badge>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{activeCheckIn.site?.name || "Unknown Site"}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span>Since {format(new Date(activeCheckIn.checkInTime), "h:mm a")}</span>
-                      </div>
-
-                      {activeBreak ? (
-                        <Button 
-                          onClick={handleEndBreak}
-                          disabled={endBreakMutation.isPending}
-                          className="w-full h-14 text-lg"
-                          variant="secondary"
-                          data-testid="button-end-break"
-                        >
-                          {endBreakMutation.isPending ? (
-                            <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                          ) : (
-                            <Coffee className="h-5 w-5 mr-2" />
-                          )}
-                          End Break
-                        </Button>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-3">
-                          <Button 
-                            onClick={handleStartBreak}
-                            disabled={startBreakMutation.isPending}
-                            variant="outline"
-                            className="h-14"
-                            data-testid="button-start-break"
-                          >
-                            {startBreakMutation.isPending ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <>
-                                <Coffee className="h-5 w-5 mr-2" />
-                                Break
-                              </>
-                            )}
-                          </Button>
-                          <Button 
-                            onClick={handleCheckOut}
-                            disabled={checkOutMutation.isPending}
-                            variant="destructive"
-                            className="h-14"
-                            data-testid="button-check-out"
-                          >
-                            {checkOutMutation.isPending ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <>
-                                <LogOut className="h-5 w-5 mr-2" />
-                                Check Out
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <XCircle className="h-5 w-5 text-muted-foreground" />
-                        Not Checked In
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Select Site</label>
-                        <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
-                          <SelectTrigger data-testid="select-site">
-                            <SelectValue placeholder="Choose your site" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sites.map((site) => (
-                              <SelectItem key={site.id} value={site.id}>
-                                {site.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Your Role</label>
-                        <Select value={selectedRole} onValueChange={setSelectedRole}>
-                          <SelectTrigger data-testid="select-role">
-                            <SelectValue placeholder="Select role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="guard">Guard</SelectItem>
-                            <SelectItem value="supervisor">Supervisor</SelectItem>
-                            <SelectItem value="steward">Steward</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <Button 
-                        onClick={handleCheckIn}
-                        disabled={checkInMutation.isPending || !selectedSiteId}
-                        className="w-full h-16 text-xl font-bold"
-                        data-testid="button-check-in"
-                      >
-                        {checkInMutation.isPending ? (
-                          <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                        ) : (
-                          <LogIn className="h-6 w-6 mr-2" />
-                        )}
-                        CHECK IN
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-
-                <Card 
-                  className="cursor-pointer hover-elevate"
-                  onClick={() => setActiveTab("schedule")}
-                  data-testid="card-quick-schedule"
-                >
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Calendar className="h-5 w-5 text-primary" />
-                      </div>
-                      <span className="font-medium">View My Schedule</span>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </CardContent>
-                </Card>
-
-                <Card 
-                  className="cursor-pointer hover-elevate"
-                  onClick={() => setActiveTab("notices")}
-                  data-testid="card-quick-notices"
-                >
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-                        <Bell className="h-5 w-5 text-amber-600" />
-                      </div>
-                      <span className="font-medium">Notice Board</span>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </CardContent>
-                </Card>
-
-                <Card 
-                  className="cursor-pointer hover-elevate"
-                  onClick={() => setActiveTab("leave")}
-                  data-testid="card-quick-leave"
-                >
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                        <FileText className="h-5 w-5 text-green-600" />
-                      </div>
-                      <div>
-                        <span className="font-medium">Leave Requests</span>
-                        {leaveRequests.filter(r => r.status === 'pending').length > 0 && (
-                          <Badge variant="secondary" className="ml-2 text-xs">
-                            {leaveRequests.filter(r => r.status === 'pending').length} pending
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </CardContent>
-                </Card>
-
-                {/* Admin/Super Admin users can access the full dashboard */}
-                {(user.role === 'admin' || user.role === 'super_admin') && (
-                  <Card 
-                    className="cursor-pointer hover-elevate border-primary/30"
-                    onClick={() => setLocation('/')}
-                    data-testid="card-admin-dashboard"
-                  >
-                    <CardContent className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Shield className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <span className="font-medium">Admin Dashboard</span>
-                          <p className="text-xs text-muted-foreground">Access full management</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                    </CardContent>
-                  </Card>
-                )}
-
-                <Card 
-                  className="cursor-pointer hover-elevate"
-                  onClick={() => setActiveTab("settings")}
-                  data-testid="card-quick-settings"
-                >
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                        <SettingsIcon className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <span className="font-medium">Settings</span>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="schedule" className="mt-0">
-                <h2 className="text-xl font-bold mb-4">My Schedule</h2>
-                <MySchedule />
-              </TabsContent>
-
-              <TabsContent value="leave" className="mt-0 space-y-4">
-                <h2 className="text-xl font-bold mb-4">Leave Requests</h2>
-                <LeaveRequestForm />
-                
-                {leaveRequests.length > 0 && (
-                  <div className="space-y-3 mt-6">
-                    <h3 className="font-semibold text-muted-foreground">Your Requests</h3>
-                    {leaveRequests.map((request) => (
-                      <Card key={request.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium">Leave Request</span>
-                            <Badge variant={
-                              request.status === 'approved' ? 'default' :
-                              request.status === 'rejected' ? 'destructive' : 'secondary'
-                            }>
-                              {request.status}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {format(new Date(request.startDate), "MMM d")} - {format(new Date(request.endDate), "MMM d, yyyy")}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ))}
+            {activeCheckIn ? (
+              <Card className="border-green-500 bg-green-50 dark:bg-green-950/20">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      Currently Checked In
+                    </CardTitle>
+                    {activeBreak && (
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                        <Coffee className="h-3 w-3 mr-1" /> On Break
+                      </Badge>
+                    )}
                   </div>
-                )}
-              </TabsContent>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{activeCheckIn.site?.name || "Unknown Site"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span>Since {format(new Date(activeCheckIn.checkInTime), "h:mm a")}</span>
+                  </div>
 
-              <TabsContent value="notices" className="mt-0">
-                <h2 className="text-xl font-bold mb-4">Notice Board</h2>
-                <GuardNoticeBoard />
-              </TabsContent>
-
-              <TabsContent value="invoices" className="mt-0">
-                <h2 className="text-xl font-bold mb-4">My Invoices</h2>
-                <GuardInvoices />
-              </TabsContent>
-
-              <TabsContent value="settings" className="mt-0 space-y-4">
-                <h2 className="text-xl font-bold mb-4">Settings</h2>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <User className="h-5 w-5" />
-                      Profile
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Name</p>
-                        <p className="font-medium" data-testid="text-profile-name">{user.firstName} {user.lastName}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Username</p>
-                        <p className="font-medium" data-testid="text-profile-username">{user.username}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Role</p>
-                        <p className="font-medium capitalize" data-testid="text-profile-role">{user.role}</p>
-                      </div>
-                      {user.email && (
-                        <div>
-                          <p className="text-xs text-muted-foreground">Email</p>
-                          <p className="font-medium" data-testid="text-profile-email">{user.email}</p>
-                        </div>
+                  {activeBreak ? (
+                    <Button 
+                      onClick={handleEndBreak}
+                      disabled={endBreakMutation.isPending}
+                      className="w-full h-14 text-lg"
+                      variant="secondary"
+                      data-testid="button-end-break"
+                    >
+                      {endBreakMutation.isPending ? (
+                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      ) : (
+                        <Coffee className="h-5 w-5 mr-2" />
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <GuardStripeSettings />
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Shield className="h-5 w-5" />
-                      Change Password
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <form onSubmit={handleChangePassword} className="space-y-3">
-                      <div className="space-y-1">
-                        <Label htmlFor="current-password">Current Password</Label>
-                        <Input
-                          id="current-password"
-                          type="password"
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                          placeholder="Enter current password"
-                          data-testid="input-current-password"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="new-password">New Password</Label>
-                        <Input
-                          id="new-password"
-                          type="password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="Enter new password (min 6 characters)"
-                          data-testid="input-new-password"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="confirm-password">Confirm New Password</Label>
-                        <Input
-                          id="confirm-password"
-                          type="password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Confirm new password"
-                          data-testid="input-confirm-password"
-                        />
-                      </div>
+                      End Break
+                    </Button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
                       <Button 
-                        type="submit" 
-                        className="w-full"
-                        disabled={changePasswordMutation.isPending || !currentPassword || !newPassword || !confirmPassword}
-                        data-testid="button-change-password"
+                        onClick={handleStartBreak}
+                        disabled={startBreakMutation.isPending}
+                        variant="outline"
+                        className="h-14"
+                        data-testid="button-start-break"
                       >
-                        {changePasswordMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : null}
-                        Update Password
+                        {startBreakMutation.isPending ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <>
+                            <Coffee className="h-5 w-5 mr-2" />
+                            Break
+                          </>
+                        )}
                       </Button>
-                    </form>
-                  </CardContent>
-                </Card>
+                      <Button 
+                        onClick={handleCheckOut}
+                        disabled={checkOutMutation.isPending}
+                        variant="destructive"
+                        className="h-14"
+                        data-testid="button-check-out"
+                      >
+                        {checkOutMutation.isPending ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <>
+                            <LogOut className="h-5 w-5 mr-2" />
+                            Check Out
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <XCircle className="h-5 w-5 text-muted-foreground" />
+                    Not Checked In
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select Site</label>
+                    <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
+                      <SelectTrigger data-testid="select-site">
+                        <SelectValue placeholder="Choose your site" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sites.map((site) => (
+                          <SelectItem key={site.id} value={site.id}>
+                            {site.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="pt-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Your Role</label>
+                    <Select value={selectedRole} onValueChange={setSelectedRole}>
+                      <SelectTrigger data-testid="select-role">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="guard">Guard</SelectItem>
+                        <SelectItem value="supervisor">Supervisor</SelectItem>
+                        <SelectItem value="steward">Steward</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={handleLogout}
-                    data-testid="button-logout"
+                    onClick={handleCheckIn}
+                    disabled={checkInMutation.isPending || !selectedSiteId}
+                    className="w-full h-16 text-xl font-bold"
+                    data-testid="button-check-in"
                   >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
+                    {checkInMutation.isPending ? (
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    ) : (
+                      <LogIn className="h-6 w-6 mr-2" />
+                    )}
+                    CHECK IN
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card 
+              className="cursor-pointer hover-elevate"
+              onClick={() => setActiveTab("schedule")}
+              data-testid="card-quick-schedule"
+            >
+              <CardContent className="flex items-center justify-between p-4 gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="font-medium">View My Schedule</span>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+
+            <Card 
+              className="cursor-pointer hover-elevate"
+              onClick={() => setActiveTab("notices")}
+              data-testid="card-quick-notices"
+            >
+              <CardContent className="flex items-center justify-between p-4 gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <Bell className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <span className="font-medium">Notice Board</span>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+
+            <Card 
+              className="cursor-pointer hover-elevate"
+              onClick={() => setActiveTab("leave")}
+              data-testid="card-quick-leave"
+            >
+              <CardContent className="flex items-center justify-between p-4 gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <span className="font-medium">Leave Requests</span>
+                    {leaveRequests.filter(r => r.status === 'pending').length > 0 && (
+                      <Badge variant="secondary" className="ml-2 text-xs">
+                        {leaveRequests.filter(r => r.status === 'pending').length} pending
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+
+            {(user.role === 'admin' || user.role === 'super_admin') && (
+              <Card 
+                className="cursor-pointer hover-elevate border-primary/30"
+                onClick={() => setLocation('/')}
+                data-testid="card-admin-dashboard"
+              >
+                <CardContent className="flex items-center justify-between p-4 gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Shield className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <span className="font-medium">Admin Dashboard</span>
+                      <p className="text-xs text-muted-foreground">Access full management</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        );
+      case 'schedule':
+        return (
+          <div>
+            <h2 className="text-xl font-bold mb-4">My Schedule</h2>
+            <MySchedule />
+          </div>
+        );
+      case 'leave':
+        return (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold mb-4">Leave Requests</h2>
+            <LeaveRequestForm />
+            {leaveRequests.length > 0 && (
+              <div className="space-y-3 mt-6">
+                <h3 className="font-semibold text-muted-foreground">Your Requests</h3>
+                {leaveRequests.map((request) => (
+                  <Card key={request.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                        <span className="font-medium">Leave Request</span>
+                        <Badge variant={
+                          request.status === 'approved' ? 'default' :
+                          request.status === 'rejected' ? 'destructive' : 'secondary'
+                        }>
+                          {request.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {format(new Date(request.startDate), "MMM d")} - {format(new Date(request.endDate), "MMM d, yyyy")}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      case 'notices':
+        return (
+          <div>
+            <h2 className="text-xl font-bold mb-4">Notice Board</h2>
+            <GuardNoticeBoard />
+          </div>
+        );
+      case 'invoices':
+        return (
+          <div>
+            <h2 className="text-xl font-bold mb-4">My Invoices</h2>
+            <GuardInvoices />
+          </div>
+        );
+      case 'settings':
+        return (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold mb-4">Settings</h2>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Profile
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Name</p>
+                    <p className="font-medium" data-testid="text-profile-name">{user.firstName} {user.lastName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Username</p>
+                    <p className="font-medium" data-testid="text-profile-username">{user.username}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Role</p>
+                    <p className="font-medium capitalize" data-testid="text-profile-role">{user.role}</p>
+                  </div>
+                  {user.email && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Email</p>
+                      <p className="font-medium" data-testid="text-profile-email">{user.email}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <GuardStripeSettings />
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Change Password
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleChangePassword} className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="currentPwd">Current Password</Label>
+                    <Input
+                      id="currentPwd"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                      data-testid="input-current-password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="newPwd">New Password</Label>
+                    <Input
+                      id="newPwd"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      data-testid="input-new-password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPwd">Confirm New Password</Label>
+                    <Input
+                      id="confirmPwd"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      data-testid="input-confirm-password"
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    className="w-full"
+                    disabled={changePasswordMutation.isPending}
+                    data-testid="button-change-password"
+                  >
+                    {changePasswordMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
+                    Change Password
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <div className="pt-4">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={handleLogout}
+                data-testid="button-logout"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <div className="text-center py-12 text-muted-foreground">
+            <p>Select a section from the menu.</p>
+          </div>
+        );
+    }
+  };
+
+  const sidebarStyle = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3.5rem",
+  };
+
+  return (
+    <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+      <div className={`flex h-screen w-full ${hasCustomBackground ? 'bg-transparent' : 'bg-background'}`}>
+        <Sidebar collapsible="icon" className="border-r">
+          <SidebarHeader className="p-3">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <img src={guardTrackLogo} alt="GuardTrack" className="h-8 w-8 shrink-0" />
+              <div className="overflow-hidden">
+                <p className="font-bold text-sm truncate" data-testid="text-sidebar-company">{company?.name || 'GuardTrack'}</p>
+                <p className="text-xs text-muted-foreground truncate">{format(currentTime, "EEE, MMM d")}</p>
+              </div>
+            </div>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {navItems.map((item) => {
+                    const IconComponent = iconMap[item.icon] || Home;
+                    return (
+                      <SidebarMenuItem key={item.key}>
+                        <SidebarMenuButton
+                          onClick={() => setActiveTab(item.key)}
+                          isActive={activeTab === item.key}
+                          tooltip={item.label}
+                          data-testid={`nav-${item.key}`}
+                        >
+                          <IconComponent className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {(user.role === 'admin' || user.role === 'super_admin') && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Admin</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        onClick={() => setLocation('/')}
+                        tooltip="Admin Dashboard"
+                        data-testid="nav-admin-dashboard"
+                      >
+                        <Shield className="h-4 w-4" />
+                        <span>Admin Dashboard</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+          </SidebarContent>
+          <SidebarFooter className="p-3">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
+              </Avatar>
+              <div className="overflow-hidden">
+                <p className="text-sm font-medium truncate">{user.firstName} {user.lastName}</p>
+                <p className="text-xs text-muted-foreground capitalize truncate">{user.role}</p>
+              </div>
+            </div>
+          </SidebarFooter>
+        </Sidebar>
+
+        <div className="flex flex-col flex-1 min-w-0">
+          <header className="sticky top-0 z-50 bg-primary text-primary-foreground px-4 py-3 shadow-md">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <SidebarTrigger className="text-primary-foreground" data-testid="button-sidebar-toggle" />
+                <h1 className="text-lg font-bold truncate" data-testid="text-company-name">{company?.name || 'GuardTrack'}</h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="text-primary-foreground"
+                  data-testid="button-refresh-guard"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </Button>
+                <Avatar className="h-9 w-9 border-2 border-primary-foreground/30">
+                  <AvatarFallback className="bg-primary-foreground/20 text-primary-foreground text-sm">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            </div>
+          </header>
+
+          {isInstallable && !isInstalled && showInstallBanner && (
+            <div className="bg-primary/10 border-b border-primary/20 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                    <Download className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Install GuardTrack</p>
+                    <p className="text-xs text-muted-foreground">Quick access from home screen</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={installApp} data-testid="button-install-pwa">
+                    Install
+                  </Button>
+                  <Button 
+                    size="icon" 
+                    variant="ghost"
+                    onClick={() => setShowInstallBanner(false)}
+                    data-testid="button-dismiss-install"
+                  >
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
-              </TabsContent>
+              </div>
             </div>
+          )}
 
-          <TabsList 
-            className={`fixed bottom-0 left-0 right-0 h-16 grid rounded-none border-t bg-background shadow-lg z-50`}
-            style={{ gridTemplateColumns: `repeat(${(visibleTabs.length > 0 ? (visibleTabs.some(t => t.tabKey === 'settings') ? visibleTabs.length : visibleTabs.length + 1) : 5)}, 1fr)` }}
-          >
-            {visibleTabs.length > 0 ? (
-              <>
-                {visibleTabs.map((tab) => (
-                  <TabsTrigger 
-                    key={tab.id}
-                    value={tab.tabKey} 
-                    className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-                    data-testid={`tab-${tab.tabKey}`}
-                  >
-                    {getTabIcon(tab.icon)}
-                    <span className="text-xs">{tab.label}</span>
-                  </TabsTrigger>
-                ))}
-                {!visibleTabs.some(t => t.tabKey === 'settings') && (
-                  <TabsTrigger 
-                    value="settings" 
-                    className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-                    data-testid="tab-settings"
-                  >
-                    <SettingsIcon className="h-5 w-5" />
-                    <span className="text-xs">Settings</span>
-                  </TabsTrigger>
-                )}
-              </>
-            ) : (
-              <>
-                <TabsTrigger 
-                  value="home" 
-                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-                  data-testid="tab-home"
-                >
-                  <Home className="h-5 w-5" />
-                  <span className="text-xs">Home</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="schedule" 
-                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-                  data-testid="tab-schedule"
-                >
-                  <Calendar className="h-5 w-5" />
-                  <span className="text-xs">Schedule</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="leave" 
-                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-                  data-testid="tab-leave"
-                >
-                  <FileText className="h-5 w-5" />
-                  <span className="text-xs">Leave</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="notices" 
-                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-                  data-testid="tab-notices"
-                >
-                  <Bell className="h-5 w-5" />
-                  <span className="text-xs">Notices</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="settings" 
-                  className="flex flex-col gap-1 h-full data-[state=active]:bg-primary/10"
-                  data-testid="tab-settings"
-                >
-                  <SettingsIcon className="h-5 w-5" />
-                  <span className="text-xs">Settings</span>
-                </TabsTrigger>
-              </>
-            )}
-          </TabsList>
-        </Tabs>
-      </main>
-    </div>
+          <main className="flex-1 overflow-auto p-4">
+            {renderContent()}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }
