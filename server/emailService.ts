@@ -154,6 +154,8 @@ export async function sendJobShareNotificationEmail(data: JobShareNotificationDa
       rejected: 'Rejected',
       withdrawn: 'Withdrawn',
       cancelled: 'Cancelled',
+      edited: 'Updated',
+      deleted: 'Deleted',
     };
 
     const statusColors: Record<string, string> = {
@@ -161,6 +163,8 @@ export async function sendJobShareNotificationEmail(data: JobShareNotificationDa
       rejected: '#dc2626',
       withdrawn: '#ea580c',
       cancelled: '#dc2626',
+      edited: '#2563eb',
+      deleted: '#dc2626',
     };
 
     const statusLabel = statusLabels[data.status] || data.status;
@@ -176,7 +180,7 @@ export async function sendJobShareNotificationEmail(data: JobShareNotificationDa
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background-color: #f8f9fa; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
     <h2 style="color: #1e40af; margin-top: 0;">Job Share Update</h2>
-    <p>Your job share request has been <strong style="color: ${statusColor};">${statusLabel}</strong> by <strong>${data.toCompanyName}</strong>.</p>
+    <p>Your job share ${data.status === 'edited' || data.status === 'deleted' || data.status === 'cancelled' ? `from <strong>${data.fromCompanyName}</strong> has been` : 'request has been'} <strong style="color: ${statusColor};">${statusLabel}</strong>${data.status !== 'edited' && data.status !== 'deleted' && data.status !== 'cancelled' ? ` by <strong>${data.toCompanyName}</strong>` : ''}.</p>
   </div>
 
   <div style="margin-bottom: 24px;">

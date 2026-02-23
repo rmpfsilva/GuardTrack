@@ -708,23 +708,38 @@ export default function JobSharing() {
                             Partial
                           </Badge>
                         )}
-                        {share.status === 'pending' && (
+                        {(share.status === 'pending' || share.status === 'accepted') && (
                           <>
                             <Button size="icon" variant="ghost" onClick={() => openEditDialog(share)} data-testid={`button-edit-${share.id}`}>
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => {
-                                if (confirm("Are you sure you want to delete this job share?")) {
-                                  deleteMutation.mutate(share.id);
-                                }
-                              }}
-                              data-testid={`button-delete-${share.id}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            {share.status === 'accepted' ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm("Are you sure you want to cancel this job share? All future shifts will be removed and the accepting company will be notified.")) {
+                                    updateStatusMutation.mutate({ id: share.id, status: 'cancelled' });
+                                  }
+                                }}
+                                data-testid={`button-cancel-${share.id}`}
+                              >
+                                <X className="h-4 w-4 text-destructive" />
+                              </Button>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm("Are you sure you want to delete this job share?")) {
+                                    deleteMutation.mutate(share.id);
+                                  }
+                                }}
+                                data-testid={`button-delete-${share.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
                           </>
                         )}
                       </div>

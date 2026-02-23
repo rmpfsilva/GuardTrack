@@ -3192,6 +3192,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
+        if (updates.status === 'cancelled') {
+          if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId) {
+            return res.status(403).json({ message: "Only the creator company can cancel a job share" });
+          }
+          if (jobShare.status !== 'pending' && jobShare.status !== 'accepted') {
+            return res.status(400).json({ message: "Can only cancel pending or accepted job shares" });
+          }
+          sanitizedUpdates.assignedWorkers = [];
+          sanitizedUpdates.acceptedPositions = [];
+
+          if (jobShare.status === 'accepted') {
+            try {
+              const existingShifts = await storage.getAllScheduledShifts();
+              const jobShareShifts = existingShifts.filter((s: any) => s.jobShareId === id);
+              const futureShifts = jobShareShifts.filter((s: any) => {
+                const shiftStart = new Date(s.startTime);
+                return shiftStart > new Date();
+              });
+              for (const shift of futureShifts) {
+                await storage.deleteScheduledShift(shift.id);
+              }
+              console.log(`Job share ${id} cancelled by creator: ${futureShifts.length} future shifts deleted`);
+            } catch (shiftError) {
+              console.error("Error deleting shifts on cancellation:", shiftError);
+            }
+          }
+        }
+
         if (updates.status === 'rejected' && jobShare.status === 'accepted') {
           if (user.role !== 'super_admin' && jobShare.toCompanyId !== user.companyId) {
             return res.status(403).json({ message: "Only the accepting company can reject an accepted job share" });
@@ -3264,8 +3292,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId) {
           return res.status(403).json({ message: "Only the creator company can edit job share details" });
         }
-        if (jobShare.status !== 'pending') {
-          return res.status(400).json({ message: "Can only edit pending job shares" });
+        if (jobShare.status !== 'pending' && jobShare.status !== 'accepted') {
+          return res.status(400).json({ message: "Can only edit pending or accepted job shares" });
         }
 
         if (updates.positions && Array.isArray(updates.positions) && updates.positions.length > 0) {
@@ -3300,10 +3328,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const fromCompany = await storage.getCompany(jobShare.fromCompanyId);
             const toCompany = await storage.getCompany(jobShare.toCompanyId);
             const site = jobShare.siteId ? await storage.getSite(jobShare.siteId) : null;
-            
-            const adminsOfCreator = (await storage.getAllUsers()).filter(
-              u => u.companyId === jobShare.fromCompanyId && (u.role === 'admin' || u.role === 'super_admin') && u.email
-            );
 
             const posSource = (sanitizedUpdates.acceptedPositions && sanitizedUpdates.acceptedPositions.length > 0)
               ? sanitizedUpdates.acceptedPositions
@@ -3312,23 +3336,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ? posSource.map((p: any) => `${p.count} x ${p.role}`).join(', ')
               : `${jobShare.numberOfJobs} x ${jobShare.workingRole}`;
 
-            for (const admin of adminsOfCreator) {
+            const isCancelledByCreator = sanitizedUpdates.status === 'cancelled' && 
+              (user.role === 'super_admin' || jobShare.fromCompanyId === user.companyId);
+
+            if (isCancelledByCreator) {
+              const adminsOfAcceptor = (await storage.getAllUsers()).filter(
+                u => u.companyId === jobShare.toCompanyId && (u.role === 'admin' || u.role === 'super_admin') && u.email
+              );
+              for (const admin of adminsOfAcceptor) {
+                if (admin.email) {
+                  sendJobShareNotificationEmail({
+                    toEmail: admin.email,
+                    fromCompanyName: fromCompany?.name || 'Unknown',
+                    toCompanyName: toCompany?.name || 'Unknown',
+                    siteName: site?.name || 'Unknown Site',
+                    status: 'cancelled',
+                    startDate: new Date(jobShare.startDate).toLocaleDateString('en-GB'),
+                    endDate: new Date(jobShare.endDate).toLocaleDateString('en-GB'),
+                    positions: positionsText,
+                    notes: updates.reviewNotes || `Job share cancelled by ${fromCompany?.name || 'the offering company'}`,
+                  }).catch(err => console.error(`[Job Share Email] Failed to notify ${admin.email}:`, err.message));
+                }
+              }
+            } else {
+              const adminsOfCreator = (await storage.getAllUsers()).filter(
+                u => u.companyId === jobShare.fromCompanyId && (u.role === 'admin' || u.role === 'super_admin') && u.email
+              );
+              for (const admin of adminsOfCreator) {
+                if (admin.email) {
+                  sendJobShareNotificationEmail({
+                    toEmail: admin.email,
+                    fromCompanyName: fromCompany?.name || 'Unknown',
+                    toCompanyName: toCompany?.name || 'Unknown',
+                    siteName: site?.name || 'Unknown Site',
+                    status: sanitizedUpdates.status,
+                    startDate: new Date(jobShare.startDate).toLocaleDateString('en-GB'),
+                    endDate: new Date(jobShare.endDate).toLocaleDateString('en-GB'),
+                    positions: positionsText,
+                    notes: updates.reviewNotes || undefined,
+                  }).catch(err => console.error(`[Job Share Email] Failed to notify ${admin.email}:`, err.message));
+                }
+              }
+            }
+          } catch (err: any) {
+            console.error('[Job Share Email] Error preparing notifications:', err.message);
+          }
+        })();
+      }
+
+      if (!sanitizedUpdates.status && jobShare.status === 'accepted' && jobShare.toCompanyId &&
+          (sanitizedUpdates.positions || sanitizedUpdates.siteId || sanitizedUpdates.startDate || sanitizedUpdates.endDate || sanitizedUpdates.requirements !== undefined)) {
+        (async () => {
+          try {
+            const fromCompany = await storage.getCompany(jobShare.fromCompanyId);
+            const toCompany = await storage.getCompany(jobShare.toCompanyId);
+            const site = sanitizedUpdates.siteId 
+              ? await storage.getSite(sanitizedUpdates.siteId) 
+              : (jobShare.siteId ? await storage.getSite(jobShare.siteId) : null);
+
+            const posSource = sanitizedUpdates.positions || (jobShare.positions as any[] | null);
+            const positionsText = posSource 
+              ? posSource.map((p: any) => `${p.count} x ${p.role}`).join(', ')
+              : `${jobShare.numberOfJobs} x ${jobShare.workingRole}`;
+
+            const adminsOfAcceptor = (await storage.getAllUsers()).filter(
+              u => u.companyId === jobShare.toCompanyId && (u.role === 'admin' || u.role === 'super_admin') && u.email
+            );
+            for (const admin of adminsOfAcceptor) {
               if (admin.email) {
                 sendJobShareNotificationEmail({
                   toEmail: admin.email,
                   fromCompanyName: fromCompany?.name || 'Unknown',
                   toCompanyName: toCompany?.name || 'Unknown',
                   siteName: site?.name || 'Unknown Site',
-                  status: sanitizedUpdates.status,
-                  startDate: new Date(jobShare.startDate).toLocaleDateString('en-GB'),
-                  endDate: new Date(jobShare.endDate).toLocaleDateString('en-GB'),
+                  status: 'edited',
+                  startDate: new Date(sanitizedUpdates.startDate || jobShare.startDate).toLocaleDateString('en-GB'),
+                  endDate: new Date(sanitizedUpdates.endDate || jobShare.endDate).toLocaleDateString('en-GB'),
                   positions: positionsText,
-                  notes: updates.reviewNotes || undefined,
+                  notes: `Job share details have been updated by ${fromCompany?.name || 'the offering company'}`,
                 }).catch(err => console.error(`[Job Share Email] Failed to notify ${admin.email}:`, err.message));
               }
             }
           } catch (err: any) {
-            console.error('[Job Share Email] Error preparing notifications:', err.message);
+            console.error('[Job Share Email] Error preparing edit notifications:', err.message);
           }
         })();
       }
@@ -3590,6 +3680,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId) {
         return res.status(403).json({ message: "Only the creator company can delete job shares" });
+      }
+
+      if (jobShare.status === 'accepted') {
+        try {
+          const existingShifts = await storage.getAllScheduledShifts();
+          const jobShareShifts = existingShifts.filter((s: any) => s.jobShareId === id);
+          const futureShifts = jobShareShifts.filter((s: any) => {
+            const shiftStart = new Date(s.startTime);
+            return shiftStart > new Date();
+          });
+          for (const shift of futureShifts) {
+            await storage.deleteScheduledShift(shift.id);
+          }
+          console.log(`Job share ${id} deleted: ${futureShifts.length} future shifts removed`);
+        } catch (shiftError) {
+          console.error("Error deleting shifts on job share deletion:", shiftError);
+        }
+      }
+
+      if (jobShare.toCompanyId) {
+        (async () => {
+          try {
+            const fromCompany = await storage.getCompany(jobShare.fromCompanyId);
+            const toCompany = await storage.getCompany(jobShare.toCompanyId);
+            const site = jobShare.siteId ? await storage.getSite(jobShare.siteId) : null;
+            const posSource = jobShare.positions as any[] | null;
+            const positionsText = posSource 
+              ? posSource.map((p: any) => `${p.count} x ${p.role}`).join(', ')
+              : `${jobShare.numberOfJobs} x ${jobShare.workingRole}`;
+
+            const adminsOfAcceptor = (await storage.getAllUsers()).filter(
+              u => u.companyId === jobShare.toCompanyId && (u.role === 'admin' || u.role === 'super_admin') && u.email
+            );
+            for (const admin of adminsOfAcceptor) {
+              if (admin.email) {
+                sendJobShareNotificationEmail({
+                  toEmail: admin.email,
+                  fromCompanyName: fromCompany?.name || 'Unknown',
+                  toCompanyName: toCompany?.name || 'Unknown',
+                  siteName: site?.name || 'Unknown Site',
+                  status: 'deleted',
+                  startDate: new Date(jobShare.startDate).toLocaleDateString('en-GB'),
+                  endDate: new Date(jobShare.endDate).toLocaleDateString('en-GB'),
+                  positions: positionsText,
+                  notes: `Job share has been removed by ${fromCompany?.name || 'the offering company'}`,
+                }).catch(err => console.error(`[Job Share Email] Failed to notify ${admin.email}:`, err.message));
+              }
+            }
+          } catch (err: any) {
+            console.error('[Job Share Email] Error preparing delete notifications:', err.message);
+          }
+        })();
       }
 
       await storage.deleteJobShare(id);
