@@ -17,29 +17,13 @@ import type { JobShareWithDetails, Company, Site, JobSharePosition, JobShareRole
 import { JOB_SHARE_ROLES } from "@shared/schema";
 import { UserPlus, Phone, Mail, Shield } from "lucide-react";
 
-const ROLE_LABELS: Record<string, string> = {
-  sia: "SIA",
-  steward: "Steward",
-  supervisor: "Supervisor",
-  response: "Response",
-  dog_handler: "Dog Handler",
-  call_out: "Call Out",
-  guard: "SIA",
-};
-
-const normalizeLegacyRole = (role: string): JobShareRole => {
-  if (role === 'guard') return 'sia';
-  if (JOB_SHARE_ROLES.includes(role as JobShareRole)) return role as JobShareRole;
-  return 'sia';
-};
-
-interface PositionRow {
-  role: JobShareRole;
-  count: number;
-  hourlyRate: string;
-}
-
-const emptyPosition = (): PositionRow => ({ role: "sia", count: 1, hourlyRate: "15.00" });
+import { ROLE_LABELS, normalizeLegacyRole, emptyPosition, getPositionsForShare, getTotalPositions, type PositionRow } from "./job-share/shared";
+import { PositionsDisplay } from "./job-share/PositionsDisplay";
+import { AssignedWorkersDisplay } from "./job-share/AssignedWorkersDisplay";
+import { PositionsEditor } from "./job-share/PositionsEditor";
+import { JobShareProgress } from "./job-share/JobShareProgress";
+import { JobShareDeadline, isDeadlineExpired } from "./job-share/JobShareDeadline";
+import { JobShareMessages } from "./job-share/JobShareMessages";
 
 export default function JobSharing() {
   const { user } = useAuth();
@@ -75,6 +59,8 @@ export default function JobSharing() {
     requirements: "",
   });
   const [positions, setPositions] = useState<PositionRow[]>([emptyPosition()]);
+  const [deadlineOption, setDeadlineOption] = useState<string>("none");
+  const [customDeadlineHours, setCustomDeadlineHours] = useState<string>("24");
 
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ['/api/companies/for-job-sharing'],
@@ -250,6 +236,8 @@ export default function JobSharing() {
   const resetForm = () => {
     setFormData({ toCompanyId: "", siteId: "", startDate: "", endDate: "", requirements: "" });
     setPositions([emptyPosition()]);
+    setDeadlineOption("none");
+    setCustomDeadlineHours("24");
   };
 
   const addPosition = () => {
@@ -265,6 +253,21 @@ export default function JobSharing() {
     setPositions(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
   };
 
+  const computeDeadline = (): string | null => {
+    if (deadlineOption === 'none') return null;
+    const now = new Date();
+    let hours = 0;
+    switch (deadlineOption) {
+      case '2h': hours = 2; break;
+      case '6h': hours = 6; break;
+      case '12h': hours = 12; break;
+      case '24h': hours = 24; break;
+      case 'custom': hours = parseFloat(customDeadlineHours) || 24; break;
+    }
+    now.setTime(now.getTime() + hours * 60 * 60 * 1000);
+    return now.toISOString();
+  };
+
   const handleCreate = () => {
     if (!formData.toCompanyId || !formData.siteId || !formData.startDate || !formData.endDate) {
       toast({ title: "Validation Error", description: "Please fill in all required fields", variant: "destructive" });
@@ -274,7 +277,8 @@ export default function JobSharing() {
       toast({ title: "Validation Error", description: "Each position needs a valid role, count, and rate", variant: "destructive" });
       return;
     }
-    createMutation.mutate({ ...formData, positions });
+    const deadline = computeDeadline();
+    createMutation.mutate({ ...formData, positions, responseDeadline: deadline });
   };
 
   const openEditDialog = (share: JobShareWithDetails) => {
@@ -446,123 +450,6 @@ export default function JobSharing() {
     }
   };
 
-  const getPositionsForShare = (share: JobShareWithDetails): JobSharePosition[] => {
-    const sharePositions = share.positions as JobSharePosition[] | null;
-    if (sharePositions && sharePositions.length > 0) {
-      return sharePositions.map(p => ({ ...p, role: normalizeLegacyRole(p.role) }));
-    }
-    return [{ role: normalizeLegacyRole(share.workingRole || 'sia'), count: Number(share.numberOfJobs), hourlyRate: String(share.hourlyRate) }];
-  };
-
-  const getTotalPositions = (positions: JobSharePosition[]) => {
-    return positions.reduce((sum, p) => sum + Number(p.count), 0);
-  };
-
-  const positionsEditorJSX = (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <Label className="text-sm font-medium">Positions</Label>
-        <Button type="button" variant="outline" size="sm" onClick={addPosition} data-testid="button-add-position">
-          <Plus className="h-3 w-3 mr-1" />Add Position
-        </Button>
-      </div>
-      {positions.map((pos, index) => (
-        <div key={index} className="flex items-end gap-2 p-3 rounded-md border bg-muted/30" data-testid={`position-row-${index}`}>
-          <div className="flex-1 min-w-0">
-            <Label className="text-xs text-muted-foreground">Role</Label>
-            <Select value={pos.role} onValueChange={(v) => updatePosition(index, 'role', v)}>
-              <SelectTrigger data-testid={`select-position-role-${index}`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {JOB_SHARE_ROLES.map(role => (
-                  <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-20">
-            <Label className="text-xs text-muted-foreground">Count</Label>
-            <Input
-              type="number"
-              min="1"
-              value={pos.count}
-              onChange={(e) => updatePosition(index, 'count', parseInt(e.target.value) || 1)}
-              data-testid={`input-position-count-${index}`}
-            />
-          </div>
-          <div className="w-28">
-            <Label className="text-xs text-muted-foreground">Rate (£/hr)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={pos.hourlyRate}
-              onChange={(e) => updatePosition(index, 'hourlyRate', e.target.value)}
-              data-testid={`input-position-rate-${index}`}
-            />
-          </div>
-          {positions.length > 1 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => removePosition(index)}
-              data-testid={`button-remove-position-${index}`}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          )}
-        </div>
-      ))}
-      <div className="text-sm text-muted-foreground">
-        Total: {positions.reduce((sum, p) => sum + (p.count || 0), 0)} positions across {positions.length} role{positions.length > 1 ? 's' : ''}
-      </div>
-    </div>
-  );
-
-  const AssignedWorkersDisplay = ({ workers }: { workers: JobShareAssignedWorker[] }) => (
-    <div className="space-y-2">
-      {workers.map((worker, index) => (
-        <div key={index} className="flex items-center justify-between p-2 rounded-md bg-muted/40" data-testid={`assigned-worker-${index}`}>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium">{worker.name}</span>
-            <Badge variant="secondary" className="text-xs">{ROLE_LABELS[worker.role] || worker.role}</Badge>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            {worker.phone && (
-              <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{worker.phone}</span>
-            )}
-            {worker.email && (
-              <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{worker.email}</span>
-            )}
-            {worker.siaLicense && (
-              <span className="flex items-center gap-1"><Shield className="h-3 w-3" />{worker.siaLicense}</span>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
-  const PositionsDisplay = ({ positions: displayPositions }: { positions: JobSharePosition[] }) => (
-    <div className="space-y-2">
-      {displayPositions.map((pos, index) => (
-        <div key={index} className="flex items-center justify-between p-2 rounded-md bg-muted/40" data-testid={`display-position-${index}`}>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-xs">{ROLE_LABELS[pos.role] || pos.role}</Badge>
-            <span className="text-sm font-medium flex items-center gap-1">
-              <Users className="h-3 w-3" />{pos.count}
-            </span>
-          </div>
-          <span className="text-sm font-semibold flex items-center gap-0.5">
-            <PoundSterling className="h-3 w-3" />{pos.hourlyRate}/hr
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -633,7 +520,41 @@ export default function JobSharing() {
                 </div>
               </div>
 
-              {positionsEditorJSX}
+              <PositionsEditor
+                positions={positions}
+                onAdd={addPosition}
+                onRemove={removePosition}
+                onUpdate={updatePosition}
+              />
+
+              <div>
+                <Label>Response Deadline (Optional)</Label>
+                <Select value={deadlineOption} onValueChange={setDeadlineOption}>
+                  <SelectTrigger data-testid="select-deadline">
+                    <SelectValue placeholder="No deadline" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No deadline</SelectItem>
+                    <SelectItem value="2h">2 hours</SelectItem>
+                    <SelectItem value="6h">6 hours</SelectItem>
+                    <SelectItem value="12h">12 hours</SelectItem>
+                    <SelectItem value="24h">24 hours</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+                {deadlineOption === 'custom' && (
+                  <div className="mt-2">
+                    <Label className="text-xs text-muted-foreground">Hours from now</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={customDeadlineHours}
+                      onChange={(e) => setCustomDeadlineHours(e.target.value)}
+                      data-testid="input-custom-deadline"
+                    />
+                  </div>
+                )}
+              </div>
 
               <div>
                 <Label>Requirements (Optional)</Label>
@@ -701,13 +622,14 @@ export default function JobSharing() {
                           {share.site?.name || "Unknown Site"}
                         </CardDescription>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {getStatusBadge(share.status)}
                         {isPartial && (
                           <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20" data-testid={`badge-partial-${share.id}`}>
                             Partial
                           </Badge>
                         )}
+                        <JobShareDeadline deadline={(share as any).responseDeadline} status={share.status} />
                         {(share.status === 'pending' || share.status === 'accepted') && (
                           <>
                             <Button size="icon" variant="ghost" onClick={() => openEditDialog(share)} data-testid={`button-edit-${share.id}`}>
@@ -746,6 +668,11 @@ export default function JobSharing() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    <JobShareProgress
+                      positions={sharePositions}
+                      acceptedPositions={accepted}
+                      status={share.status}
+                    />
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">{isPartial ? "Accepted / Requested" : "Total Positions"}</p>
@@ -794,6 +721,7 @@ export default function JobSharing() {
                         <AssignedWorkersDisplay workers={share.assignedWorkers} />
                       </div>
                     )}
+                    <JobShareMessages jobShareId={share.id} />
                   </CardContent>
                 </Card>
               );
@@ -815,8 +743,9 @@ export default function JobSharing() {
               const sharePositions = getPositionsForShare(share);
               const accepted = share.acceptedPositions as JobSharePosition[] | null;
               const isPartial = accepted && accepted.length > 0 && getTotalPositions(accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))) < getTotalPositions(sharePositions);
+              const expired = isDeadlineExpired((share as any).responseDeadline);
               return (
-                <Card key={share.id} data-testid={`received-share-${share.id}`}>
+                <Card key={share.id} className={expired && share.status === 'pending' ? 'border-red-500/30 opacity-80' : ''} data-testid={`received-share-${share.id}`}>
                   <CardHeader>
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -836,10 +765,16 @@ export default function JobSharing() {
                             Partial
                           </Badge>
                         )}
+                        <JobShareDeadline deadline={(share as any).responseDeadline} status={share.status} />
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    <JobShareProgress
+                      positions={sharePositions}
+                      acceptedPositions={accepted}
+                      status={share.status}
+                    />
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">{isPartial ? "Accepted / Requested" : "Total Positions"}</p>
@@ -877,23 +812,29 @@ export default function JobSharing() {
 
                     {share.status === 'pending' && (
                       <div className="flex gap-2 pt-2 border-t">
-                        <Button
-                          size="sm"
-                          onClick={() => openAcceptDialog(share)}
-                          disabled={updateStatusMutation.isPending}
-                          data-testid={`button-accept-${share.id}`}
-                        >
-                          <Check className="h-4 w-4 mr-1" />Accept
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => updateStatusMutation.mutate({ id: share.id, status: 'rejected' })}
-                          disabled={updateStatusMutation.isPending}
-                          data-testid={`button-reject-${share.id}`}
-                        >
-                          <X className="h-4 w-4 mr-1" />Reject
-                        </Button>
+                        {expired ? (
+                          <p className="text-sm text-red-600 dark:text-red-400 font-medium">Response window closed</p>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => openAcceptDialog(share)}
+                              disabled={updateStatusMutation.isPending}
+                              data-testid={`button-accept-${share.id}`}
+                            >
+                              <Check className="h-4 w-4 mr-1" />Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => updateStatusMutation.mutate({ id: share.id, status: 'rejected' })}
+                              disabled={updateStatusMutation.isPending}
+                              data-testid={`button-reject-${share.id}`}
+                            >
+                              <X className="h-4 w-4 mr-1" />Reject
+                            </Button>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -948,6 +889,7 @@ export default function JobSharing() {
                         </Button>
                       </div>
                     )}
+                    <JobShareMessages jobShareId={share.id} />
                   </CardContent>
                 </Card>
               );
@@ -1144,7 +1086,12 @@ export default function JobSharing() {
               </div>
             </div>
 
-            {positionsEditorJSX}
+            <PositionsEditor
+              positions={positions}
+              onAdd={addPosition}
+              onRemove={removePosition}
+              onUpdate={updatePosition}
+            />
 
             <div>
               <Label>Requirements (Optional)</Label>

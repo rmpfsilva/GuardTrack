@@ -16,7 +16,58 @@ import { z } from "zod";
 import { insertCompanyPartnershipSchema } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { CompanyPartnershipWithDetails, Company } from "@shared/schema";
-import { Search, Send, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react";
+import { Search, Send, CheckCircle, XCircle, Clock, Trash2, BarChart3, TrendingUp, Timer } from "lucide-react";
+
+interface PartnerMetrics {
+  totalShares: number;
+  accepted: number;
+  rejected: number;
+  acceptanceRate: number;
+  avgResponseTimeHours: number | null;
+}
+
+function PartnershipMetrics({ partnershipId }: { partnershipId: string }) {
+  const { data: metrics, isLoading } = useQuery<PartnerMetrics>({
+    queryKey: ['/api/partnerships', partnershipId, 'metrics'],
+    queryFn: async () => {
+      const res = await fetch(`/api/partnerships/${partnershipId}/metrics`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch metrics');
+      return res.json();
+    },
+  });
+
+  if (isLoading || !metrics) return null;
+  if (metrics.totalShares === 0) {
+    return (
+      <div className="text-xs text-muted-foreground italic pt-1" data-testid={`metrics-empty-${partnershipId}`}>
+        No job shares exchanged yet
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2" data-testid={`metrics-${partnershipId}`}>
+      <div className="space-y-0.5">
+        <p className="text-xs text-muted-foreground flex items-center gap-1"><BarChart3 className="h-3 w-3" />Total Shares</p>
+        <p className="text-sm font-semibold" data-testid={`metric-total-${partnershipId}`}>{metrics.totalShares}</p>
+      </div>
+      <div className="space-y-0.5">
+        <p className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle className="h-3 w-3" />Accepted</p>
+        <p className="text-sm font-semibold" data-testid={`metric-accepted-${partnershipId}`}>{metrics.accepted}</p>
+      </div>
+      <div className="space-y-0.5">
+        <p className="text-xs text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3 w-3" />Acceptance Rate</p>
+        <p className="text-sm font-semibold" data-testid={`metric-rate-${partnershipId}`}>{metrics.acceptanceRate}%</p>
+      </div>
+      <div className="space-y-0.5">
+        <p className="text-xs text-muted-foreground flex items-center gap-1"><Timer className="h-3 w-3" />Avg Response</p>
+        <p className="text-sm font-semibold" data-testid={`metric-response-${partnershipId}`}>
+          {metrics.avgResponseTimeHours !== null ? `${metrics.avgResponseTimeHours}h` : 'N/A'}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 const partnershipFormSchema = insertCompanyPartnershipSchema.omit({
   toCompanyId: true,
@@ -430,6 +481,9 @@ export default function CompanyPartnerships() {
                     </div>
                   </div>
                 </CardHeader>
+                <CardContent>
+                  <PartnershipMetrics partnershipId={partnership.id} />
+                </CardContent>
               </Card>
             ))
           )}

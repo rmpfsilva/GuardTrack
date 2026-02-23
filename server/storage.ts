@@ -101,6 +101,8 @@ import {
   type GuardAppTab,
   type InsertGuardAppTab,
   type UpdateGuardAppTab,
+  jobShareMessages,
+  type JobShareMessage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
@@ -291,6 +293,10 @@ export interface IStorage {
   createJobShare(jobShare: InsertJobShare): Promise<JobShare>;
   updateJobShare(id: string, updates: UpdateJobShare): Promise<JobShare>;
   deleteJobShare(id: string): Promise<void>;
+
+  // Job share message operations
+  getJobShareMessages(jobShareId: string): Promise<any[]>;
+  createJobShareMessage(data: { jobShareId: string; senderCompanyId: string; senderUserId: string; message: string }): Promise<any>;
 
   // Trial management operations
   setCompanyTrial(companyId: string, trialDays: number): Promise<Company>;
@@ -3013,6 +3019,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobShare(id: string): Promise<void> {
     await db.delete(jobShares).where(eq(jobShares.id, id));
+  }
+
+  async getJobShareMessages(jobShareId: string): Promise<any[]> {
+    const messages = await db
+      .select({
+        id: jobShareMessages.id,
+        jobShareId: jobShareMessages.jobShareId,
+        senderCompanyId: jobShareMessages.senderCompanyId,
+        senderUserId: jobShareMessages.senderUserId,
+        message: jobShareMessages.message,
+        createdAt: jobShareMessages.createdAt,
+        senderCompanyName: companies.name,
+        senderUserName: users.username,
+        senderFirstName: users.firstName,
+        senderLastName: users.lastName,
+      })
+      .from(jobShareMessages)
+      .leftJoin(companies, eq(jobShareMessages.senderCompanyId, companies.id))
+      .leftJoin(users, eq(jobShareMessages.senderUserId, users.id))
+      .where(eq(jobShareMessages.jobShareId, jobShareId))
+      .orderBy(asc(jobShareMessages.createdAt));
+    return messages;
+  }
+
+  async createJobShareMessage(data: { jobShareId: string; senderCompanyId: string; senderUserId: string; message: string }): Promise<any> {
+    const [msg] = await db.insert(jobShareMessages).values(data).returning();
+    return msg;
   }
 
   // Trial management operations

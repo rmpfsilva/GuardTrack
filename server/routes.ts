@@ -3119,7 +3119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const totalJobs = sanitizedPositions.reduce((sum: number, p: any) => sum + p.count, 0);
       
-      const jobShareData = {
+      const jobShareData: any = {
         toCompanyId: req.body.toCompanyId,
         siteId: req.body.siteId,
         fromCompanyId: user.companyId,
@@ -3132,6 +3132,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         workingRole: sanitizedPositions[0].role,
         hourlyRate: sanitizedPositions[0].hourlyRate,
       };
+
+      if (req.body.responseDeadline) {
+        jobShareData.responseDeadline = new Date(req.body.responseDeadline);
+      }
 
       const jobShare = await storage.createJobShare(jobShareData);
       res.status(201).json(jobShare);
@@ -3244,6 +3248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (updates.status === 'accepted') {
+          sanitizedUpdates.acceptedAt = new Date();
           if (updates.assignedWorkers && Array.isArray(updates.assignedWorkers)) {
             const validRoles = JOB_SHARE_ROLES as readonly string[];
             const cleanWorkers = updates.assignedWorkers
@@ -3318,6 +3323,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (updates.startDate) sanitizedUpdates.startDate = new Date(updates.startDate);
         if (updates.endDate) sanitizedUpdates.endDate = new Date(updates.endDate);
         if (updates.requirements !== undefined) sanitizedUpdates.requirements = updates.requirements || null;
+        if (updates.responseDeadline !== undefined) {
+          sanitizedUpdates.responseDeadline = updates.responseDeadline ? new Date(updates.responseDeadline) : null;
+        }
       }
 
       const updatedJobShare = await storage.updateJobShare(id, sanitizedUpdates);
@@ -3739,6 +3747,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting job share:", error);
       res.status(400).json({ message: error.message || "Failed to delete job share" });
+    }
+  });
+
+  // Job Share Messages Routes
+  app.get('/api/job-shares/:id/messages', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      const jobShare = await storage.getJobShare(id);
+      if (!jobShare) {
+        return res.status(404).json({ message: "Job share not found" });
+      }
+
+      if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId && jobShare.toCompanyId !== user.companyId) {
+        return res.status(403).json({ message: "Only involved companies can view messages" });
+      }
+
+      const messages = await storage.getJobShareMessages(id);
+      res.json(messages);
+    } catch (error: any) {
+      console.error("Error fetching job share messages:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch messages" });
+    }
+  });
+
+  app.post('/api/job-shares/:id/messages', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+      const { message } = req.body;
+
+      if (!message || !message.trim()) {
+        return res.status(400).json({ message: "Message cannot be empty" });
+      }
+
+      const jobShare = await storage.getJobShare(id);
+      if (!jobShare) {
+        return res.status(404).json({ message: "Job share not found" });
+      }
+
+      if (user.role !== 'super_admin' && jobShare.fromCompanyId !== user.companyId && jobShare.toCompanyId !== user.companyId) {
+        return res.status(403).json({ message: "Only involved companies can send messages" });
+      }
+
+      const msg = await storage.createJobShareMessage({
+        jobShareId: id,
+        senderCompanyId: user.companyId,
+        senderUserId: user.id,
+        message: message.trim(),
+      });
+
+      res.status(201).json(msg);
+    } catch (error: any) {
+      console.error("Error creating job share message:", error);
+      res.status(500).json({ message: error.message || "Failed to send message" });
+    }
+  });
+
+  // Partner Performance Metrics Route
+  app.get('/api/partnerships/:id/metrics', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      const partnership = await storage.getPartnership(id);
+      if (!partnership) {
+        return res.status(404).json({ message: "Partnership not found" });
+      }
+
+      if (user.role !== 'super_admin' && partnership.fromCompanyId !== user.companyId && partnership.toCompanyId !== user.companyId) {
+        return res.status(403).json({ message: "Only involved companies can view metrics" });
+      }
+
+      const allShares = await storage.getAllJobShares();
+      const partnerShares = allShares.filter(s =>
+        (s.fromCompanyId === partnership.fromCompanyId && s.toCompanyId === partnership.toCompanyId) ||
+        (s.fromCompanyId === partnership.toCompanyId && s.toCompanyId === partnership.fromCompanyId)
+      );
+
+      const totalShares = partnerShares.length;
+      const acceptedShares = partnerShares.filter(s => s.status === 'accepted');
+      const rejectedShares = partnerShares.filter(s => s.status === 'rejected');
+      const acceptanceRate = totalShares > 0 ? Math.round((acceptedShares.length / totalShares) * 100) : 0;
+
+      let avgResponseTimeHours: number | null = null;
+      const sharesWithResponseTime = acceptedShares.filter(s => s.acceptedAt && s.createdAt);
+      if (sharesWithResponseTime.length > 0) {
+        const totalMs = sharesWithResponseTime.reduce((sum, s) => {
+          const created = new Date(s.createdAt!).getTime();
+          const accepted = new Date(s.acceptedAt!).getTime();
+          return sum + (accepted - created);
+        }, 0);
+        avgResponseTimeHours = Math.round((totalMs / sharesWithResponseTime.length) / (1000 * 60 * 60) * 10) / 10;
+      }
+
+      res.json({
+        totalShares,
+        accepted: acceptedShares.length,
+        rejected: rejectedShares.length,
+        acceptanceRate,
+        avgResponseTimeHours,
+      });
+    } catch (error: any) {
+      console.error("Error fetching partnership metrics:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch metrics" });
     }
   });
 

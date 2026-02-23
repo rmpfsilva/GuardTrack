@@ -403,8 +403,19 @@ export const jobShares = pgTable("job_shares", {
   reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
   reviewedAt: timestamp("reviewed_at"),
   reviewNotes: text("review_notes"),
+  responseDeadline: timestamp("response_deadline"),
+  acceptedAt: timestamp("accepted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const jobShareMessages = pgTable("job_share_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobShareId: varchar("job_share_id").notNull().references(() => jobShares.id, { onDelete: 'cascade' }),
+  senderCompanyId: varchar("sender_company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  senderUserId: varchar("sender_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Define relations
@@ -975,6 +986,12 @@ export const insertJobShareSchema = createInsertSchema(jobShares).omit({
   reviewedBy: true,
   reviewedAt: true,
   reviewNotes: true,
+  acceptedAt: true,
+});
+
+export const insertJobShareMessageSchema = createInsertSchema(jobShareMessages).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const updateJobShareSchema = createInsertSchema(jobShares).omit({
@@ -1228,6 +1245,9 @@ export type UpdateCompanyPartnership = z.infer<typeof updateCompanyPartnershipSc
 export type JobShare = typeof jobShares.$inferSelect;
 export type InsertJobShare = z.infer<typeof insertJobShareSchema>;
 export type UpdateJobShare = z.infer<typeof updateJobShareSchema>;
+
+export type JobShareMessage = typeof jobShareMessages.$inferSelect;
+export type InsertJobShareMessage = z.infer<typeof insertJobShareMessageSchema>;
 
 export type SubscriptionPayment = typeof subscriptionPayments.$inferSelect;
 export type InsertSubscriptionPayment = z.infer<typeof insertSubscriptionPaymentSchema>;
