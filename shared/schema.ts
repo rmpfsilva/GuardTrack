@@ -78,6 +78,7 @@ export const companies = pgTable("companies", {
   planId: varchar("plan_id").references(() => subscriptionPlans.id, { onDelete: 'set null' }), // Reference to subscription plan
   subscriptionStatus: varchar("subscription_status").default('active'), // 'trial' | 'active' | 'expired' | 'suspended'
   billingStartDate: timestamp("billing_start_date"),
+  stripeAccountId: varchar("stripe_account_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -97,6 +98,7 @@ export const users = pgTable("users", {
   siaExpiryDate: timestamp("sia_expiry_date"),
   stewardId: varchar("steward_id"),
   stewardIdExpiryDate: timestamp("steward_id_expiry_date"),
+  stripeConnectedAccountId: varchar("stripe_connected_account_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -200,6 +202,7 @@ export const scheduledShifts = pgTable("scheduled_shifts", {
   isActive: boolean("is_active").notNull().default(true),
   notes: text("notes"),
   jobShareId: varchar("job_share_id").references(() => jobShares.id, { onDelete: 'set null' }),
+  billingStatus: varchar("billing_status").notNull().default('not_invoiced'),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1126,6 +1129,34 @@ export const updateErrorLogSchema = createInsertSchema(errorLogs).omit({
   createdAt: true,
 }).partial();
 
+// Staff Invoices - guards create invoices from completed shifts
+export const staffInvoices = pgTable("staff_invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  guardUserId: varchar("guard_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  invoiceNumber: varchar("invoice_number").notNull(),
+  totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status").notNull().default('submitted'),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id"),
+  rejectionReason: text("rejection_reason"),
+  approvedBy: varchar("approved_by").references(() => users.id, { onDelete: 'set null' }),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Invoice shifts junction - links staff invoices to scheduled shifts
+export const invoiceShifts = pgTable("invoice_shifts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull().references(() => staffInvoices.id, { onDelete: 'cascade' }),
+  shiftId: varchar("shift_id").notNull().references(() => scheduledShifts.id, { onDelete: 'cascade' }),
+  checkInId: varchar("check_in_id").references(() => checkIns.id, { onDelete: 'set null' }),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  hours: numeric("hours", { precision: 6, scale: 2 }).notNull(),
+  rate: numeric("rate", { precision: 10, scale: 2 }).notNull(),
+});
+
 // Guard App Tabs - Configurable navigation tabs for the guard mobile app
 // Platform-wide guard app tabs configuration (super_admin only)
 export const guardAppTabs = pgTable("guard_app_tabs", {
@@ -1153,6 +1184,26 @@ export const updateGuardAppTabSchema = createInsertSchema(guardAppTabs).omit({
   createdAt: true,
   updatedAt: true,
 }).partial();
+
+export const insertStaffInvoiceSchema = createInsertSchema(staffInvoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  stripePaymentIntentId: true,
+  approvedBy: true,
+  approvedAt: true,
+  paidAt: true,
+});
+
+export const updateStaffInvoiceSchema = createInsertSchema(staffInvoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export const insertInvoiceShiftSchema = createInsertSchema(invoiceShifts).omit({
+  id: true,
+});
 
 // TypeScript types
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
@@ -1332,4 +1383,33 @@ export type ErrorLogWithDetails = ErrorLog & {
   company?: Company;
   user?: User;
   resolver?: User;
+};
+
+export type StaffInvoice = typeof staffInvoices.$inferSelect;
+export type InsertStaffInvoice = z.infer<typeof insertStaffInvoiceSchema>;
+export type UpdateStaffInvoice = z.infer<typeof updateStaffInvoiceSchema>;
+
+export type InvoiceShift = typeof invoiceShifts.$inferSelect;
+export type InsertInvoiceShift = z.infer<typeof insertInvoiceShiftSchema>;
+
+export type StaffInvoiceWithDetails = StaffInvoice & {
+  guard: User;
+  company: Company;
+  approver?: User;
+  shifts: (InvoiceShift & { shift: ScheduledShift; site?: Site })[];
+};
+
+export type InvoicableShift = {
+  shiftId: string;
+  checkInId: string;
+  siteName: string;
+  siteId: string;
+  startTime: Date;
+  endTime: Date;
+  checkInTime: Date;
+  checkOutTime: Date;
+  hours: number;
+  rate: string;
+  amount: string;
+  jobTitle: string;
 };

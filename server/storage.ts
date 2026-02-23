@@ -103,6 +103,10 @@ import {
   type UpdateGuardAppTab,
   jobShareMessages,
   type JobShareMessage,
+  staffInvoices,
+  invoiceShifts,
+  type StaffInvoice,
+  type InvoiceShift,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
@@ -340,6 +344,17 @@ export interface IStorage {
   createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
   updateSubscriptionPlan(id: string, updates: UpdateSubscriptionPlan): Promise<SubscriptionPlan>;
   deleteSubscriptionPlan(id: string): Promise<void>;
+
+  // Staff invoice operations
+  getStaffInvoices(companyId: string, filters?: { guardUserId?: string; status?: string }): Promise<any[]>;
+  getStaffInvoiceById(id: string): Promise<any | undefined>;
+  createStaffInvoice(data: any): Promise<any>;
+  updateStaffInvoice(id: string, updates: any): Promise<any>;
+  getInvoiceShifts(invoiceId: string): Promise<any[]>;
+  createInvoiceShifts(shifts: any[]): Promise<any[]>;
+  getInvoicableShifts(guardUserId: string, companyId: string): Promise<any[]>;
+  updateShiftBillingStatus(shiftIds: string[], status: string): Promise<void>;
+  generateInvoiceNumber(companyId: string): Promise<string>;
 
   // Guard app tab operations (platform-wide, super_admin configurable)
   getGuardAppTabs(): Promise<GuardAppTab[]>;
@@ -3702,11 +3717,168 @@ export class DatabaseStorage implements IStorage {
         featureGate: 'noticeBoard',
         roleVisibility: ['guard', 'steward', 'supervisor'],
       },
+      {
+        tabKey: 'invoices',
+        label: 'Invoices',
+        icon: 'DollarSign',
+        sortOrder: '4',
+        isActive: true,
+        isDefault: false,
+        featureGate: null,
+        roleVisibility: ['guard', 'steward', 'supervisor'],
+      },
     ];
 
     // Insert default tabs
     const createdTabs = await db.insert(guardAppTabs).values(defaultTabs).returning();
     return createdTabs;
+  }
+
+  async getStaffInvoices(companyId: string, filters?: { guardUserId?: string; status?: string }): Promise<any[]> {
+    const conditions = [eq(staffInvoices.companyId, companyId)];
+    if (filters?.guardUserId) conditions.push(eq(staffInvoices.guardUserId, filters.guardUserId));
+    if (filters?.status) conditions.push(eq(staffInvoices.status, filters.status));
+
+    const results = await db.select().from(staffInvoices).where(and(...conditions)).orderBy(desc(staffInvoices.createdAt));
+
+    const enriched = await Promise.all(results.map(async (inv) => {
+      const guard = await this.getUserById(inv.guardUserId);
+      const company = await this.getCompany(inv.companyId);
+      const shifts = await this.getInvoiceShifts(inv.id);
+      const approver = inv.approvedBy ? await this.getUserById(inv.approvedBy) : undefined;
+      return { ...inv, guard, company, approver, shifts };
+    }));
+    return enriched;
+  }
+
+  async getStaffInvoiceById(id: string): Promise<any | undefined> {
+    const [inv] = await db.select().from(staffInvoices).where(eq(staffInvoices.id, id));
+    if (!inv) return undefined;
+    const guard = await this.getUserById(inv.guardUserId);
+    const company = await this.getCompany(inv.companyId);
+    const shifts = await this.getInvoiceShifts(inv.id);
+    const approver = inv.approvedBy ? await this.getUserById(inv.approvedBy) : undefined;
+    return { ...inv, guard, company, approver, shifts };
+  }
+
+  async createStaffInvoice(data: any): Promise<any> {
+    const [inv] = await db.insert(staffInvoices).values(data).returning();
+    return inv;
+  }
+
+  async updateStaffInvoice(id: string, updates: any): Promise<any> {
+    const [inv] = await db.update(staffInvoices)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(staffInvoices.id, id))
+      .returning();
+    return inv;
+  }
+
+  async getInvoiceShifts(invoiceId: string): Promise<any[]> {
+    const results = await db.select().from(invoiceShifts).where(eq(invoiceShifts.invoiceId, invoiceId));
+    const enriched = await Promise.all(results.map(async (is) => {
+      const [shift] = await db.select().from(scheduledShifts).where(eq(scheduledShifts.id, is.shiftId));
+      let site;
+      if (shift) {
+        [site] = await db.select().from(sites).where(eq(sites.id, shift.siteId));
+      }
+      return { ...is, shift, site };
+    }));
+    return enriched;
+  }
+
+  async createInvoiceShifts(shifts: any[]): Promise<any[]> {
+    if (shifts.length === 0) return [];
+    const results = await db.insert(invoiceShifts).values(shifts).returning();
+    return results;
+  }
+
+  async getInvoicableShifts(guardUserId: string, companyId: string): Promise<any[]> {
+    const results = await db
+      .select({
+        shiftId: scheduledShifts.id,
+        siteId: scheduledShifts.siteId,
+        startTime: scheduledShifts.startTime,
+        endTime: scheduledShifts.endTime,
+        jobTitle: scheduledShifts.jobTitle,
+        billingStatus: scheduledShifts.billingStatus,
+        checkInId: checkIns.id,
+        checkInTime: checkIns.checkInTime,
+        checkOutTime: checkIns.checkOutTime,
+        workingRole: checkIns.workingRole,
+        siteName: sites.name,
+        guardRate: sites.guardRate,
+        stewardRate: sites.stewardRate,
+        supervisorRate: sites.supervisorRate,
+      })
+      .from(scheduledShifts)
+      .innerJoin(checkIns, and(
+        eq(checkIns.userId, scheduledShifts.userId),
+        eq(checkIns.siteId, scheduledShifts.siteId),
+        eq(checkIns.status, 'completed'),
+      ))
+      .innerJoin(sites, eq(sites.id, scheduledShifts.siteId))
+      .where(and(
+        eq(scheduledShifts.userId, guardUserId),
+        eq(scheduledShifts.isActive, true),
+        eq(scheduledShifts.billingStatus, 'not_invoiced'),
+      ))
+      .orderBy(desc(scheduledShifts.startTime));
+
+    const seen = new Set<string>();
+    const filtered = results.filter(r => {
+      if (!r.checkOutTime) return false;
+      const checkInDate = new Date(r.checkInTime!).toDateString();
+      const shiftDate = new Date(r.startTime).toDateString();
+      if (checkInDate !== shiftDate) return false;
+      const key = r.shiftId;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return filtered.map(r => {
+      const role = (r.workingRole || r.jobTitle || 'guard').toLowerCase();
+      let rate = r.guardRate || '15.00';
+      if (role === 'steward') rate = r.stewardRate || rate;
+      if (role === 'supervisor') rate = r.supervisorRate || rate;
+
+      const checkIn = new Date(r.checkInTime!);
+      const checkOut = new Date(r.checkOutTime!);
+      const hours = Math.round(((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60)) * 100) / 100;
+      const amount = (hours * parseFloat(rate)).toFixed(2);
+
+      return {
+        shiftId: r.shiftId,
+        checkInId: r.checkInId,
+        siteName: r.siteName,
+        siteId: r.siteId,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        checkInTime: r.checkInTime,
+        checkOutTime: r.checkOutTime,
+        hours,
+        rate,
+        amount,
+        jobTitle: r.jobTitle,
+      };
+    });
+  }
+
+  async updateShiftBillingStatus(shiftIds: string[], status: string): Promise<void> {
+    if (shiftIds.length === 0) return;
+    await db.update(scheduledShifts)
+      .set({ billingStatus: status, updatedAt: new Date() })
+      .where(inArray(scheduledShifts.id, shiftIds));
+  }
+
+  async generateInvoiceNumber(companyId: string): Promise<string> {
+    const [result] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(staffInvoices)
+      .where(eq(staffInvoices.companyId, companyId));
+    const nextNum = (result?.count || 0) + 1;
+    return `SI-${String(nextNum).padStart(5, '0')}`;
   }
 }
 

@@ -674,6 +674,250 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== Staff Invoice Routes ====================
+
+  // Get invoicable shifts for the current guard
+  app.get('/api/staff-invoices/invoicable-shifts', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company assigned" });
+      const shifts = await storage.getInvoicableShifts(user.id, user.companyId);
+      res.json(shifts);
+    } catch (error: any) {
+      console.error("Error fetching invoicable shifts:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch invoicable shifts" });
+    }
+  });
+
+  // Create a staff invoice from selected shifts
+  app.post('/api/staff-invoices', isAuthenticated, async (req: any, res) => {
+    try {
+      const { z } = await import("zod");
+      const createInvoiceSchema = z.object({
+        shiftIds: z.array(z.string()).min(1, "Must select at least one shift"),
+      });
+
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company assigned" });
+
+      const parsed = createInvoiceSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid request" });
+      }
+      const { shiftIds } = parsed.data;
+
+      const invoicableShifts = await storage.getInvoicableShifts(user.id, user.companyId);
+      const invoicableMap = new Map(invoicableShifts.map(s => [s.shiftId, s]));
+
+      const selectedShifts = [];
+      for (const shiftId of shiftIds) {
+        const shift = invoicableMap.get(shiftId);
+        if (!shift) {
+          return res.status(400).json({ message: `Shift ${shiftId} is not invoicable or does not belong to you` });
+        }
+        selectedShifts.push(shift);
+      }
+
+      const totalAmount = selectedShifts.reduce((sum, s) => sum + parseFloat(s.amount), 0).toFixed(2);
+      const invoiceNumber = await storage.generateInvoiceNumber(user.companyId);
+
+      const invoice = await storage.createStaffInvoice({
+        companyId: user.companyId,
+        guardUserId: user.id,
+        invoiceNumber,
+        totalAmount,
+        status: 'submitted',
+      });
+
+      const invoiceShiftRecords = selectedShifts.map(s => ({
+        invoiceId: invoice.id,
+        shiftId: s.shiftId,
+        checkInId: s.checkInId,
+        amount: s.amount,
+        hours: String(s.hours),
+        rate: s.rate,
+      }));
+
+      await storage.createInvoiceShifts(invoiceShiftRecords);
+      await storage.updateShiftBillingStatus(shiftIds, 'invoiced');
+
+      const fullInvoice = await storage.getStaffInvoiceById(invoice.id);
+      res.status(201).json(fullInvoice);
+    } catch (error: any) {
+      console.error("Error creating staff invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to create invoice" });
+    }
+  });
+
+  // Get staff invoices (guards see own, admins see company)
+  app.get('/api/staff-invoices', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company assigned" });
+
+      const filters: { guardUserId?: string; status?: string } = {};
+      if (user.role !== 'admin' && user.role !== 'super_admin') {
+        filters.guardUserId = user.id;
+      }
+      if (req.query.status) filters.status = req.query.status as string;
+
+      const invoices = await storage.getStaffInvoices(user.companyId, filters);
+      res.json(invoices);
+    } catch (error: any) {
+      console.error("Error fetching staff invoices:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch staff invoices" });
+    }
+  });
+
+  // Get a single staff invoice by ID
+  app.get('/api/staff-invoices/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const invoice = await storage.getStaffInvoiceById(req.params.id);
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+
+      if (user.role !== 'super_admin' && invoice.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      if (user.role !== 'admin' && user.role !== 'super_admin' && invoice.guardUserId !== user.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      res.json(invoice);
+    } catch (error: any) {
+      console.error("Error fetching staff invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch invoice" });
+    }
+  });
+
+  // Admin approve invoice
+  app.patch('/api/staff-invoices/:id/approve', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const invoice = await storage.getStaffInvoiceById(req.params.id);
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      if (user.role !== 'super_admin' && invoice.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      if (invoice.status !== 'submitted') {
+        return res.status(400).json({ message: `Cannot approve invoice with status '${invoice.status}'` });
+      }
+
+      const updated = await storage.updateStaffInvoice(invoice.id, {
+        status: 'approved',
+        approvedBy: user.id,
+        approvedAt: new Date(),
+        rejectionReason: null,
+      });
+      const full = await storage.getStaffInvoiceById(updated.id);
+      res.json(full);
+    } catch (error: any) {
+      console.error("Error approving staff invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to approve invoice" });
+    }
+  });
+
+  // Admin reject invoice
+  app.patch('/api/staff-invoices/:id/reject', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const invoice = await storage.getStaffInvoiceById(req.params.id);
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      if (user.role !== 'super_admin' && invoice.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      if (invoice.status === 'paid') {
+        return res.status(400).json({ message: "Cannot reject a paid invoice" });
+      }
+
+      const { z } = await import("zod");
+      const rejectSchema = z.object({ reason: z.string().min(1, "Rejection reason is required") });
+      const parsed = rejectSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Rejection reason is required" });
+      }
+      const { reason } = parsed.data;
+      const shiftIds = invoice.shifts?.map((s: any) => s.shiftId) || [];
+
+      const updated = await storage.updateStaffInvoice(invoice.id, {
+        status: 'rejected',
+        rejectionReason: reason,
+      });
+      await storage.updateShiftBillingStatus(shiftIds, 'not_invoiced');
+
+      const full = await storage.getStaffInvoiceById(updated.id);
+      res.json(full);
+    } catch (error: any) {
+      console.error("Error rejecting staff invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to reject invoice" });
+    }
+  });
+
+  // Admin mark invoice as paid (placeholder for Stripe integration)
+  app.post('/api/staff-invoices/:id/pay', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const invoice = await storage.getStaffInvoiceById(req.params.id);
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      if (user.role !== 'super_admin' && invoice.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      if (invoice.status !== 'approved') {
+        return res.status(400).json({ message: `Cannot pay invoice with status '${invoice.status}'. Must be approved first.` });
+      }
+
+      // TODO: Stripe Connect payment integration
+      // When Stripe keys are configured:
+      // 1. Check company has stripeAccountId
+      // 2. Check guard has stripeConnectedAccountId
+      // 3. Create PaymentIntent with transfer
+      // For now, mark as paid manually
+      const shiftIds = invoice.shifts?.map((s: any) => s.shiftId) || [];
+
+      const updated = await storage.updateStaffInvoice(invoice.id, {
+        status: 'paid',
+        paidAt: new Date(),
+      });
+      await storage.updateShiftBillingStatus(shiftIds, 'paid');
+
+      const full = await storage.getStaffInvoiceById(updated.id);
+      res.json(full);
+    } catch (error: any) {
+      console.error("Error paying staff invoice:", error);
+      res.status(500).json({ message: error.message || "Failed to pay invoice" });
+    }
+  });
+
+  // ==================== Stripe Connect Status Routes ====================
+
+  app.get('/api/stripe/connect/company/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.json({ connected: false });
+      const company = await storage.getCompany(user.companyId);
+      res.json({
+        connected: !!(company as any)?.stripeAccountId,
+        accountId: (company as any)?.stripeAccountId || null,
+      });
+    } catch (error: any) {
+      res.json({ connected: false });
+    }
+  });
+
+  app.get('/api/stripe/connect/guard/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      res.json({
+        connected: !!(user as any)?.stripeConnectedAccountId,
+        accountId: (user as any)?.stripeConnectedAccountId || null,
+      });
+    } catch (error: any) {
+      res.json({ connected: false });
+    }
+  });
+
+  // ==================== End Staff Invoice Routes ====================
+
   // User management routes (admin only)
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (req: any, res) => {
     try {

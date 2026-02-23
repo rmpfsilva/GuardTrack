@@ -48,6 +48,7 @@ import PlatformSettings from "@/components/platform-settings";
 import SuperAdminUserManagement from "@/components/super-admin-user-management";
 import AuthActivityLogs from "@/components/auth-activity-logs";
 import SuperAdminCreateUser from "@/components/super-admin-create-user";
+import StaffInvoiceManagement from "@/components/staff-invoice-management";
 
 interface DashboardStats {
   activeGuards: number;
@@ -483,6 +484,7 @@ export default function AdminDashboard() {
                   {hasTabAccess('partnerships') && <TabsTrigger value="partnerships" data-testid="tab-partnerships" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('partnerships') ? 'tab-has-new' : ''}`}>Partnerships</TabsTrigger>}
                   {hasTabAccess('job-sharing') && <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('job-sharing') ? 'tab-has-new' : ''}`}>Job Sharing</TabsTrigger>}
                   {hasTabAccess('billing') && <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>}
+                  <TabsTrigger value="staff-invoices" data-testid="tab-staff-invoices" className="text-xs sm:text-sm whitespace-nowrap">Staff Invoices</TabsTrigger>
                   <TabsTrigger value="company-invoices" data-testid="tab-company-invoices" className="text-xs sm:text-sm whitespace-nowrap">Invoices</TabsTrigger>
                   {hasTabAccess('activity') && <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>}
                   <TabsTrigger value="support" data-testid="tab-support" className="text-xs sm:text-sm whitespace-nowrap">Support</TabsTrigger>
@@ -664,6 +666,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="job-sharing">
             <JobSharing />
+          </TabsContent>
+
+          <TabsContent value="staff-invoices">
+            <StaffInvoiceManagement />
           </TabsContent>
 
           {user.role === 'super_admin' && (

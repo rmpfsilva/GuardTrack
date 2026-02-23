@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { 
   Clock, MapPin, LogIn, LogOut, Calendar, Bell, User, 
   Home, Coffee, FileText, ChevronRight, Loader2, AlertCircle,
-  CheckCircle2, XCircle, Download, X, Share, Smartphone, ExternalLink, Youtube, Mail, Copy, RefreshCw
+  CheckCircle2, XCircle, Download, X, Share, Smartphone, ExternalLink, Youtube, Mail, Copy, RefreshCw, DollarSign
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -26,6 +26,8 @@ import { Label } from "@/components/ui/label";
 import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
 import GuardNoticeBoard from "@/components/guard-notice-board";
+import GuardInvoices from "@/components/guard-invoices";
+import { GuardStripeSettings } from "@/components/stripe-connect-settings";
 import { useBackground } from "@/components/background-provider";
 import { useFeatureAccess, type FeatureName } from "@/hooks/use-feature-access";
 import type { Site, CheckInWithDetails, Break, LeaveRequest, GuardAppTab } from "@shared/schema";
@@ -43,6 +45,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Clock,
   MapPin,
   Briefcase,
+  DollarSign,
   Settings: SettingsIcon,
 };
 
@@ -1234,6 +1237,11 @@ export default function GuardApp() {
                 <GuardNoticeBoard />
               </TabsContent>
 
+              <TabsContent value="invoices" className="mt-0">
+                <h2 className="text-xl font-bold mb-4">My Invoices</h2>
+                <GuardInvoices />
+              </TabsContent>
+
               <TabsContent value="settings" className="mt-0 space-y-4">
                 <h2 className="text-xl font-bold mb-4">Settings</h2>
 
@@ -1267,6 +1275,8 @@ export default function GuardApp() {
                     </div>
                   </CardContent>
                 </Card>
+
+                <GuardStripeSettings />
 
                 <Card>
                   <CardHeader className="pb-2">
