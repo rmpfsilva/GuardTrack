@@ -1,0 +1,283 @@
+FULL AI AGENT BUILD PROMPT
+
+(Stripe Connect + Guard Self-Invoicing)
+
+OBJECTIVE
+
+Enhance the existing GuardTrack invoice system to:
+
+Allow guards to generate invoices from approved shifts
+
+Prevent duplicate invoicing
+
+Add company-side invoice approval workflow
+
+Integrate Stripe Connect (Standard accounts)
+
+Allow companies to pay approved invoices directly inside the app
+
+Automatically update invoice + shift billing status after payment
+
+IMPORTANT:
+This is an addition to a live system.
+Do NOT break existing shift scheduling or job sharing logic.
+
+PHASE 1 — DATABASE ADDITIONS
+1️⃣ Add Invoice Table
+
+Create new table: staffInvoices
+
+Fields:
+
+id (UUID)
+
+companyId
+
+guardUserId
+
+invoiceNumber (unique per company)
+
+totalAmount
+
+status (draft | submitted | approved | rejected | paid)
+
+stripePaymentIntentId (nullable)
+
+createdAt
+
+updatedAt
+
+2️⃣ Add InvoiceShifts Junction Table
+
+Create table: invoiceShifts
+
+id
+
+invoiceId
+
+shiftId
+
+amount
+
+hours
+
+rate
+
+3️⃣ Update Scheduled Shifts Table
+
+Add new field:
+
+billingStatus
+
+Enum:
+
+not_invoiced
+
+invoiced
+
+paid
+
+Default: not_invoiced
+
+PHASE 2 — GUARD SIDE (UI)
+
+Add new tab:
+
+"My Invoices"
+
+Inside:
+
+Section 1:
+List shifts where:
+
+billingStatus = not_invoiced
+
+shift is completed
+
+shift approved (if approval system exists)
+
+Allow:
+
+Select individual shifts
+
+Select all by week
+
+Select all by month
+
+Show auto-calculated total
+
+When user clicks “Create Invoice”:
+
+Create invoice
+
+Attach selected shifts
+
+Change shift billingStatus → invoiced
+
+Status = submitted
+
+Guards CANNOT edit rates or totals manually.
+Everything is system calculated.
+
+PHASE 3 — ADMIN SIDE
+
+Add new tab:
+
+"Staff Invoices"
+
+Admin sees:
+
+Submitted
+
+Approved
+
+Rejected
+
+Paid
+
+Invoice detail view:
+
+Guard name
+
+Shift breakdown
+
+Hours per shift
+
+Total
+
+Stripe payout status
+
+Admin can:
+
+Approve
+
+Reject (with reason)
+
+Pay via Stripe
+
+PHASE 4 — STRIPE CONNECT INTEGRATION
+
+Use:
+
+Stripe Connect — Standard Accounts.
+
+Company Stripe Connection
+
+Add new section in company settings:
+
+“Payments”
+
+Button:
+Connect with Stripe
+
+Use OAuth to connect company’s Stripe account.
+Store:
+
+stripeAccountId
+
+Guard Stripe Account
+
+Guards must:
+
+Connect their own Stripe account before payment.
+
+Add button in profile:
+
+“Connect for Payout”
+
+Store:
+
+stripeConnectedAccountId
+
+PHASE 5 — PAYMENT FLOW
+
+When admin clicks:
+
+“Pay via Stripe”
+
+System should:
+
+Create PaymentIntent
+
+Transfer to guard’s Stripe account
+
+On success:
+
+Update invoice status → paid
+
+Update all related shifts → billingStatus = paid
+
+Store stripePaymentIntentId
+
+If payment fails:
+
+Show error
+
+Do not change invoice status
+
+PHASE 6 — SAFETY RULES
+
+Do NOT allow paying unapproved invoices
+
+Do NOT allow manual invoice amount override
+
+Do NOT allow duplicate shift attachment
+
+Do NOT delete invoices after payment
+
+Do NOT auto-create payouts without admin click
+
+PHASE 7 — OPTIONAL FUTURE (Do Not Build Now)
+
+Platform fee deduction
+
+Automatic weekly payouts
+
+VAT handling
+
+Tax export reports
+
+Partial payments
+
+ARCHITECTURE NOTES
+
+Must reuse existing shift data
+
+Must not break job sharing
+
+Must not break current billing tab
+
+Add feature flag to enable per company
+
+⚖️ Critical Legal Note (You Must Consider This)
+
+If companies are paying contractors through Stripe:
+
+You are facilitating payments,
+but NOT holding funds.
+
+That keeps you outside most FCA headaches in the UK.
+
+Still:
+Add a Terms update:
+“GuardTrack facilitates payments via Stripe. GuardTrack does not hold or process funds directly.”
+
+💡 What Makes This Powerful
+
+Once this is live:
+
+Companies won’t leave.
+
+Because:
+
+Scheduling
+
+Job sharing
+
+Invoice creation
+
+Payment processing
+
+All in one place.
+
+That’s lock-in.
