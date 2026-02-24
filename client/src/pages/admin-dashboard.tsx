@@ -4,19 +4,27 @@ import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { usePlanFeatures, AdminTab } from "@/hooks/use-plan-features";
-import { format, startOfWeek, endOfWeek } from "date-fns";
-import { Users, MapPin, Clock, Activity, Calendar, Settings, Smartphone, Copy, ExternalLink, Mail, ChevronDown, RefreshCw } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { format } from "date-fns";
+import {
+  Users, MapPin, Clock, Activity, Calendar, Settings, Mail, RefreshCw,
+  LayoutDashboard, UserCog, CalendarOff, CheckSquare, ClipboardEdit, Megaphone,
+  Handshake, Share2, Receipt, CreditCard, BarChart3, MessageSquare,
+  Building2, AlertTriangle, FileText, DollarSign, Shield, LogOut
+} from "lucide-react";
+import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationSettingsButton } from "@/components/notification-settings-button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LocationDisplay } from "@/components/location-display";
+import {
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
+  SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  SidebarProvider, SidebarTrigger,
+} from "@/components/ui/sidebar";
 import type { Site, CheckInWithDetails, User, Company, LeaveRequestWithDetails, SupportMessage, ErrorLog, CompanyPartnershipWithDetails, JobShareWithDetails } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
@@ -29,10 +37,8 @@ import InvitationManagement from "@/components/invitation-management";
 import AdminLeaveManagement from "@/components/admin-leave-management";
 import AdvancedReports from "@/components/advanced-reports";
 import AdminApprovals from "@/components/admin-approvals";
-import { UpgradePrompt } from "@/components/upgrade-prompt";
 import { useBackground } from "@/components/background-provider";
 import NoticeBoardManagement from "@/components/notice-board-management";
-import CompanyManagement from "@/components/company-management";
 import CompanyPartnerships from "@/components/company-partnerships";
 import JobSharing from "@/components/job-sharing";
 import ClientManagement from "@/components/client-management";
@@ -49,13 +55,7 @@ import SuperAdminUserManagement from "@/components/super-admin-user-management";
 import AuthActivityLogs from "@/components/auth-activity-logs";
 import SuperAdminCreateUser from "@/components/super-admin-create-user";
 import StaffInvoiceManagement from "@/components/staff-invoice-management";
-
-interface DashboardStats {
-  activeGuards: number;
-  totalSites: number;
-  totalGuards: number;
-  weeklyHours: number;
-}
+import OperationsCommandCentre from "@/components/operations-command-centre";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading, isAdmin, logoutMutation } = useAuth();
@@ -63,7 +63,6 @@ export default function AdminDashboard() {
   const { hasTabAccess, getAccessibleTabs, planTier, isLoading: planLoading } = usePlanFeatures();
   const { hasCustomBackground } = useBackground();
   const [, setLocation] = useLocation();
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [editingCheckIn, setEditingCheckIn] = useState<CheckInWithDetails | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -79,7 +78,14 @@ export default function AdminDashboard() {
     return stored ? new Date(stored) : new Date(0);
   });
 
-  // Redirect if not authenticated or not admin
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (user.role === 'super_admin' && activeTab === 'overview') {
+        setActiveTab('clients');
+      }
+    }
+  }, [authLoading, user]);
+
   useEffect(() => {
     if (!authLoading && !user) {
       toast({
@@ -102,36 +108,14 @@ export default function AdminDashboard() {
     }
   }, [user, authLoading, isAdmin, toast]);
 
-  // Update current time every second
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const isCompanyAdmin = isAdmin && user?.role !== 'super_admin';
   
-  // Fetch dashboard stats (company admins only)
-  const { data: stats } = useQuery<DashboardStats>({
-    queryKey: ["/api/admin/stats"],
-    enabled: !!user && isCompanyAdmin,
-    refetchInterval: 30000,
-  });
-
-  // Fetch recent activity (company admins only)
   const { data: recentActivity = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/admin/recent-activity"],
     enabled: !!user && isCompanyAdmin,
     refetchInterval: 30000,
   });
 
-  // Fetch active check-ins (company admins only)
-  const { data: activeCheckIns = [] } = useQuery<CheckInWithDetails[]>({
-    queryKey: ["/api/admin/active-check-ins"],
-    enabled: !!user && isCompanyAdmin,
-    refetchInterval: 30000,
-  });
-
-  // Fetch user's company information (regular admins only)
   const { data: userCompany } = useQuery<Company>({
     queryKey: ['/api/companies', user?.companyId],
     queryFn: async () => {
@@ -145,42 +129,36 @@ export default function AdminDashboard() {
     enabled: !!user?.companyId && isAdmin && user?.role !== 'super_admin',
   });
 
-  // Fetch pending leave requests (for tab notification)
   const { data: pendingLeave = [] } = useQuery<LeaveRequestWithDetails[]>({
     queryKey: ["/api/leave-requests/pending"],
     enabled: !!user && isCompanyAdmin,
     refetchInterval: 30000,
   });
 
-  // Fetch pending breaks (for approvals tab notification)
   const { data: pendingBreaks = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/breaks/pending"],
     enabled: !!user && isCompanyAdmin,
     refetchInterval: 30000,
   });
 
-  // Fetch pending overtime (for approvals tab notification)
   const { data: pendingOvertime = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/overtime/pending"],
     enabled: !!user && isCompanyAdmin,
     refetchInterval: 30000,
   });
 
-  // Fetch support messages for super admin (messages tab notification)
   const { data: supportMessages = [] } = useQuery<SupportMessage[]>({
     queryKey: ["/api/super-admin/support-messages"],
     enabled: !!user && user?.role === 'super_admin',
     refetchInterval: 30000,
   });
 
-  // Fetch error logs for super admin (error logs tab notification)
   const { data: errorLogs = [] } = useQuery<ErrorLog[]>({
     queryKey: ["/api/super-admin/error-logs"],
     enabled: !!user && user?.role === 'super_admin',
     refetchInterval: 30000,
   });
 
-  // Fetch received partnership requests (for partnerships tab notification)
   const { data: receivedPartnerships = [] } = useQuery<CompanyPartnershipWithDetails[]>({
     queryKey: ["/api/partnerships/received"],
     enabled: !!user && isCompanyAdmin,
@@ -199,7 +177,6 @@ export default function AdminDashboard() {
     refetchInterval: 30000,
   });
 
-  // Calculate which tabs have new entries (not currently selected)
   const tabHasNew = (tabValue: string): boolean => {
     if (activeTab === tabValue) return false;
     
@@ -246,561 +223,438 @@ export default function AdminDashboard() {
     return user.email?.[0]?.toUpperCase() || "A";
   };
 
-  return (
-    <div className={`min-h-screen ${hasCustomBackground ? 'bg-transparent' : 'bg-background'}`}>
-      {/* Header */}
-      <header className="border-b border-border sticky top-0 bg-muted z-50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={guardTrackLogo} alt="GuardTrack" className="h-8" data-testid="img-company-logo" />
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-xs">
-                {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-              </Badge>
-              {user.role === 'super_admin' ? (
-                <Badge variant="outline" className="text-xs" data-testid="badge-platform-admin">
-                  Platform Admin
-                </Badge>
-              ) : userCompany ? (
-                <>
-                  <Badge variant="outline" className="text-xs" data-testid="badge-company-name">
-                    {userCompany.name}
-                  </Badge>
-                  {planTier && (
-                    <Badge variant="default" className="text-xs" data-testid="badge-plan-tier">
-                      {planTier}
-                    </Badge>
-                  )}
-                </>
-              ) : null}
-            </div>
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (value === 'job-sharing') {
+      const now = new Date();
+      setJobSharingLastSeen(now);
+      localStorage.setItem('jobSharingLastSeen', now.toISOString());
+    }
+  };
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        return <OperationsCommandCentre onNavigate={handleTabChange} />;
+      case 'billing':
+        return <BillingReports />;
+      case 'company-invoices':
+        return <CompanyInvoices />;
+      case 'reports':
+        return <AdvancedReports />;
+      case 'schedule':
+        return <ScheduleManagement />;
+      case 'guards':
+        return <GuardDirectory />;
+      case 'users':
+        return <UserManagement />;
+      case 'invitations':
+        return <InvitationManagement />;
+      case 'manual':
+        return <AdminCheckInControl />;
+      case 'sites':
+        return <SiteManagement />;
+      case 'leave':
+        return <AdminLeaveManagement />;
+      case 'approvals':
+        return <AdminApprovals />;
+      case 'notices':
+        return <NoticeBoardManagement />;
+      case 'partnerships':
+        return <CompanyPartnerships />;
+      case 'job-sharing':
+        return <JobSharing />;
+      case 'staff-invoices':
+        return <StaffInvoiceManagement />;
+      case 'clients':
+        return <ClientManagement />;
+      case 'all-users':
+        return <SuperAdminUserManagement />;
+      case 'plans':
+        return <PlanManagement />;
+      case 'usage-reports':
+        return <ClientUsageReports />;
+      case 'subscription-billing':
+        return <SubscriptionBilling />;
+      case 'invoices':
+        return <InvoiceManagement />;
+      case 'messages':
+        return <SupportMessages />;
+      case 'auth-activity':
+        return (
+          <div className="space-y-6">
+            <SuperAdminCreateUser />
+            <AuthActivityLogs />
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              data-testid="button-refresh-admin"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
-            <NotificationSettingsButton variant="ghost" size="icon" />
-            <ThemeToggle />
-            <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={user.profileImageUrl || undefined} alt={user.firstName || "Admin"} />
-                <AvatarFallback>{getInitials()}</AvatarFallback>
-              </Avatar>
-              <span className="text-sm font-medium hidden sm:inline">{user.firstName || user.email}</span>
-            </div>
-            <Link href="/settings">
-              <Button 
-                variant="ghost" 
-                size="sm"
-                data-testid="button-settings"
-              >
-                <Settings className="h-4 w-4" />
-                <span className="hidden sm:inline ml-2">Settings</span>
-              </Button>
-            </Link>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={async () => {
-                await logoutMutation.mutateAsync();
-                setLocation('/auth');
-              }}
-              data-testid="button-logout"
-            >
-              Log Out
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-8">
-        {/* Current Time and Guard App Link */}
-        <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-8">
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground mb-1">System Time</p>
-            <p className="text-2xl font-mono font-semibold">
-              {format(currentTime, "HH:mm:ss - EEEE, MMMM d, yyyy")}
-            </p>
-          </div>
-          
-          {user.role !== 'super_admin' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  size="sm"
-                  variant="outline"
-                  className="gap-2"
-                  data-testid="button-guard-app-menu"
-                >
-                  <Smartphone className="h-4 w-4" />
-                  <span>Guard Mobile App</span>
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => {
-                    const url = `${window.location.origin}/guard/app`;
-                    const subject = encodeURIComponent("Download GuardTrack Mobile App");
-                    const body = encodeURIComponent(`Hi,\n\nPlease use the following link to access the GuardTrack Mobile App:\n\n${url}\n\nYou can install it on your phone for easy access to check-ins, schedules, and more.\n\nBest regards`);
-                    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-                  }}
-                  data-testid="menu-item-invite"
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  Invite via Email
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    window.open('/guard/app', '_blank');
-                  }}
-                  data-testid="menu-item-open"
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Open App
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    const url = `${window.location.origin}/guard/app`;
-                    navigator.clipboard.writeText(url);
-                    toast({
-                      title: "Link Copied",
-                      description: "Guard app link copied to clipboard",
-                    });
-                  }}
-                  data-testid="menu-item-copy-link"
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy Link
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-
-        {/* Stats Cards - Hidden for super admin */}
-        {user.role !== 'super_admin' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
-                <Activity className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-chart-2" data-testid="stat-active-guards">
-                  {stats?.activeGuards || 0}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Currently on duty</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Sites</CardTitle>
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold" data-testid="stat-total-sites">
-                  {stats?.totalSites || 0}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Active locations</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold" data-testid="stat-total-guards">
-                  {stats?.totalGuards || 0}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Registered personnel</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Weekly Hours</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold" data-testid="stat-weekly-hours">
-                  {stats?.weeklyHours ? Number(stats.weeklyHours).toFixed(1) : "0.0"}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">This week's total</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Main Content Tabs */}
-        <Tabs value={activeTab} onValueChange={(val) => {
-          setActiveTab(val);
-          if (val === 'job-sharing') {
-            const now = new Date();
-            setJobSharingLastSeen(now);
-            localStorage.setItem('jobSharingLastSeen', now.toISOString());
-          }
-        }} className="space-y-6">
-          <div className="w-full overflow-x-auto pb-2">
-            <TabsList className="inline-flex min-w-min bg-muted">
-              {user.role === 'super_admin' ? (
-                <>
-                  {/* Super Admin Tabs - Platform Management Only */}
-                  <TabsTrigger value="clients" data-testid="tab-clients" className="text-xs sm:text-sm whitespace-nowrap">Clients</TabsTrigger>
-                  <TabsTrigger value="all-users" data-testid="tab-all-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>
-                  <TabsTrigger value="plans" data-testid="tab-plans" className="text-xs sm:text-sm whitespace-nowrap">Plans</TabsTrigger>
-                  <TabsTrigger value="messages" data-testid="tab-messages" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('messages') ? 'tab-has-new' : ''}`}>Messages</TabsTrigger>
-                  <TabsTrigger value="subscription-billing" data-testid="tab-subscription-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>
-                  <TabsTrigger value="invoices" data-testid="tab-invoices" className="text-xs sm:text-sm whitespace-nowrap">Invoices</TabsTrigger>
-                  <TabsTrigger value="usage-reports" data-testid="tab-usage-reports" className="text-xs sm:text-sm whitespace-nowrap">Usage Reports</TabsTrigger>
-                  <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>
-                  <TabsTrigger value="auth-activity" data-testid="tab-auth-activity" className="text-xs sm:text-sm whitespace-nowrap">Auth Logs</TabsTrigger>
-                  <TabsTrigger value="error-logs" data-testid="tab-error-logs" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('error-logs') ? 'tab-has-new' : ''}`}>Error Logs</TabsTrigger>
-                  <TabsTrigger value="platform-settings" data-testid="tab-platform-settings" className="text-xs sm:text-sm whitespace-nowrap">Settings</TabsTrigger>
-                </>
+        );
+      case 'error-logs':
+        return <ErrorLogs />;
+      case 'platform-settings':
+        return <PlatformSettings />;
+      case 'activity':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>All Activity</CardTitle>
+              <CardDescription>Complete check-in and check-out history</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentActivity.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No activity to display</p>
               ) : (
-                <>
-                  {/* Regular Admin Tabs - Filtered by Plan */}
-                  {hasTabAccess('overview') && <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>}
-                  {hasTabAccess('guards') && <TabsTrigger value="guards" data-testid="tab-guards" className="text-xs sm:text-sm whitespace-nowrap">Employees</TabsTrigger>}
-                  {hasTabAccess('reports') && <TabsTrigger value="reports" data-testid="tab-reports" className="text-xs sm:text-sm whitespace-nowrap">Reports</TabsTrigger>}
-                  {hasTabAccess('users') && <TabsTrigger value="users" data-testid="tab-users" className="text-xs sm:text-sm whitespace-nowrap">Users</TabsTrigger>}
-                  {hasTabAccess('schedule') && <TabsTrigger value="schedule" data-testid="tab-schedule" className="text-xs sm:text-sm whitespace-nowrap">Schedule</TabsTrigger>}
-                  {hasTabAccess('sites') && <TabsTrigger value="sites" data-testid="tab-sites" className="text-xs sm:text-sm whitespace-nowrap">Sites</TabsTrigger>}
-                  {hasTabAccess('leave') && <TabsTrigger value="leave" data-testid="tab-leave" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('leave') ? 'tab-has-new' : ''}`}>Leave</TabsTrigger>}
-                  {hasTabAccess('invitations') && <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm whitespace-nowrap">Invites</TabsTrigger>}
-                  {hasTabAccess('manual') && <TabsTrigger value="manual" data-testid="tab-manual" className="text-xs sm:text-sm whitespace-nowrap">Manual</TabsTrigger>}
-                  {hasTabAccess('approvals') && <TabsTrigger value="approvals" data-testid="tab-approvals" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('approvals') ? 'tab-has-new' : ''}`}>Approvals</TabsTrigger>}
-                  {hasTabAccess('notices') && <TabsTrigger value="notices" data-testid="tab-notices" className="text-xs sm:text-sm whitespace-nowrap">Notices</TabsTrigger>}
-                  {hasTabAccess('partnerships') && <TabsTrigger value="partnerships" data-testid="tab-partnerships" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('partnerships') ? 'tab-has-new' : ''}`}>Partnerships</TabsTrigger>}
-                  {hasTabAccess('job-sharing') && <TabsTrigger value="job-sharing" data-testid="tab-job-sharing" className={`text-xs sm:text-sm whitespace-nowrap ${tabHasNew('job-sharing') ? 'tab-has-new' : ''}`}>Job Sharing</TabsTrigger>}
-                  {hasTabAccess('billing') && <TabsTrigger value="billing" data-testid="tab-billing" className="text-xs sm:text-sm whitespace-nowrap">Billing</TabsTrigger>}
-                  <TabsTrigger value="staff-invoices" data-testid="tab-staff-invoices" className="text-xs sm:text-sm whitespace-nowrap">Staff Invoices</TabsTrigger>
-                  <TabsTrigger value="company-invoices" data-testid="tab-company-invoices" className="text-xs sm:text-sm whitespace-nowrap">Invoices</TabsTrigger>
-                  {hasTabAccess('activity') && <TabsTrigger value="activity" data-testid="tab-activity" className="text-xs sm:text-sm whitespace-nowrap">Activity</TabsTrigger>}
-                  <TabsTrigger value="support" data-testid="tab-support" className="text-xs sm:text-sm whitespace-nowrap">Support</TabsTrigger>
-                </>
-              )}
-            </TabsList>
-          </div>
-
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Active Check-Ins */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
-                    Currently On Duty
-                  </CardTitle>
-                  <CardDescription>Employees actively checked in</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {activeCheckIns.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No employees on duty</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {activeCheckIns.map((checkIn) => (
-                        <div 
-                          key={checkIn.id}
-                          className="p-3 rounded-lg border border-border space-y-2"
-                          data-testid={`active-checkin-${checkIn.id}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-9 w-9">
-                                <AvatarImage src={checkIn.user.profileImageUrl || undefined} />
-                                <AvatarFallback>
-                                  {checkIn.user.firstName?.[0]}{checkIn.user.lastName?.[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium text-sm">
-                                  {checkIn.user.firstName} {checkIn.user.lastName}
-                                </p>
-                                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <MapPin className="h-3 w-3" />
-                                  {checkIn.site.name}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <Badge variant="default" className="bg-chart-2">Active</Badge>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {format(new Date(checkIn.checkInTime), "HH:mm")}
-                              </p>
-                            </div>
+                <div className="space-y-2">
+                  {recentActivity.map((checkIn) => (
+                    <div 
+                      key={checkIn.id}
+                      className="p-4 rounded-lg border border-border hover-elevate space-y-2"
+                      data-testid={`full-activity-${checkIn.id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={checkIn.user.profileImageUrl || undefined} />
+                            <AvatarFallback>
+                              {checkIn.user.firstName?.[0]}{checkIn.user.lastName?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">
+                              {checkIn.user.firstName} {checkIn.user.lastName}
+                            </p>
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {checkIn.site.name}
+                            </p>
                           </div>
-                          <LocationDisplay 
-                            latitude={checkIn.latitude}
-                            longitude={checkIn.longitude}
-                            className="text-xs"
-                            showLabel={false}
-                          />
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Recent Activity Feed */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Recent Activity
-                  </CardTitle>
-                  <CardDescription>Latest check-in/check-out events</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {recentActivity.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No recent activity</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {recentActivity.slice(0, 10).map((checkIn) => (
-                        <div 
-                          key={checkIn.id}
-                          className="p-3 rounded-lg border border-border text-sm space-y-2"
-                          data-testid={`activity-${checkIn.id}`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="flex-1">
-                              <p className="font-medium">
-                                {checkIn.user.firstName} {checkIn.user.lastName}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {checkIn.site.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                In: {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
-                                {checkIn.checkOutTime && ` • Out: ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
-                              </p>
-                            </div>
-                            <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'}>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-sm font-mono">
+                              {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
+                              {checkIn.checkOutTime && ` - ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
+                            </p>
+                            <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'} className="mt-1">
                               {checkIn.status}
                             </Badge>
                           </div>
-                          <LocationDisplay 
-                            latitude={checkIn.latitude}
-                            longitude={checkIn.longitude}
-                            className="text-xs"
-                            showLabel={false}
-                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingCheckIn(checkIn);
+                              setIsEditDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-checkin-${checkIn.id}`}
+                          >
+                            Edit
+                          </Button>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-            
-            {/* Upgrade Prompt - only for non-super admins */}
-            {user.role !== 'super_admin' && (
-              <div className="mt-6">
-                <UpgradePrompt />
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="billing">
-            <BillingReports />
-          </TabsContent>
-
-          <TabsContent value="company-invoices">
-            <CompanyInvoices />
-          </TabsContent>
-
-          <TabsContent value="reports">
-            <AdvancedReports />
-          </TabsContent>
-
-          <TabsContent value="schedule">
-            <ScheduleManagement />
-          </TabsContent>
-
-          <TabsContent value="guards">
-            <GuardDirectory />
-          </TabsContent>
-
-          <TabsContent value="users">
-            <UserManagement />
-          </TabsContent>
-
-          <TabsContent value="invitations">
-            <InvitationManagement />
-          </TabsContent>
-
-          <TabsContent value="manual">
-            <AdminCheckInControl />
-          </TabsContent>
-
-          <TabsContent value="sites">
-            <SiteManagement />
-          </TabsContent>
-
-          <TabsContent value="leave">
-            <AdminLeaveManagement />
-          </TabsContent>
-
-          <TabsContent value="approvals">
-            <AdminApprovals />
-          </TabsContent>
-
-          <TabsContent value="notices">
-            <NoticeBoardManagement />
-          </TabsContent>
-
-          <TabsContent value="partnerships">
-            <CompanyPartnerships />
-          </TabsContent>
-
-          <TabsContent value="job-sharing">
-            <JobSharing />
-          </TabsContent>
-
-          <TabsContent value="staff-invoices">
-            <StaffInvoiceManagement />
-          </TabsContent>
-
-          {user.role === 'super_admin' && (
-            <>
-              <TabsContent value="clients">
-                <ClientManagement />
-              </TabsContent>
-
-              <TabsContent value="all-users">
-                <SuperAdminUserManagement />
-              </TabsContent>
-
-              <TabsContent value="plans">
-                <PlanManagement />
-              </TabsContent>
-              
-              <TabsContent value="usage-reports">
-                <ClientUsageReports />
-              </TabsContent>
-
-              <TabsContent value="subscription-billing">
-                <SubscriptionBilling />
-              </TabsContent>
-
-              <TabsContent value="invoices">
-                <InvoiceManagement />
-              </TabsContent>
-
-              <TabsContent value="messages">
-                <SupportMessages />
-              </TabsContent>
-
-              <TabsContent value="auth-activity">
-                <div className="space-y-6">
-                  <SuperAdminCreateUser />
-                  <AuthActivityLogs />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="error-logs">
-                <ErrorLogs />
-              </TabsContent>
-
-              <TabsContent value="platform-settings">
-                <PlatformSettings />
-              </TabsContent>
-            </>
-          )}
-
-          <TabsContent value="activity">
-            <Card>
-              <CardHeader>
-                <CardTitle>All Activity</CardTitle>
-                <CardDescription>Complete check-in and check-out history</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {recentActivity.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No activity to display</p>
-                ) : (
-                  <div className="space-y-2">
-                    {recentActivity.map((checkIn) => (
-                      <div 
-                        key={checkIn.id}
-                        className="p-4 rounded-lg border border-border hover-elevate space-y-2"
-                        data-testid={`full-activity-${checkIn.id}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={checkIn.user.profileImageUrl || undefined} />
-                              <AvatarFallback>
-                                {checkIn.user.firstName?.[0]}{checkIn.user.lastName?.[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">
-                                {checkIn.user.firstName} {checkIn.user.lastName}
-                              </p>
-                              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {checkIn.site.name}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <p className="text-sm font-mono">
-                                {format(new Date(checkIn.checkInTime), "MMM d, HH:mm")}
-                                {checkIn.checkOutTime && ` - ${format(new Date(checkIn.checkOutTime), "HH:mm")}`}
-                              </p>
-                              <Badge variant={checkIn.status === 'active' ? 'default' : 'secondary'} className="mt-1">
-                                {checkIn.status}
-                              </Badge>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setEditingCheckIn(checkIn);
-                                setIsEditDialogOpen(true);
-                              }}
-                              data-testid={`button-edit-checkin-${checkIn.id}`}
-                            >
-                              Edit
-                            </Button>
-                          </div>
-                        </div>
-                        <LocationDisplay 
-                          latitude={checkIn.latitude}
-                          longitude={checkIn.longitude}
-                          className="text-xs"
-                          showLabel={false}
-                        />
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                      <LocationDisplay 
+                        latitude={checkIn.latitude}
+                        longitude={checkIn.longitude}
+                        className="text-xs"
+                        showLabel={false}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      case 'support':
+        return (
+          <div className="space-y-6">
+            <CompanySupportMessages />
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
-          {/* Support Tab - Company Admins only (not Super Admin) */}
-          <TabsContent value="support">
-            <div className="space-y-6">
-              <CompanySupportMessages />
+  const renderSidebarItem = (value: string, label: string, Icon: React.ComponentType<{ className?: string }>) => (
+    <SidebarMenuItem key={value}>
+      <SidebarMenuButton
+        data-active={activeTab === value}
+        data-testid={`tab-${value}`}
+        tooltip={label}
+        onClick={() => handleTabChange(value)}
+      >
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+        {tabHasNew(value) && (
+          <span className="ml-auto h-2 w-2 rounded-full bg-destructive flex-shrink-0" />
+        )}
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+
+  const sidebarStyle = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3.5rem",
+  };
+
+  return (
+    <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+      <div className={`flex h-screen w-full ${hasCustomBackground ? 'bg-transparent' : 'bg-background'}`}>
+        <Sidebar collapsible="icon">
+          <SidebarHeader className="border-b border-sidebar-border">
+            <div className="flex items-center gap-2 px-2 py-1">
+              <img src={guardTrackLogo} alt="GuardTrack" className="h-7 w-7 flex-shrink-0" data-testid="img-company-logo" />
+              <span className="text-sm font-semibold truncate group-data-[collapsible=icon]:hidden">
+                {user.role === 'super_admin' ? 'Platform Admin' : (userCompany?.name || 'GuardTrack')}
+              </span>
             </div>
-          </TabsContent>
-        </Tabs>
+          </SidebarHeader>
+
+          <SidebarContent>
+            {user.role === 'super_admin' ? (
+              <>
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <Shield className="h-4 w-4 mr-2" />
+                    Platform
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {renderSidebarItem('clients', 'Clients', Building2)}
+                      {renderSidebarItem('all-users', 'Users', Users)}
+                      {renderSidebarItem('plans', 'Plans', CreditCard)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Communication
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {renderSidebarItem('messages', 'Messages', MessageSquare)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Finance
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {renderSidebarItem('subscription-billing', 'Billing', CreditCard)}
+                      {renderSidebarItem('invoices', 'Invoices', FileText)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Analytics
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {renderSidebarItem('usage-reports', 'Usage Reports', BarChart3)}
+                      {renderSidebarItem('auth-activity', 'Auth Logs', Shield)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <Settings className="h-4 w-4 mr-2" />
+                    System
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {renderSidebarItem('invitations', 'Invites', Mail)}
+                      {renderSidebarItem('error-logs', 'Error Logs', AlertTriangle)}
+                      {renderSidebarItem('platform-settings', 'Settings', Settings)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            ) : (
+              <>
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <LayoutDashboard className="h-4 w-4 mr-2" />
+                    Command Centre
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {hasTabAccess('overview') && renderSidebarItem('overview', 'Overview', LayoutDashboard)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <Users className="h-4 w-4 mr-2" />
+                    Workforce
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {hasTabAccess('guards') && renderSidebarItem('guards', 'Employees', Users)}
+                      {hasTabAccess('users') && renderSidebarItem('users', 'Users', UserCog)}
+                      {hasTabAccess('leave') && renderSidebarItem('leave', 'Leave', CalendarOff)}
+                      {hasTabAccess('invitations') && renderSidebarItem('invitations', 'Invites', Mail)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Operations
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {hasTabAccess('schedule') && renderSidebarItem('schedule', 'Schedule', Calendar)}
+                      {hasTabAccess('sites') && renderSidebarItem('sites', 'Sites', MapPin)}
+                      {hasTabAccess('approvals') && renderSidebarItem('approvals', 'Approvals', CheckSquare)}
+                      {hasTabAccess('manual') && renderSidebarItem('manual', 'Manual', ClipboardEdit)}
+                      {hasTabAccess('notices') && renderSidebarItem('notices', 'Notices', Megaphone)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <Handshake className="h-4 w-4 mr-2" />
+                    Network
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {hasTabAccess('partnerships') && renderSidebarItem('partnerships', 'Partnerships', Handshake)}
+                      {hasTabAccess('job-sharing') && renderSidebarItem('job-sharing', 'Job Sharing', Share2)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Finance
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {renderSidebarItem('staff-invoices', 'Staff Invoices', Receipt)}
+                      {renderSidebarItem('company-invoices', 'Invoices', FileText)}
+                      {hasTabAccess('billing') && renderSidebarItem('billing', 'Billing', CreditCard)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Insights
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {hasTabAccess('reports') && renderSidebarItem('reports', 'Reports', BarChart3)}
+                      {hasTabAccess('activity') && renderSidebarItem('activity', 'Activity', Activity)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <Settings className="h-4 w-4 mr-2" />
+                    System
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {renderSidebarItem('support', 'Support', MessageSquare)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            )}
+          </SidebarContent>
+
+          <SidebarFooter className="border-t border-sidebar-border p-3">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarImage src={user.profileImageUrl || undefined} alt={user.firstName || "Admin"} />
+                <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
+              </Avatar>
+              <div className="overflow-hidden group-data-[collapsible=icon]:hidden">
+                <p className="text-sm font-medium truncate">{user.firstName || user.email}</p>
+                <p className="text-xs text-muted-foreground capitalize truncate">{user.role === 'super_admin' ? 'Super Admin' : 'Admin'}</p>
+              </div>
+            </div>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  data-testid="button-logout"
+                  tooltip="Log Out"
+                  onClick={async () => {
+                    await logoutMutation.mutateAsync();
+                    setLocation('/auth');
+                  }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Log Out</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </Sidebar>
+
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="border-b border-border sticky top-0 bg-muted z-50 h-14 flex items-center justify-between gap-2 px-4">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <span className="text-sm font-semibold hidden sm:inline">Operations Command Centre</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                data-testid="button-refresh-admin"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+              <NotificationSettingsButton variant="ghost" size="icon" />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-avatar-menu">
+                    <Avatar className="h-7 w-7">
+                      <AvatarImage src={user.profileImageUrl || undefined} alt={user.firstName || "Admin"} />
+                      <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      await logoutMutation.mutateAsync();
+                      setLocation('/auth');
+                    }}
+                    data-testid="button-logout-header"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Log Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </header>
+
+          <main className="flex-1 overflow-auto p-4 md:p-6">
+            {renderContent()}
+          </main>
+        </div>
       </div>
 
-      {/* Edit Check-In Dialog */}
       <EditCheckInDialog
         checkIn={editingCheckIn}
         isOpen={isEditDialogOpen}
@@ -809,6 +663,6 @@ export default function AdminDashboard() {
           setEditingCheckIn(null);
         }}
       />
-    </div>
+    </SidebarProvider>
   );
 }

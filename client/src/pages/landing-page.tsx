@@ -6,11 +6,10 @@ import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_176021
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="min-h-screen guardtrack-bg">
+      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-lg">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <img 
                 src={guardTrackLogo} 
@@ -19,23 +18,23 @@ export default function LandingPage() {
                 data-testid="img-logo-header"
               />
             </div>
-            <nav className="hidden md:flex items-center gap-6">
-              <a href="#how-it-works" className="text-sm hover:text-primary transition-colors" data-testid="link-how-it-works">
+            <nav className="hidden md:flex items-center gap-8">
+              <a href="#how-it-works" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-how-it-works">
                 How It Works
               </a>
-              <a href="#about" className="text-sm hover:text-primary transition-colors" data-testid="link-about">
+              <a href="#about" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-about">
                 About Us
               </a>
-              <a href="#who-uses" className="text-sm hover:text-primary transition-colors" data-testid="link-who-uses">
+              <a href="#who-uses" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-who-uses">
                 Who Uses It
               </a>
-              <a href="#pricing" className="text-sm hover:text-primary transition-colors" data-testid="link-pricing">
+              <a href="#pricing" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-pricing">
                 Pricing
               </a>
-              <a href="#learn" className="text-sm hover:text-primary transition-colors" data-testid="link-learn">
+              <a href="#learn" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-learn">
                 Learn
               </a>
-              <a href="#contact" className="text-sm hover:text-primary transition-colors" data-testid="link-contact">
+              <a href="#contact" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-contact">
                 Contact
               </a>
             </nav>
@@ -51,63 +50,65 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="py-24 bg-gradient-to-br from-primary/10 to-background">
-        <div className="container mx-auto px-4">
-          <div className="max-w-5xl mx-auto text-center space-y-8">
-            <div className="flex justify-center">
+      <section className="relative py-32 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background/80" />
+        <div className="container mx-auto px-4 relative">
+          <div className="max-w-5xl mx-auto text-center space-y-10">
+            <div className="flex justify-center relative">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-80 h-80 rounded-full bg-primary/10 blur-3xl" />
+              </div>
               <img 
                 src={guardTrackLogo} 
                 alt="GuardTrack" 
-                className="w-64 h-auto"
+                className="w-72 h-auto relative"
                 data-testid="img-logo-hero"
               />
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold">
+            <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
               Security Guard Management Made Simple
             </h1>
-            <p className="text-xl text-muted-foreground">
+            <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto">
               Track shifts, manage attendance, and streamline security operations with GuardTrack.
             </p>
-            <div className="flex gap-4 justify-center">
+            <div className="flex gap-4 justify-center flex-wrap">
               <Link href="/login">
-                <Button size="lg" data-testid="button-hero-get-started">Get Started</Button>
+                <Button size="lg" className="text-base px-8" data-testid="button-hero-get-started">Get Started</Button>
               </Link>
               <a href="#how-it-works">
-                <Button size="lg" variant="outline" data-testid="button-hero-learn-more">Learn More</Button>
+                <Button size="lg" variant="outline" className="text-base px-8 bg-background/20 backdrop-blur-sm" data-testid="button-hero-learn-more">Learn More</Button>
               </a>
             </div>
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="py-20 bg-background">
+      <section id="how-it-works" className="py-24 bg-background">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
+            <h2 className="text-3xl font-bold text-center mb-16">How It Works</h2>
             <div className="grid md:grid-cols-3 gap-8">
-              <Card>
+              <Card className="hover-elevate">
                 <CardHeader>
-                  <Clock className="h-10 w-10 text-primary mb-2" />
+                  <Clock className="h-10 w-10 text-primary mb-3" />
                   <CardTitle>1. Schedule Shifts</CardTitle>
                   <CardDescription>
                     Admins create and assign shifts to security guards through an intuitive calendar interface.
                   </CardDescription>
                 </CardHeader>
               </Card>
-              <Card>
+              <Card className="hover-elevate">
                 <CardHeader>
-                  <ShieldCheck className="h-10 w-10 text-primary mb-2" />
+                  <ShieldCheck className="h-10 w-10 text-primary mb-3" />
                   <CardTitle>2. Check In/Out</CardTitle>
                   <CardDescription>
                     Guards check in and out with GPS verification, ensuring accurate location tracking and attendance.
                   </CardDescription>
                 </CardHeader>
               </Card>
-              <Card>
+              <Card className="hover-elevate">
                 <CardHeader>
-                  <DollarSign className="h-10 w-10 text-primary mb-2" />
+                  <DollarSign className="h-10 w-10 text-primary mb-3" />
                   <CardTitle>3. Generate Reports</CardTitle>
                   <CardDescription>
                     Automatic billing reports based on hours worked, with export to Google Sheets and professional invoices.
@@ -119,18 +120,17 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* About Us */}
-      <section id="about" className="py-20 bg-muted/50">
+      <section id="about" className="py-24 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-8">About Us</h2>
-            <div className="prose prose-lg mx-auto text-center">
-              <p className="text-muted-foreground">
+            <h2 className="text-3xl font-bold text-center mb-10">About Us</h2>
+            <div className="max-w-2xl mx-auto text-center space-y-6">
+              <p className="text-muted-foreground text-lg leading-relaxed">
                 GuardTrack was born from a real need in the security industry. We saw security companies struggling with 
                 outdated attendance systems, manual timesheet calculations, and complex billing processes. Our mission 
                 is to provide a modern, efficient solution that saves time and reduces administrative overhead.
               </p>
-              <p className="text-muted-foreground mt-4">
+              <p className="text-muted-foreground text-lg leading-relaxed">
                 Built by a team passionate about combining technology with operational efficiency, GuardTrack has grown 
                 to serve security companies of all sizes, helping them manage their workforce with confidence and precision.
               </p>
@@ -139,15 +139,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Who Uses It */}
-      <section id="who-uses" className="py-20 bg-background">
+      <section id="who-uses" className="py-24 bg-background">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-12">Who Uses GuardTrack?</h2>
+            <h2 className="text-3xl font-bold text-center mb-16">Who Uses GuardTrack?</h2>
             <div className="grid md:grid-cols-2 gap-8">
-              <Card>
+              <Card className="hover-elevate">
                 <CardHeader>
-                  <Users className="h-10 w-10 text-primary mb-2" />
+                  <Users className="h-10 w-10 text-primary mb-3" />
                   <CardTitle>Security Companies</CardTitle>
                   <CardDescription>
                     Perfect for security firms managing multiple sites and guards. Streamline operations, reduce 
@@ -155,9 +154,9 @@ export default function LandingPage() {
                   </CardDescription>
                 </CardHeader>
               </Card>
-              <Card>
+              <Card className="hover-elevate">
                 <CardHeader>
-                  <ShieldCheck className="h-10 w-10 text-primary mb-2" />
+                  <ShieldCheck className="h-10 w-10 text-primary mb-3" />
                   <CardTitle>Event Security Teams</CardTitle>
                   <CardDescription>
                     Ideal for event security management with flexible shift scheduling, real-time attendance tracking, 
@@ -170,11 +169,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="py-20 bg-muted/50">
+      <section id="pricing" className="py-24 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl font-bold mb-8">Pricing</h2>
+            <h2 className="text-3xl font-bold mb-10">Pricing</h2>
             <Card className="max-w-md mx-auto">
               <CardHeader>
                 <CardTitle>Contact Us for Pricing</CardTitle>
@@ -193,15 +191,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Learn */}
-      <section id="learn" className="py-20 bg-background">
+      <section id="learn" className="py-24 bg-background">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-12">How to Use GuardTrack</h2>
+            <h2 className="text-3xl font-bold text-center mb-16">How to Use GuardTrack</h2>
             <div className="space-y-6">
-              <Card>
+              <Card className="hover-elevate">
                 <CardHeader>
-                  <BookOpen className="h-8 w-8 text-primary mb-2" />
+                  <BookOpen className="h-8 w-8 text-primary mb-3" />
                   <CardTitle>For Administrators</CardTitle>
                   <CardDescription>
                     Set up sites and rates, schedule shifts, monitor real-time attendance, approve breaks and overtime, 
@@ -209,9 +206,9 @@ export default function LandingPage() {
                   </CardDescription>
                 </CardHeader>
               </Card>
-              <Card>
+              <Card className="hover-elevate">
                 <CardHeader>
-                  <BookOpen className="h-8 w-8 text-primary mb-2" />
+                  <BookOpen className="h-8 w-8 text-primary mb-3" />
                   <CardTitle>For Security Guards</CardTitle>
                   <CardDescription>
                     View your schedule, check in/out with GPS verification, track breaks, apply for available shifts, 
@@ -224,14 +221,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Contact */}
-      <section id="contact" className="py-20 bg-muted/50">
+      <section id="contact" className="py-24 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl font-bold mb-8">Contact Us</h2>
+            <h2 className="text-3xl font-bold mb-10">Contact Us</h2>
             <Card className="max-w-md mx-auto">
               <CardHeader>
-                <Mail className="h-12 w-12 text-primary mx-auto mb-2" />
+                <Mail className="h-12 w-12 text-primary mx-auto mb-3" />
                 <CardTitle>Get in Touch</CardTitle>
                 <CardDescription>
                   Have questions? Want to schedule a demo? We'd love to hear from you.
@@ -250,10 +246,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-8 border-t bg-background">
+      <footer className="py-10 border-t border-border/40 bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <img 
                 src={guardTrackLogo} 
@@ -262,7 +257,7 @@ export default function LandingPage() {
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} GuardTrack. All rights reserved.
+              &copy; {new Date().getFullYear()} GuardTrack. All rights reserved.
             </p>
           </div>
         </div>
