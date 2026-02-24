@@ -56,6 +56,7 @@ import AuthActivityLogs from "@/components/auth-activity-logs";
 import SuperAdminCreateUser from "@/components/super-admin-create-user";
 import StaffInvoiceManagement from "@/components/staff-invoice-management";
 import { CompanyStripeSettings } from "@/components/stripe-connect-settings";
+import { XeroSettings } from "@/components/xero-connect-settings";
 import OperationsCommandCentre from "@/components/operations-command-centre";
 
 export default function AdminDashboard() {
@@ -86,6 +87,24 @@ export default function AdminDashboard() {
       }
     }
   }, [authLoading, user]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const xero = params.get('xero');
+    if (tab) {
+      setActiveTab(tab);
+    }
+    if (xero === 'connected') {
+      toast({ title: "Xero Connected", description: "Your Xero account has been connected successfully." });
+      queryClient.invalidateQueries({ queryKey: ["/api/xero/status"] });
+    } else if (xero === 'error') {
+      toast({ title: "Xero Connection Failed", description: "There was an error connecting your Xero account. Please try again.", variant: "destructive" });
+    }
+    if (tab || xero) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -241,6 +260,7 @@ export default function AdminDashboard() {
         return (
           <div className="space-y-6">
             <CompanyStripeSettings />
+            <XeroSettings />
             <BillingReports />
           </div>
         );

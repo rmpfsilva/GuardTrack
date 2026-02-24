@@ -10,7 +10,8 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, CheckCircle2, XCircle, DollarSign, MapPin, Clock, User, AlertCircle, ChevronLeft, Loader2, Filter } from "lucide-react";
+import { FileText, CheckCircle2, XCircle, DollarSign, MapPin, Clock, User, AlertCircle, ChevronLeft, Loader2, Filter, RefreshCw } from "lucide-react";
+import { SiXero } from "react-icons/si";
 import type { StaffInvoiceWithDetails } from "@shared/schema";
 
 function statusBadge(status: string) {
@@ -74,6 +75,30 @@ function InvoiceDetailView({ invoice, onBack }: { invoice: StaffInvoiceWithDetai
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const { data: xeroStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ["/api/xero/status"],
+    retry: false,
+  });
+
+  const xeroSyncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/xero/sync-invoice/${invoice.id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Synced to Xero", description: "Invoice has been created as a bill in Xero." });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-invoices"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Xero sync failed", description: err.message || "Failed to sync to Xero", variant: "destructive" });
+    },
+  });
+
+  const inv = invoice as any;
+  const canSyncToXero = xeroStatus?.connected && (invoice.status === 'approved' || invoice.status === 'paid') && !inv.xeroInvoiceId && inv.xeroSyncStatus !== 'synced';
+  const canRetrySync = xeroStatus?.connected && inv.xeroSyncStatus === 'error' && !inv.xeroInvoiceId;
+  const isSynced = inv.xeroSyncStatus === 'synced' && !!inv.xeroInvoiceId;
 
   return (
     <div className="space-y-4">
@@ -190,6 +215,45 @@ function InvoiceDetailView({ invoice, onBack }: { invoice: StaffInvoiceWithDetai
                     {payMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <DollarSign className="h-4 w-4 mr-2" />}
                     Mark as Paid
                   </Button>
+                )}
+              </div>
+            </>
+          )}
+
+          {(isSynced || canSyncToXero || canRetrySync) && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  {isSynced ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <SiXero className="h-4 w-4 text-blue-500" />
+                      <span className="text-muted-foreground">Synced to Xero</span>
+                      {inv.xeroSyncedAt && (
+                        <span className="text-xs text-muted-foreground">({format(new Date(inv.xeroSyncedAt), "dd MMM yyyy")})</span>
+                      )}
+                    </div>
+                  ) : (canSyncToXero || canRetrySync) ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => xeroSyncMutation.mutate()}
+                      disabled={xeroSyncMutation.isPending}
+                      data-testid="button-sync-xero"
+                    >
+                      {xeroSyncMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : canRetrySync ? (
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                      ) : (
+                        <SiXero className="h-4 w-4 mr-2" />
+                      )}
+                      {canRetrySync ? "Retry Xero Sync" : "Sync to Xero"}
+                    </Button>
+                  ) : null}
+                </div>
+                {inv.xeroSyncStatus === 'error' && inv.xeroSyncError && (
+                  <p className="text-xs text-destructive">{inv.xeroSyncError}</p>
                 )}
               </div>
             </>

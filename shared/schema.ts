@@ -79,6 +79,12 @@ export const companies = pgTable("companies", {
   subscriptionStatus: varchar("subscription_status").default('active'), // 'trial' | 'active' | 'expired' | 'suspended'
   billingStartDate: timestamp("billing_start_date"),
   stripeAccountId: varchar("stripe_account_id"),
+  xeroAccessToken: text("xero_access_token"),
+  xeroRefreshToken: text("xero_refresh_token"),
+  xeroExpiresAt: timestamp("xero_expires_at"),
+  xeroTenantId: varchar("xero_tenant_id"),
+  xeroTenantName: varchar("xero_tenant_name"),
+  xeroConnectedAt: timestamp("xero_connected_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1142,6 +1148,10 @@ export const staffInvoices = pgTable("staff_invoices", {
   approvedBy: varchar("approved_by").references(() => users.id, { onDelete: 'set null' }),
   approvedAt: timestamp("approved_at"),
   paidAt: timestamp("paid_at"),
+  xeroInvoiceId: varchar("xero_invoice_id"),
+  xeroSyncStatus: varchar("xero_sync_status").default('not_synced'),
+  xeroSyncError: text("xero_sync_error"),
+  xeroSyncedAt: timestamp("xero_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

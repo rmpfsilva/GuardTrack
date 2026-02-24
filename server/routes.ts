@@ -1017,6 +1017,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== End Staff Invoice & Stripe Routes ====================
 
+  // ==================== Xero Integration Routes ====================
+
+  app.get('/api/xero/configured', isAuthenticated, async (_req: any, res) => {
+    const { isXeroConfigured } = await import('./xero');
+    res.json({ configured: isXeroConfigured() });
+  });
+
+  app.get('/api/xero/status', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.json({ connected: false });
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.json({ connected: false });
+      const c = company as any;
+      res.json({
+        connected: !!(c.xeroTenantId && c.xeroRefreshToken),
+        tenantName: c.xeroTenantName || null,
+        connectedAt: c.xeroConnectedAt || null,
+      });
+    } catch (error: any) {
+      res.json({ connected: false });
+    }
+  });
+
+  app.post('/api/xero/connect', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { isXeroConfigured, buildConsentUrl } = await import('./xero');
+      if (!isXeroConfigured()) {
+        return res.status(503).json({ message: "Xero integration is not configured on this platform. Please contact your platform administrator." });
+      }
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const url = await buildConsentUrl(baseUrl);
+      res.json({ url });
+    } catch (error: any) {
+      console.error("Error building Xero consent URL:", error);
+      res.status(500).json({ message: error.message || "Failed to start Xero connection" });
+    }
+  });
+
+  app.get('/api/xero/callback', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { handleCallback } = await import('./xero');
+      const user = req.user;
+      if (!user.companyId) {
+        return res.redirect('/admin?tab=billing&xero=error&reason=no_company');
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const callbackUrl = `${baseUrl}${req.originalUrl}`;
+
+      const result = await handleCallback(baseUrl, callbackUrl);
+
+      await storage.updateCompany(user.companyId, {
+        xeroAccessToken: result.accessToken,
+        xeroRefreshToken: result.refreshToken,
+        xeroExpiresAt: result.expiresAt,
+        xeroTenantId: result.tenantId,
+        xeroTenantName: result.tenantName,
+        xeroConnectedAt: new Date(),
+      } as any);
+
+      res.redirect('/admin?tab=billing&xero=connected');
+    } catch (error: any) {
+      console.error("Error handling Xero callback:", error);
+      res.redirect('/admin?tab=billing&xero=error');
+    }
+  });
+
+  app.post('/api/xero/disconnect', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company assigned" });
+
+      await storage.updateCompany(user.companyId, {
+        xeroAccessToken: null,
+        xeroRefreshToken: null,
+        xeroExpiresAt: null,
+        xeroTenantId: null,
+        xeroTenantName: null,
+        xeroConnectedAt: null,
+      } as any);
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error disconnecting Xero:", error);
+      res.status(500).json({ message: error.message || "Failed to disconnect Xero" });
+    }
+  });
+
+  app.post('/api/xero/sync-invoice/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company assigned" });
+
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const c = company as any;
+
+      if (!c.xeroTenantId || !c.xeroRefreshToken) {
+        return res.status(400).json({ message: "Xero is not connected. Please connect your Xero account first." });
+      }
+
+      const invoice = await storage.getStaffInvoiceById(req.params.id);
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      if (invoice.companyId !== user.companyId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      if (invoice.status !== 'approved' && invoice.status !== 'paid') {
+        return res.status(400).json({ message: "Only approved or paid invoices can be synced to Xero." });
+      }
+      if ((invoice as any).xeroInvoiceId) {
+        return res.status(400).json({ message: "This invoice has already been synced to Xero." });
+      }
+      if ((invoice as any).xeroSyncStatus === 'error') {
+        await storage.updateStaffInvoice(invoice.id, {
+          xeroSyncStatus: 'not_synced',
+          xeroSyncError: null,
+        } as any);
+      }
+
+      const guard = await storage.getUser(invoice.guardUserId);
+      const guardName = guard ? `${guard.firstName || ''} ${guard.lastName || ''}`.trim() || guard.username : 'Unknown Guard';
+
+      const shifts = invoice.shifts || [];
+      const lineItems = shifts.map((s: any) => ({
+        description: `${s.site?.name || 'Shift'} - ${s.shift ? new Date(s.shift.startTime).toLocaleDateString() : 'Unknown date'} (${s.hours}h @ £${s.rate}/h)`,
+        quantity: parseFloat(s.hours),
+        unitAmount: parseFloat(s.rate),
+        accountCode: '200',
+      }));
+
+      if (lineItems.length === 0) {
+        return res.status(400).json({ message: "Invoice has no shift data to sync." });
+      }
+
+      const invoiceDate = invoice.createdAt ? new Date(invoice.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      const { createBillInXero } = await import('./xero');
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+      const result = await createBillInXero(
+        baseUrl,
+        c.xeroAccessToken,
+        c.xeroRefreshToken,
+        new Date(c.xeroExpiresAt),
+        c.xeroTenantId,
+        guardName,
+        invoice.invoiceNumber,
+        lineItems,
+        invoiceDate,
+        dueDate
+      );
+
+      if (result.newTokens) {
+        await storage.updateCompany(user.companyId, {
+          xeroAccessToken: result.newTokens.accessToken,
+          xeroRefreshToken: result.newTokens.refreshToken,
+          xeroExpiresAt: result.newTokens.expiresAt,
+        } as any);
+      }
+
+      await storage.updateStaffInvoice(invoice.id, {
+        xeroInvoiceId: result.xeroInvoiceId,
+        xeroSyncStatus: 'synced',
+        xeroSyncedAt: new Date(),
+        xeroSyncError: null,
+      } as any);
+
+      const full = await storage.getStaffInvoiceById(invoice.id);
+      res.json(full);
+    } catch (error: any) {
+      console.error("Error syncing invoice to Xero:", error);
+      try {
+        await storage.updateStaffInvoice(req.params.id, {
+          xeroSyncStatus: 'error',
+          xeroSyncError: error.message || 'Unknown error',
+        } as any);
+      } catch (updateErr) {
+        console.error("Failed to save sync error:", updateErr);
+      }
+      res.status(500).json({ message: error.message || "Failed to sync invoice to Xero" });
+    }
+  });
+
+  // ==================== End Xero Routes ====================
+
   // User management routes (admin only)
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
