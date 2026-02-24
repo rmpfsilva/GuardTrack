@@ -909,6 +909,7 @@ export default function GuardApp() {
   const navItems = visibleTabs.length > 0
     ? [
         ...visibleTabs.map(tab => ({ key: tab.tabKey, label: tab.label, icon: tab.icon })),
+        ...(!visibleTabs.some(t => t.tabKey === 'invoices') ? [{ key: 'invoices', label: 'Invoices', icon: 'DollarSign' }] : []),
         ...(!visibleTabs.some(t => t.tabKey === 'settings') ? [{ key: 'settings', label: 'Settings', icon: 'Settings' }] : []),
       ]
     : defaultNavItems;
