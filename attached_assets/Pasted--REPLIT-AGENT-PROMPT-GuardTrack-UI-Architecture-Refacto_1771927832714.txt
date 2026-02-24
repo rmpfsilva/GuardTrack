@@ -1,0 +1,396 @@
+🔵 REPLIT AGENT PROMPT
+GuardTrack UI Architecture Refactor – Operations Command Centre Upgrade
+🚨 DO NOT BREAK ANY CORE LOGIC
+
+This is a UI/UX structural refactor only.
+
+You MUST NOT:
+
+Modify backend routes
+
+Modify database schema
+
+Modify API contracts
+
+Modify TanStack query logic
+
+Modify feature gating logic
+
+Modify plan-based access logic
+
+Modify guard app behaviour
+
+Modify Stripe logic
+
+Modify routing configuration in vite.config.ts
+
+Modify build system
+
+All functionality must remain identical.
+
+We are restructuring layout and visual system only.
+
+🎯 OBJECTIVE
+
+Transform GuardTrack Admin Dashboard from:
+
+Horizontal tab-based navigation
+→ Into a structured Left Sidebar Navigation System
+
+Transform the Admin landing page into:
+
+Operations Command Centre (Action-driven dashboard)
+
+Refresh design to:
+
+Feel modern SaaS
+
+Be visually lighter
+
+Improve hierarchy
+
+Reduce clutter
+
+Align with GuardTrack logo colours
+
+Improve perceived product quality
+
+1️⃣ ADMIN DASHBOARD NAVIGATION REBUILD
+File to modify:
+
+client/src/pages/admin-dashboard.tsx
+
+REMOVE:
+
+The horizontal scrolling <Tabs> navigation system at the top.
+
+REPLACE WITH:
+
+Shadcn <Sidebar> layout (same pattern used in guard-app.tsx).
+
+Use:
+
+<SidebarProvider>
+  <Sidebar collapsible="icon">
+  <SidebarContent>
+  ...
+
+Follow exact structure from guard-app.tsx for consistency.
+
+NEW ADMIN SIDEBAR STRUCTURE
+
+Group tabs into collapsible sections:
+
+📊 Command Centre
+
+Overview (default landing page)
+
+👥 Workforce
+
+Employees
+
+Users
+
+Leave
+
+Invites
+
+📅 Operations
+
+Schedule
+
+Sites
+
+Approvals
+
+Manual
+
+Notices
+
+🤝 Network
+
+Partnerships
+
+Job Sharing
+
+💰 Finance
+
+Staff Invoices
+
+Invoices
+
+Billing
+
+📈 Insights
+
+Reports
+
+Activity
+
+⚙ System
+
+Support
+
+Settings
+
+Requirements:
+
+Use Lucide icons only (no emoji).
+
+Use Shadcn <SidebarGroup> and <SidebarMenuItem>.
+
+Use existing feature gating hooks (useFeatureAccess, usePlanFeatures) to conditionally render items.
+
+Preserve role filtering logic.
+
+Sidebar must support icon-only collapse mode.
+
+Active tab must visually highlight using sidebar-primary.
+
+Use existing CSS variables for colours.
+
+2️⃣ OPERATIONS COMMAND CENTRE (New Overview Page)
+Replace current Overview content inside admin-dashboard.tsx
+
+Create a new component inside:
+client/src/components/operations-command-centre.tsx
+
+Import and render when Overview is active.
+
+STRUCTURE
+SECTION 1 – Header
+
+Large title:
+Operations Command Centre
+
+Subtext:
+“Live overview of workforce, shifts and network activity.”
+
+SECTION 2 – Priority Action Cards (Dynamic)
+
+Create a responsive grid (3–4 per row).
+
+Cards should conditionally show:
+
+Pending Leave Approvals
+
+Pending Staff Invoices
+
+Unfilled Shifts (if any)
+
+Pending Job Shares
+
+Pending Notice Applications
+
+Each card:
+
+Use <Card>
+
+Use Lucide icon
+
+Use subtle accent background
+
+Click navigates to relevant section
+
+Use muted secondary text
+
+No nested cards
+
+SECTION 3 – Live Metrics Row
+
+Cards:
+
+Active Guards Now
+
+Scheduled Shifts Today
+
+Weekly Hours
+
+Pending Invoice Value
+
+Must:
+
+Use existing query endpoints
+
+Be read-only
+
+No backend changes
+
+Use hover-elevate
+
+SECTION 4 – Two Column Layout
+
+Left:
+Recent Activity Feed (compact)
+
+Right:
+Currently On Duty
+
+Use smaller cards.
+Increase spacing between items.
+Do not use heavy borders.
+
+3️⃣ VISUAL SYSTEM REFINEMENT
+
+Modify only CSS variables in:
+
+client/src/index.css
+
+Updated Dark Mode Palette
+
+We are softening the heavy dark tone.
+
+Replace dark mode with:
+
+--background: 222 47% 11%;   /* Deep navy gradient base */
+--card: 222 35% 16%;
+--sidebar: 222 40% 13%;
+--primary: 215 85% 55%;      /* Brighter electric blue */
+--accent: 215 60% 22%;
+--muted: 220 20% 20%;
+--border: 220 25% 25%;
+
+Keep HSL format (space-separated).
+
+Do NOT wrap in hsl().
+
+Background Enhancement
+
+Enhance default background:
+
+Update .guardtrack-bg to use subtle radial gradient:
+
+Deep navy top-left
+Slightly lighter blue bottom-right
+
+Do NOT use strong colour shifts.
+
+Keep it professional.
+
+4️⃣ GLOBAL SPACING & HIERARCHY ADJUSTMENTS
+
+Across admin components:
+
+Increase vertical spacing between sections
+
+Use space-y-6 or space-y-8
+
+Increase card padding slightly
+
+Reduce dense stacking
+
+Typography:
+
+Page titles: text-2xl font-semibold
+
+Section titles: text-lg font-medium
+
+Subtext: text-muted-foreground
+
+5️⃣ REMOVE VISUAL CLUTTER
+
+In admin header:
+
+Simplify:
+
+Current:
+Logo + company + refresh + theme + bell + avatar
+
+Refine:
+
+Left:
+Logo + Company Name
+
+Right:
+Notifications + Avatar
+
+Move theme toggle into Settings page.
+
+6️⃣ LANDING PAGE VISUAL UPGRADE
+
+File:
+client/src/pages/landing-page.tsx
+
+Enhancements:
+
+Use same background gradient as app
+
+Increase hero text size
+
+Add subtle glow behind logo
+
+Improve spacing between navigation items
+
+Make CTA button primary blue
+
+Use accent sparingly
+
+Do NOT change routing or auth behaviour.
+
+7️⃣ NON-NEGOTIABLE DESIGN RULES
+
+Must follow:
+
+Use Shadcn components only
+
+No custom hover logic for Buttons or Badges
+
+No nested cards
+
+Use rounded-md only
+
+No emoji
+
+No hardcoded hex colours
+
+Use CSS variables only
+
+Keep Tailwind class consistency
+
+8️⃣ PERFORMANCE & SAFETY
+
+After refactor:
+
+Ensure no layout shifts break responsiveness
+
+Ensure mobile view still works
+
+Ensure feature gating still works
+
+Ensure sidebar collapse works
+
+Ensure Super Admin tabs still appear conditionally
+
+9️⃣ DELIVERABLES
+
+Agent must:
+
+Replace admin tab layout with Sidebar layout
+
+Create Operations Command Centre component
+
+Adjust CSS variables for refined colour system
+
+Improve spacing and typography
+
+Preserve all logic and data flows
+
+No backend changes.
+No schema changes.
+No API changes.
+
+RESULT WE ARE TARGETING
+
+GuardTrack should now feel like:
+
+A modern SaaS operations platform
+
+Structured and scalable
+
+Visually lighter
+
+Premium
+
+Easier to navigate
+
+Action-driven instead of static
