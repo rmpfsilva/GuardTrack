@@ -7,40 +7,40 @@ import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_176021
 export default function LandingPage() {
   return (
     <div className="min-h-screen guardtrack-bg">
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4">
+      <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-slate-900/90 backdrop-blur-lg">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <img 
                 src={guardTrackLogo} 
                 alt="GuardTrack" 
-                className="h-12 w-auto"
+                className="h-10 w-auto"
                 data-testid="img-logo-header"
               />
             </div>
             <nav className="hidden md:flex items-center gap-8">
-              <a href="#how-it-works" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-how-it-works">
+              <a href="#how-it-works" className="text-sm text-white/70 hover:text-white transition-colors" data-testid="link-how-it-works">
                 How It Works
               </a>
-              <a href="#about" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-about">
+              <a href="#about" className="text-sm text-white/70 hover:text-white transition-colors" data-testid="link-about">
                 About Us
               </a>
-              <a href="#who-uses" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-who-uses">
+              <a href="#who-uses" className="text-sm text-white/70 hover:text-white transition-colors" data-testid="link-who-uses">
                 Who Uses It
               </a>
-              <a href="#pricing" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-pricing">
+              <a href="#pricing" className="text-sm text-white/70 hover:text-white transition-colors" data-testid="link-pricing">
                 Pricing
               </a>
-              <a href="#learn" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-learn">
+              <a href="#learn" className="text-sm text-white/70 hover:text-white transition-colors" data-testid="link-learn">
                 Learn
               </a>
-              <a href="#contact" className="text-sm text-foreground/80 hover:text-foreground transition-colors" data-testid="link-contact">
+              <a href="#contact" className="text-sm text-white/70 hover:text-white transition-colors" data-testid="link-contact">
                 Contact
               </a>
             </nav>
             <div className="flex items-center gap-3">
               <Link href="/login">
-                <Button variant="ghost" data-testid="button-nav-login">Login</Button>
+                <Button variant="outline" className="border-white/20 text-white bg-transparent" data-testid="button-nav-login">Login</Button>
               </Link>
               <Link href="/login">
                 <Button data-testid="button-nav-signup">Sign Up</Button>
@@ -65,10 +65,10 @@ export default function LandingPage() {
                 data-testid="img-logo-hero"
               />
             </div>
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
+            <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white">
               Security Guard Management Made Simple
             </h1>
-            <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto">
+            <p className="text-xl md:text-2xl text-white/70 max-w-3xl mx-auto">
               Track shifts, manage attendance, and streamline security operations with GuardTrack.
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
@@ -76,7 +76,7 @@ export default function LandingPage() {
                 <Button size="lg" className="text-base px-8" data-testid="button-hero-get-started">Get Started</Button>
               </Link>
               <a href="#how-it-works">
-                <Button size="lg" variant="outline" className="text-base px-8 bg-background/20 backdrop-blur-sm" data-testid="button-hero-learn-more">Learn More</Button>
+                <Button size="lg" variant="outline" className="text-base px-8 border-white/30 text-white bg-white/10 backdrop-blur-sm" data-testid="button-hero-learn-more">Learn More</Button>
               </a>
             </div>
           </div>
