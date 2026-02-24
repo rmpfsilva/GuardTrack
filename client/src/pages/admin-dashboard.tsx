@@ -55,6 +55,7 @@ import SuperAdminUserManagement from "@/components/super-admin-user-management";
 import AuthActivityLogs from "@/components/auth-activity-logs";
 import SuperAdminCreateUser from "@/components/super-admin-create-user";
 import StaffInvoiceManagement from "@/components/staff-invoice-management";
+import { CompanyStripeSettings } from "@/components/stripe-connect-settings";
 import OperationsCommandCentre from "@/components/operations-command-centre";
 
 export default function AdminDashboard() {
@@ -237,7 +238,12 @@ export default function AdminDashboard() {
       case 'overview':
         return <OperationsCommandCentre onNavigate={handleTabChange} />;
       case 'billing':
-        return <BillingReports />;
+        return (
+          <div className="space-y-6">
+            <CompanyStripeSettings />
+            <BillingReports />
+          </div>
+        );
       case 'company-invoices':
         return <CompanyInvoices />;
       case 'reports':

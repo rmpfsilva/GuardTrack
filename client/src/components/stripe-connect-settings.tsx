@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,11 +11,37 @@ interface StripeConnectStatusResponse {
   accountId?: string;
 }
 
+interface StripeConfiguredResponse {
+  configured: boolean;
+}
+
 export function CompanyStripeSettings() {
+  const { toast } = useToast();
+
+  const { data: stripeConfigured } = useQuery<StripeConfiguredResponse>({
+    queryKey: ["/api/stripe/configured"],
+    retry: false,
+  });
+
   const { data: status, isLoading } = useQuery<StripeConnectStatusResponse>({
     queryKey: ["/api/stripe/connect/company/status"],
     retry: false,
   });
+
+  const onboardMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/stripe/connect/company/onboard");
+      return res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      window.location.href = data.url;
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to start Stripe onboarding", variant: "destructive" });
+    },
+  });
+
+  const isPlatformConfigured = stripeConfigured?.configured;
 
   return (
     <Card>
@@ -45,12 +73,22 @@ export function CompanyStripeSettings() {
               <div>
                 <p className="text-sm font-medium">Stripe not connected</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Connect your Stripe account to enable employee invoice payments. This feature will be available once platform payment keys are configured.
+                  {isPlatformConfigured
+                    ? "Connect your Stripe account to enable employee invoice payments."
+                    : "Connect your Stripe account to enable employee invoice payments. This feature will be available once platform payment keys are configured."}
                 </p>
               </div>
             </div>
-            <Button disabled data-testid="button-connect-stripe-company">
-              <ExternalLink className="h-4 w-4 mr-2" />
+            <Button
+              disabled={!isPlatformConfigured || onboardMutation.isPending}
+              onClick={() => onboardMutation.mutate()}
+              data-testid="button-connect-stripe-company"
+            >
+              {onboardMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ExternalLink className="h-4 w-4 mr-2" />
+              )}
               Connect Stripe Account
             </Button>
           </div>
@@ -61,10 +99,32 @@ export function CompanyStripeSettings() {
 }
 
 export function GuardStripeSettings() {
+  const { toast } = useToast();
+
+  const { data: stripeConfigured } = useQuery<StripeConfiguredResponse>({
+    queryKey: ["/api/stripe/configured"],
+    retry: false,
+  });
+
   const { data: status, isLoading } = useQuery<StripeConnectStatusResponse>({
     queryKey: ["/api/stripe/connect/guard/status"],
     retry: false,
   });
+
+  const onboardMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/stripe/connect/guard/onboard");
+      return res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      window.location.href = data.url;
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to start Stripe onboarding", variant: "destructive" });
+    },
+  });
+
+  const isPlatformConfigured = stripeConfigured?.configured;
 
   return (
     <Card>
@@ -91,10 +151,21 @@ export function GuardStripeSettings() {
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Connect your payment account to receive invoice payouts. Available once platform payments are configured.
+              {isPlatformConfigured
+                ? "Connect your payment account to receive invoice payouts."
+                : "Connect your payment account to receive invoice payouts. Available once platform payments are configured."}
             </p>
-            <Button disabled size="sm" data-testid="button-connect-stripe-guard">
-              <ExternalLink className="h-4 w-4 mr-2" />
+            <Button
+              disabled={!isPlatformConfigured || onboardMutation.isPending}
+              onClick={() => onboardMutation.mutate()}
+              size="sm"
+              data-testid="button-connect-stripe-guard"
+            >
+              {onboardMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ExternalLink className="h-4 w-4 mr-2" />
+              )}
               Connect for Payout
             </Button>
           </div>

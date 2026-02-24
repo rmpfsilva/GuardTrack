@@ -853,7 +853,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin mark invoice as paid (placeholder for Stripe integration)
   app.post('/api/staff-invoices/:id/pay', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const user = req.user;
@@ -866,13 +865,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: `Cannot pay invoice with status '${invoice.status}'. Must be approved first.` });
       }
 
-      // TODO: Stripe Connect payment integration
-      // When Stripe keys are configured:
-      // 1. Check company has stripeAccountId
-      // 2. Check guard has stripeConnectedAccountId
-      // 3. Create PaymentIntent with transfer
-      // For now, mark as paid manually
       const shiftIds = invoice.shifts?.map((s: any) => s.shiftId) || [];
+
+      const { isStripeConfigured, createPaymentIntent } = await import('./stripe');
+      if (isStripeConfigured()) {
+        const company = await storage.getCompany(invoice.companyId);
+        const guard = await storage.getUser(invoice.guardUserId);
+        const companyStripeId = (company as any)?.stripeAccountId;
+        const guardStripeId = (guard as any)?.stripeConnectedAccountId;
+
+        if (!companyStripeId) {
+          return res.status(400).json({ message: "Company has not connected a Stripe account. Please set up Stripe Connect in billing settings." });
+        }
+        if (!guardStripeId) {
+          return res.status(400).json({ message: "Guard has not connected a Stripe payout account. They must set up Stripe Connect in their settings." });
+        }
+
+        const paymentIntent = await createPaymentIntent(
+          parseFloat(invoice.totalAmount),
+          companyStripeId,
+          guardStripeId,
+          invoice.id
+        );
+
+        const updated = await storage.updateStaffInvoice(invoice.id, {
+          status: 'paid',
+          paidAt: new Date(),
+          stripePaymentIntentId: paymentIntent.id,
+        });
+        await storage.updateShiftBillingStatus(shiftIds, 'paid');
+        const full = await storage.getStaffInvoiceById(updated.id);
+        return res.json(full);
+      }
 
       const updated = await storage.updateStaffInvoice(invoice.id, {
         status: 'paid',
@@ -888,7 +912,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==================== Stripe Connect Status Routes ====================
+  // ==================== Stripe Connect Routes ====================
+
+  app.get('/api/stripe/configured', isAuthenticated, async (_req: any, res) => {
+    const { isStripeConfigured } = await import('./stripe');
+    res.json({ configured: isStripeConfigured() });
+  });
 
   app.get('/api/stripe/connect/company/status', isAuthenticated, async (req: any, res) => {
     try {
@@ -916,7 +945,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==================== End Staff Invoice Routes ====================
+  app.post('/api/stripe/connect/company/onboard', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { isStripeConfigured, createConnectedAccount, createConnectAccountLink } = await import('./stripe');
+      if (!isStripeConfigured()) {
+        return res.status(503).json({ message: "Stripe is not configured on this platform yet. Please contact your platform administrator." });
+      }
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company assigned" });
+
+      const company = await storage.getCompany(user.companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      let accountId = (company as any).stripeAccountId;
+      if (!accountId) {
+        const account = await createConnectedAccount(company.email || user.email || '');
+        accountId = account.id;
+        await storage.updateCompany(user.companyId, { stripeAccountId: accountId } as any);
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const link = await createConnectAccountLink(
+        accountId,
+        `${baseUrl}/admin?tab=billing&stripe=connected`,
+        `${baseUrl}/api/stripe/connect/company/refresh`
+      );
+
+      res.json({ url: link.url });
+    } catch (error: any) {
+      console.error("Error creating company Stripe onboarding:", error);
+      res.status(500).json({ message: error.message || "Failed to start Stripe onboarding" });
+    }
+  });
+
+  app.get('/api/stripe/connect/company/refresh', isAuthenticated, async (req: any, res) => {
+    res.redirect('/admin?tab=billing&stripe=refresh');
+  });
+
+  app.post('/api/stripe/connect/guard/onboard', isAuthenticated, async (req: any, res) => {
+    try {
+      const { isStripeConfigured, createConnectedAccount, createConnectAccountLink } = await import('./stripe');
+      if (!isStripeConfigured()) {
+        return res.status(503).json({ message: "Stripe is not configured on this platform yet." });
+      }
+      const user = req.user;
+
+      let accountId = (user as any).stripeConnectedAccountId;
+      if (!accountId) {
+        const account = await createConnectedAccount(user.email || '');
+        accountId = account.id;
+        await storage.updateUser(user.id, { stripeConnectedAccountId: accountId } as any);
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const link = await createConnectAccountLink(
+        accountId,
+        `${baseUrl}/guard/app?tab=settings&stripe=connected`,
+        `${baseUrl}/api/stripe/connect/guard/refresh`
+      );
+
+      res.json({ url: link.url });
+    } catch (error: any) {
+      console.error("Error creating guard Stripe onboarding:", error);
+      res.status(500).json({ message: error.message || "Failed to start Stripe onboarding" });
+    }
+  });
+
+  app.get('/api/stripe/connect/guard/refresh', isAuthenticated, async (req: any, res) => {
+    res.redirect('/guard/app?tab=settings&stripe=refresh');
+  });
+
+  // ==================== End Staff Invoice & Stripe Routes ====================
 
   // User management routes (admin only)
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (req: any, res) => {
