@@ -32,6 +32,9 @@ export default function JobSharing() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAcceptDialogOpen, setIsAcceptDialogOpen] = useState(false);
   const [isEditWorkersDialogOpen, setIsEditWorkersDialogOpen] = useState(false);
+  const [isUpdateRatesOpen, setIsUpdateRatesOpen] = useState(false);
+  const [updatingRatesShare, setUpdatingRatesShare] = useState<JobShareWithDetails | null>(null);
+  const [updatedRates, setUpdatedRates] = useState<Array<{ role: string; count: number; hourlyRate: string }>>([]);
   const [editingShare, setEditingShare] = useState<JobShareWithDetails | null>(null);
   const [acceptingShare, setAcceptingShare] = useState<JobShareWithDetails | null>(null);
   const [editingWorkersShare, setEditingWorkersShare] = useState<JobShareWithDetails | null>(null);
@@ -314,6 +317,31 @@ export default function JobSharing() {
         requirements: formData.requirements,
         positions,
       }
+    });
+  };
+
+  const openUpdateRatesDialog = (share: JobShareWithDetails) => {
+    setUpdatingRatesShare(share);
+    const sharePositions = getPositionsForShare(share);
+    setUpdatedRates(sharePositions.map(p => ({ role: p.role, count: Number(p.count), hourlyRate: p.hourlyRate })));
+    setIsUpdateRatesOpen(true);
+  };
+
+  const handleUpdateRates = () => {
+    if (!updatingRatesShare) return;
+    if (updatedRates.some(p => !p.hourlyRate || parseFloat(p.hourlyRate) <= 0)) {
+      toast({ title: "Validation Error", description: "All positions need a valid hourly rate", variant: "destructive" });
+      return;
+    }
+    updateMutation.mutate({
+      id: updatingRatesShare.id,
+      data: { positions: updatedRates },
+    }, {
+      onSuccess: () => {
+        setIsUpdateRatesOpen(false);
+        setUpdatingRatesShare(null);
+        setUpdatedRates([]);
+      },
     });
   };
 
@@ -632,6 +660,9 @@ export default function JobSharing() {
                         <JobShareDeadline deadline={(share as any).responseDeadline} status={share.status} />
                         {(share.status === 'pending' || share.status === 'accepted') && (
                           <>
+                            <Button size="icon" variant="ghost" onClick={() => openUpdateRatesDialog(share)} title="Update rates" data-testid={`button-update-rates-${share.id}`}>
+                              <PoundSterling className="h-4 w-4" />
+                            </Button>
                             <Button size="icon" variant="ghost" onClick={() => openEditDialog(share)} data-testid={`button-edit-${share.id}`}>
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -1039,6 +1070,51 @@ export default function JobSharing() {
             <Button variant="outline" onClick={() => setIsAcceptDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleAccept} disabled={updateStatusMutation.isPending} data-testid="button-confirm-accept">
               {updateStatusMutation.isPending ? "Accepting..." : `Accept ${acceptedCounts.reduce((sum, c) => sum + c.acceptCount, 0)} Position${acceptedCounts.reduce((sum, c) => sum + c.acceptCount, 0) !== 1 ? 's' : ''}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isUpdateRatesOpen} onOpenChange={(open) => { setIsUpdateRatesOpen(open); if (!open) { setUpdatingRatesShare(null); setUpdatedRates([]); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Rates</DialogTitle>
+            <DialogDescription>
+              Adjust the hourly pay rate for each position. Roles and headcounts are not changed here.
+              {updatingRatesShare && (
+                <span className="block mt-1 text-xs">
+                  For: {updatingRatesShare.toCompany?.name} — {updatingRatesShare.site?.name}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {updatedRates.map((pos, index) => (
+              <div key={index} className="flex items-center gap-3 p-3 rounded-md border bg-muted/30" data-testid={`update-rate-row-${index}`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{ROLE_LABELS[pos.role] || pos.role}</p>
+                  <p className="text-xs text-muted-foreground">{pos.count} position{pos.count !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <PoundSterling className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={pos.hourlyRate}
+                    onChange={(e) => setUpdatedRates(prev => prev.map((p, i) => i === index ? { ...p, hourlyRate: e.target.value } : p))}
+                    className="w-24 text-right"
+                    data-testid={`input-update-rate-${index}`}
+                  />
+                  <span className="text-xs text-muted-foreground">/hr</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUpdateRatesOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdateRates} disabled={updateMutation.isPending} data-testid="button-save-rates">
+              {updateMutation.isPending ? "Saving..." : "Save Rates"}
             </Button>
           </DialogFooter>
         </DialogContent>
