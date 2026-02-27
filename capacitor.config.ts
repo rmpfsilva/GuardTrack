@@ -1,28 +1,28 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.proforce.guardtrack',
+  appId: 'com.guardtrack.app',
   appName: 'GuardTrack',
   webDir: 'dist/public',
   server: {
+    // UPDATE THIS to your live production URL before building.
+    // Once guardtrack.live is verified: https://guardtrack.live
+    // Until then, use your Replit deployment URL from the Deploy tab.
+    url: 'https://guardtrack.replit.app',
+    cleartext: false,
     androidScheme: 'https',
     iosScheme: 'https',
-    // IMPORTANT: Replace with your actual Replit URL
-    // Find it in your Replit webview URL (e.g., https://89026148-be12-4eb2-842c-9cd0afd3b68f-00-mtjsf5kyoq4z.picard.replit.dev)
-    url: 'https://YOUR-REPLIT-URL.replit.dev',
-    cleartext: false,
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#2563eb',
+      backgroundColor: '#0f172a',
       showSpinner: false,
-      androidSpinnerStyle: 'small',
-      iosSpinnerStyle: 'small',
     },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
+    Geolocation: {},
   },
 };
 

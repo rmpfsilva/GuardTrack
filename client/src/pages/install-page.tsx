@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { detectBrowser, type BrowserInfo } from "@/lib/browser-detect";
 import { useInstallPWA } from "@/hooks/use-install-pwa";
+import { isNativePlatform } from "@/lib/native";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +22,7 @@ export default function InstallPage() {
   const [animStep, setAnimStep] = useState(0);
 
   useEffect(() => {
-    if (isStandalone() || isInstalled) {
+    if (isNativePlatform() || isStandalone() || isInstalled) {
       setLocation("/login");
       return;
     }

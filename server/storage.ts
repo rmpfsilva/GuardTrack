@@ -272,6 +272,7 @@ export interface IStorage {
   updatePushSubscription(id: string, updates: UpdatePushSubscription): Promise<PushSubscription>;
   deletePushSubscription(id: string): Promise<void>;
   deletePushSubscriptionByEndpoint(endpoint: string): Promise<void>;
+  updateUserFcmToken(userId: string, token: string): Promise<void>;
 
   // Company settings operations
   getCompanySettings(): Promise<CompanySettings | undefined>;
@@ -2680,6 +2681,10 @@ export class DatabaseStorage implements IStorage {
 
   async deletePushSubscriptionByEndpoint(endpoint: string): Promise<void> {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+
+  async updateUserFcmToken(userId: string, token: string): Promise<void> {
+    await db.update(users).set({ fcmToken: token }).where(eq(users.id, userId));
   }
 
   // Company settings operations

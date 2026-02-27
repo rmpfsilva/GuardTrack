@@ -1,0 +1,118 @@
+1️⃣ App Name
+
+App name: GuardTrack
+
+Keep it clean and consistent with your SaaS brand.
+Do NOT overcomplicate it with “App” or “Mobile”.
+
+Later, if you ever split Admin vs Guard versions, you can do:
+
+GuardTrack Admin
+
+GuardTrack Guard
+
+But for now: GuardTrack
+
+2️⃣ Bundle ID (Important — Choose Properly)
+
+Use something future-proof.
+
+If you own a domain (recommended), use:
+
+com.guardtrack.app
+
+If you don’t own guardtrack.com, use something you control, like:
+
+com.ricardosilva.guardtrack
+
+Reverse domain format just needs to be unique — it does not need to resolve to a real website.
+
+If you plan to scale this properly, I’d strongly recommend buying:
+
+guardtrackapp.com
+or
+
+guardtrack.uk
+
+It costs little and makes you look serious.
+
+3️⃣ Production URL
+
+Use your live deployment URL.
+
+If you're still on:
+
+https://yourapp.replit.app
+
+Use that for now.
+
+BUT long-term:
+You should absolutely move to a custom domain. It increases credibility massively when clients install a native app tied to a proper domain.
+
+4️⃣ Push Notifications — What To Do
+
+Answer this:
+
+Add FCM support alongside the existing Web Push. Do not replace Web Push. Android app should use FCM, web app continues using VAPID.
+
+This gives you:
+
+Web push for browser users
+
+Native FCM for Android app users
+
+That’s the correct architecture.
+
+5️⃣ Firebase
+
+If you haven't created one yet, answer:
+
+I need guidance to create the Firebase project.
+
+It takes 10–15 minutes.
+You’ll need:
+
+A Firebase project
+
+Android app added inside Firebase
+
+google-services.json downloaded
+
+Yes — you will manually drop google-services.json into the Android project later. That’s normal.
+
+6️⃣ Build Environment
+
+Answer:
+
+Yes, that workflow is acceptable. Please prepare the full Capacitor Android project structure and configuration. I will complete the signed build in Android Studio locally.
+
+This is correct.
+
+Replit cannot build a signed Android App Bundle (.aab).
+That must be done locally with Android Studio.
+
+7️⃣ Assets
+
+If your logo is not a clean square 512x512 PNG:
+
+Tell the agent:
+
+Use the existing GuardTrack logo. If needed, generate adaptive Android icon assets from it.
+
+Google Play requires:
+
+512x512 PNG
+
+High resolution
+
+No transparency issues
+
+If your logo isn't optimized, we can fix that after.
+
+8️⃣ Google Play Developer Account
+
+If you’ve started registration, answer:
+
+Google Play Developer account is in progress. Approval pending.
+
+That’s enough.

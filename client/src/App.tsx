@@ -10,6 +10,8 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { BackgroundProvider } from "@/components/background-provider";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { TrialBanner } from "@/components/trial-banner";
+import { isNativePlatform } from "@/lib/native";
+import { useFCMNotifications } from "@/hooks/use-fcm-notifications";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
@@ -24,6 +26,7 @@ import ResetPasswordPage from "@/pages/reset-password";
 import InstallPage from "@/pages/install-page";
 
 function isStandalone(): boolean {
+  if (isNativePlatform()) return true;
   return window.matchMedia('(display-mode: standalone)').matches ||
     (window.navigator as any).standalone === true;
 }
@@ -37,7 +40,11 @@ function InstallGate({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const blockedPages = ['/login', '/auth', '/register', '/register-trial', '/forgot-password', '/reset-password'];
 
-  const shouldBlock = blockedPages.includes(location) && !isStandalone() && isMobileDevice();
+  // Never block on native Capacitor — app is already installed
+  const shouldBlock = !isNativePlatform() &&
+    blockedPages.includes(location) &&
+    !isStandalone() &&
+    isMobileDevice();
 
   useEffect(() => {
     if (shouldBlock) {
@@ -54,6 +61,7 @@ function InstallGate({ children }: { children: React.ReactNode }) {
 
 function Router() {
   const { user } = useAuth();
+  useFCMNotifications(!!user);
 
   return (
     <>

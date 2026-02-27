@@ -3167,6 +3167,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Store FCM token for native Android push notifications
+  app.post('/api/push/fcm-token', isAuthenticated, async (req: any, res) => {
+    try {
+      const { token } = req.body;
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ message: "FCM token is required" });
+      }
+      await storage.updateUserFcmToken(req.user.id, token);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error storing FCM token:", error);
+      res.status(500).json({ message: error.message || "Failed to store FCM token" });
+    }
+  });
+
   // Company settings routes (admin only for updates, all authenticated users can view)
   app.get('/api/company-settings', isAuthenticated, async (req, res) => {
     try {

@@ -1,6 +1,66 @@
 import webpush from 'web-push';
 import type { PushSubscription } from '@shared/schema';
 
+// FCM HTTP v1 API support for Android native push notifications.
+// To enable: set FIREBASE_PROJECT_ID and FIREBASE_SERVICE_ACCOUNT_JSON env vars.
+// FIREBASE_SERVICE_ACCOUNT_JSON = JSON.stringify(serviceAccountKeyFile)
+async function getFCMAccessToken(): Promise<string | null> {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!projectId || !serviceAccountJson) return null;
+
+  try {
+    // Dynamically import google-auth-library (install when ready: npm install google-auth-library)
+    const { GoogleAuth } = await import('google-auth-library' as any);
+    const credentials = JSON.parse(serviceAccountJson);
+    const auth = new GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+    });
+    const client = await auth.getClient();
+    const token = await client.getAccessToken();
+    return token?.token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function sendFCMNotification(
+  fcmToken: string,
+  payload: { title: string; body: string; url?: string }
+): Promise<boolean> {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  if (!projectId) return false;
+
+  const accessToken = await getFCMAccessToken();
+  if (!accessToken) return false;
+
+  try {
+    const response = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: {
+            token: fcmToken,
+            notification: { title: payload.title, body: payload.body },
+            data: payload.url ? { url: payload.url } : {},
+            android: { priority: 'high' },
+          },
+        }),
+      }
+    );
+    return response.ok;
+  } catch (err) {
+    console.error('[FCM] Failed to send FCM notification:', err);
+    return false;
+  }
+}
+
 // VAPID keys - should be set as environment variables
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';

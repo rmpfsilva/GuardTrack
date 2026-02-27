@@ -105,6 +105,7 @@ export const users = pgTable("users", {
   stewardId: varchar("steward_id"),
   stewardIdExpiryDate: timestamp("steward_id_expiry_date"),
   stripeConnectedAccountId: varchar("stripe_connected_account_id"),
+  fcmToken: varchar("fcm_token"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
