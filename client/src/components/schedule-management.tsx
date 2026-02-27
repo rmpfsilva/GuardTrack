@@ -512,7 +512,7 @@ export default function ScheduleManagement() {
           const isToday = isSameDay(day, new Date());
 
           return (
-            <Card key={day.toISOString()} className={isToday ? "border-primary" : ""} data-testid={`day-${format(day, "yyyy-MM-dd")}`}>
+            <Card key={day.toISOString()} className={`min-w-0 ${isToday ? "border-primary" : ""}`} data-testid={`day-${format(day, "yyyy-MM-dd")}`}>
               <CardHeader className="p-3 pb-2">
                 <CardTitle className="text-sm">
                   <div className="flex items-center justify-between gap-1">
@@ -533,7 +533,7 @@ export default function ScheduleManagement() {
 
                     return (
                     <Card key={shift.id} className={`p-2 hover-elevate ${isJobShare ? "bg-accent/30 border-primary/40" : ""}`} data-testid={`shift-${shift.id}`}>
-                      <div className="space-y-1">
+                      <div className="space-y-1 min-w-0 overflow-hidden">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-medium truncate flex-1" data-testid={`text-shift-name-${shift.id}`}>
                             {shift.user.firstName} {shift.user.lastName}
@@ -597,15 +597,17 @@ export default function ScheduleManagement() {
                         {isJobShare && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge variant="outline" className="text-xs gap-1 cursor-default border-primary/40 text-primary" data-testid={`badge-job-share-${shift.id}`}>
-                                <Handshake className="w-3 h-3" />
-                                Job Share
-                              </Badge>
+                              <div className="flex items-center gap-1 min-w-0">
+                                <Badge variant="outline" className="text-xs gap-1 cursor-default border-primary/40 text-primary shrink-0" data-testid={`badge-job-share-${shift.id}`}>
+                                  <Handshake className="w-3 h-3" />
+                                  <span className="hidden sm:inline">Job Share</span>
+                                </Badge>
+                              </div>
                             </TooltipTrigger>
                             <TooltipContent side="top">
                               <div className="flex items-center gap-1.5 text-xs">
                                 <Building2 className="w-3.5 h-3.5" />
-                                <span>Shared by <strong>{fromCompany || 'Partner Company'}</strong></span>
+                                <span>Job Share — by <strong>{fromCompany || 'Partner Company'}</strong></span>
                               </div>
                             </TooltipContent>
                           </Tooltip>
