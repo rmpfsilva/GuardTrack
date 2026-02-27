@@ -7,7 +7,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
-import { sendTrialInvitationEmail } from "./emailService";
+import { sendTrialInvitationEmail, sendPasswordResetEmail } from "./emailService";
 
 declare global {
   namespace Express {
@@ -497,16 +497,32 @@ export function setupAuth(app: Express) {
         expiresAt,
       });
 
-      // TODO: Send email with reset link
-      // For now, log the token server-side only (admin can share it manually)
+      const resetLink = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
       console.log(`🔐 Password reset requested for user: ${user.username}`);
-      console.log(`📧 Reset token: ${token}`);
-      console.log(`🔗 Reset link: ${req.protocol}://${req.get('host')}/reset-password?token=${token}`);
-      console.log(`⚠️  Admins: Share this reset link with the user securely`);
+      console.log(`🔗 Reset link: ${resetLink}`);
 
-      res.status(200).json({ 
-        message: "Password reset request received. Contact your administrator for the reset link.",
-      });
+      // Send email if the user has an email address on file
+      if (user.email) {
+        try {
+          const host = `${req.protocol}://${req.get('host')}`;
+          await sendPasswordResetEmail(user.email, token, host);
+          res.status(200).json({
+            message: "A password reset link has been sent to your email address.",
+          });
+        } catch (emailError: any) {
+          console.error("Failed to send password reset email:", emailError.message);
+          // Still return success — the reset link is logged for admin fallback
+          res.status(200).json({
+            message: "Password reset request received. Contact your administrator for the reset link if you don't receive an email.",
+          });
+        }
+      } else {
+        // No email on file — admin must share the link manually
+        console.log(`⚠️  No email on file for user ${user.username}. Admin must share the reset link manually.`);
+        res.status(200).json({
+          message: "Password reset request received. Contact your administrator to receive the reset link — no email address is on file for your account.",
+        });
+      }
     } catch (error: any) {
       console.error("Error requesting password reset:", error);
       res.status(500).json({ message: "Failed to process password reset request" });

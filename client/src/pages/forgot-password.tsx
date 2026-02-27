@@ -30,12 +30,14 @@ export default function ForgotPasswordPage() {
 
   const requestResetMutation = useMutation({
     mutationFn: async (data: { username: string }) => {
-      return await apiRequest("POST", "/api/auth/request-password-reset", data);
+      const res = await apiRequest("POST", "/api/auth/request-password-reset", data);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { message: string }) => {
       toast({
-        title: "Reset Request Sent",
-        description: "If your username exists, contact your administrator for the reset link.",
+        title: "Request Submitted",
+        description: data.message,
+        duration: 8000,
       });
       form.reset();
     },

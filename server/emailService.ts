@@ -242,6 +242,86 @@ export async function sendJobShareNotificationEmail(data: JobShareNotificationDa
   }
 }
 
+export async function sendPasswordResetEmail(toEmail: string, resetToken: string, requestHost: string): Promise<void> {
+  try {
+    console.log(`[Password Reset Email] Sending to: ${toEmail}`);
+
+    const gmail = await getUncachableGmailClient();
+
+    let senderEmail = 'noreply@guardtrack.com';
+    try {
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      senderEmail = profile.data.emailAddress || senderEmail;
+    } catch {
+      console.warn('[Password Reset Email] Could not fetch sender profile, using default');
+    }
+
+    const resetUrl = `${requestHost}/reset-password?token=${resetToken}`;
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #f8f9fa; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+    <h2 style="color: #1e40af; margin-top: 0;">Password Reset Request</h2>
+    <p>Hello,</p>
+    <p>We received a request to reset your <strong>GuardTrack</strong> password. Click the button below to set a new password.</p>
+    <p style="color: #666; font-size: 14px;">This link will expire in <strong>1 hour</strong>. If you did not request a password reset, you can safely ignore this email.</p>
+  </div>
+
+  <div style="text-align: center; margin: 32px 0;">
+    <a href="${resetUrl}"
+       style="display: inline-block; background-color: #1e40af; color: white; text-decoration: none; padding: 14px 36px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+      Reset My Password
+    </a>
+  </div>
+
+  <div style="background-color: #f1f5f9; border-radius: 6px; padding: 16px; margin-bottom: 24px;">
+    <p style="margin: 0; font-size: 13px; color: #64748b;">If the button doesn't work, copy and paste this link into your browser:</p>
+    <p style="margin: 8px 0 0 0; font-size: 13px; word-break: break-all; color: #1e40af;">${resetUrl}</p>
+  </div>
+
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; color: #666; font-size: 14px;">
+    <p style="margin-bottom: 0;">Best regards,<br><strong>GuardTrack Team</strong></p>
+  </div>
+</body>
+</html>`;
+
+    const message = [
+      `From: GuardTrack <${senderEmail}>`,
+      `To: ${toEmail}`,
+      `Subject: Reset your GuardTrack password`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encodedMessage },
+    });
+
+    console.log(`✅ [Password Reset Email] Sent successfully to ${toEmail}`);
+  } catch (error: any) {
+    console.error('❌ [Password Reset Email] Error sending email:', error.message);
+    if (error.response) {
+      console.error('[Password Reset Email] Response:', JSON.stringify(error.response.data, null, 2));
+    }
+    throw error;
+  }
+}
+
 export async function sendTrialInvitationEmail(toEmail: string, subject: string, body: string): Promise<void> {
   try {
     const bodyPreview = body.length > 100 ? body.substring(0, 100) + '...' : body;
