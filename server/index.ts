@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeSessionStore, storage } from "./storage";
+import { hashPassword } from "./auth";
 
 const app = express();
 app.use(express.json());
@@ -36,6 +37,44 @@ app.use((req, res, next) => {
 
   next();
 });
+
+async function ensureProductionSuperAdmin() {
+  try {
+    // Check if rmpfsilva already exists as a proper platform-level super admin
+    const existing = await storage.getSuperAdminByUsername('rmpfsilva');
+    if (existing) {
+      log('[Init] rmpfsilva super_admin already configured correctly');
+      return;
+    }
+
+    // Not found as proper super admin — check if they exist under a wrong company_id
+    const allByUsername = await storage.getUsersByUsername('rmpfsilva');
+    const initialPassword = await hashPassword('GuardTrack@2024!');
+
+    if (allByUsername.length > 0) {
+      // Fix existing record: clear company_id, set correct email, reset password
+      await storage.updateUser(allByUsername[0].id, {
+        companyId: null,
+        email: 'rmpfsilva@gmail.com',
+        password: initialPassword,
+        role: 'super_admin',
+      });
+      log('[Init] rmpfsilva super_admin fixed: company_id cleared, email and password updated');
+    } else {
+      // Create fresh super admin
+      await storage.createUser({
+        username: 'rmpfsilva',
+        email: 'rmpfsilva@gmail.com',
+        password: initialPassword,
+        role: 'super_admin',
+        companyId: null,
+      });
+      log('[Init] rmpfsilva super_admin created');
+    }
+  } catch (err) {
+    console.error('[Init] Error ensuring super admin:', err);
+  }
+}
 
 async function backfillJobShareShifts() {
   try {
@@ -137,6 +176,9 @@ async function backfillJobShareShifts() {
   try {
     // Initialize session store before starting the server
     await initializeSessionStore();
+
+    // Ensure platform super admin exists in whichever DB this instance connects to
+    await ensureProductionSuperAdmin();
     
     const server = await registerRoutes(app);
 
