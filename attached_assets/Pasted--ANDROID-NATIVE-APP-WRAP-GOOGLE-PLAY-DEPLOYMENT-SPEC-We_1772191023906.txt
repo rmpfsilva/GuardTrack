@@ -1,0 +1,251 @@
+🚀 ANDROID NATIVE APP WRAP + GOOGLE PLAY DEPLOYMENT SPEC
+
+We need to convert our existing production web app into a native Android application using Capacitor and prepare it for release on Google Play.
+
+The goal:
+
+Wrap existing web app (no rebuild)
+
+Enable native permissions (location, notifications)
+
+Enable push notifications
+
+Generate signed Android App Bundle (.aab)
+
+Prepare for Play Store submission
+
+1️⃣ Install Capacitor
+
+Install Capacitor in project:
+
+npm install @capacitor/core @capacitor/cli
+
+Initialize Capacitor:
+
+npx cap init "AppName" "com.company.appname"
+
+AppName = Production app name
+
+Bundle ID = reverse domain format (must be unique)
+
+2️⃣ Configure Capacitor to Load Production URL
+
+We are NOT bundling static files.
+
+Instead configure Capacitor to load the live HTTPS production URL.
+
+In capacitor.config.ts or capacitor.config.json:
+
+{
+  "appId": "com.company.appname",
+  "appName": "AppName",
+  "webDir": "dist",
+  "server": {
+    "url": "https://yourproductionurl.com",
+    "cleartext": false
+  }
+}
+
+This ensures:
+
+App loads live site
+
+Updates don’t require Play Store re-submission
+
+Only native layer updates require re-submission
+
+3️⃣ Add Android Platform
+npx cap add android
+
+Then sync:
+
+npx cap sync android
+4️⃣ Native Permissions Setup
+
+We must properly configure:
+
+Location Permission
+
+In AndroidManifest.xml, ensure:
+
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+Request permission using Capacitor plugin:
+
+Install plugin:
+
+npm install @capacitor/geolocation
+
+Implement permission request on first launch.
+
+Push Notifications
+
+Install plugin:
+
+npm install @capacitor/push-notifications
+
+Implement:
+
+Register device
+
+Get FCM token
+
+Send token to backend
+
+Store token per user
+
+Handle foreground + background notifications
+
+Use Firebase Cloud Messaging (FCM).
+
+Create Firebase project.
+Download google-services.json.
+Place inside Android app folder.
+
+5️⃣ WebView Optimization
+
+Inside Android project:
+
+Enable hardware acceleration
+
+Disable zoom controls
+
+Enable safe browsing
+
+Set splash screen
+
+Set app icon (512x512)
+
+Make it feel native, not like a browser wrapper.
+
+6️⃣ Disable External Browser Redirects
+
+All internal navigation must stay inside app WebView.
+
+Only open external links in external browser if:
+
+Explicit external link
+
+Terms or privacy page
+
+7️⃣ Remove PWA Install Logic Inside Android
+
+When running inside Capacitor:
+
+Detect native platform:
+
+import { Capacitor } from '@capacitor/core';
+
+if (Capacitor.isNativePlatform()) {
+  // Disable PWA install prompts
+}
+
+We must:
+
+Hide install banners
+
+Disable standalone checks
+
+Skip PWA onboarding
+
+Directly allow login
+
+8️⃣ Build Signed Android App Bundle (.aab)
+
+In Android Studio:
+
+Generate signed bundle:
+Build → Generate Signed Bundle
+
+Create new keystore
+
+Store keystore securely (backup required)
+
+Build release AAB (not APK)
+
+This is mandatory for Play Store.
+
+9️⃣ Google Play Console Setup
+
+Steps:
+
+Create Google Play Developer account
+
+Create new app
+
+Upload AAB file
+
+Complete:
+
+App description
+
+Privacy policy URL
+
+Permissions explanation
+
+Screenshots (phone)
+
+App icon (512x512)
+
+Feature graphic (1024x500)
+
+Declare:
+
+Location usage reason
+
+Notification usage reason
+
+Submit to Internal Testing first.
+Test on real devices.
+Then move to Production.
+
+🔟 Testing Requirements
+
+Before submission:
+
+Test login
+
+Test push notifications
+
+Test location permission flow
+
+Test background app resume
+
+Test slow internet
+
+Test denied permission scenario
+
+Test logout/login persistence
+
+⚠️ Critical Requirements
+
+Do NOT duplicate backend logic.
+
+Web app remains source of truth.
+
+Native layer only handles:
+
+Permissions
+
+Push notifications
+
+Store packaging
+
+All UI remains web-based.
+
+🎯 End Result
+
+We will have:
+
+Android native app
+
+Proper install via Play Store
+
+Native permission handling
+
+Push notification reliability
+
+Reduced onboarding friction
+
+No yearly Apple fee (for now)
