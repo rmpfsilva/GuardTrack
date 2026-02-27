@@ -4,7 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeSessionStore, storage } from "./storage";
 import { hashPassword } from "./auth";
 import { db } from "./db";
-import { users } from "@shared/schema";
+import { users, userRoles } from "@shared/schema";
 import { or, eq } from "drizzle-orm";
 
 const app = express();
@@ -54,40 +54,56 @@ async function ensureProductionSuperAdmin() {
       )
     );
 
-    // Already perfect: username, role, company_id all correct
-    const perfect = matches.find(
-      u => u.username === TARGET_USERNAME && u.role === 'super_admin' && !u.companyId
-    );
-    if (perfect) {
-      log('[Init] rmpfsilva super_admin already configured correctly');
-      return;
-    }
-
     const initialPassword = await hashPassword('GuardTrack@2024!');
+    let targetId: string;
 
     if (matches.length > 0) {
       // Use whichever record we found (prefer email match, then username match)
       const target = matches.find(u => u.email === TARGET_EMAIL) ?? matches[0];
-      await db.update(users).set({
-        username: TARGET_USERNAME,
-        email: TARGET_EMAIL,
-        password: initialPassword,
-        role: 'super_admin',
-        companyId: null,
-        updatedAt: new Date(),
-      }).where(eq(users.id, target.id));
-      log(`[Init] rmpfsilva super_admin fixed (was: username=${target.username}, role=${target.role}, companyId=${target.companyId ?? 'null'})`);
+      targetId = target.id;
+
+      const needsUpdate = target.username !== TARGET_USERNAME || target.role !== 'super_admin' || target.companyId !== null;
+      if (needsUpdate) {
+        await db.update(users).set({
+          username: TARGET_USERNAME,
+          email: TARGET_EMAIL,
+          password: initialPassword,
+          role: 'super_admin',
+          companyId: null,
+          updatedAt: new Date(),
+        }).where(eq(users.id, target.id));
+        log(`[Init] rmpfsilva users table fixed (was: username=${target.username}, role=${target.role}, companyId=${target.companyId ?? 'null'})`);
+      }
     } else {
-      // No matching record at all — insert fresh, but first clear any stale email
+      // No matching record — clear stale email and create fresh
       await db.update(users).set({ email: null }).where(eq(users.email, TARGET_EMAIL));
-      await db.insert(users).values({
+      const [created] = await db.insert(users).values({
         username: TARGET_USERNAME,
         email: TARGET_EMAIL,
         password: initialPassword,
         role: 'super_admin',
         companyId: null,
-      });
+      }).returning({ id: users.id });
+      targetId = created.id;
       log('[Init] rmpfsilva super_admin created fresh');
+    }
+
+    // ALWAYS ensure userRoles table is correct — stale 'admin' entries override users.role
+    const existingRoles = await db.select().from(userRoles).where(eq(userRoles.userId, targetId));
+    const hasSuperAdmin = existingRoles.some(r => r.role === 'super_admin');
+    const hasStaleRoles = existingRoles.some(r => r.role !== 'super_admin');
+
+    if (hasStaleRoles) {
+      await db.delete(userRoles).where(eq(userRoles.userId, targetId));
+      log('[Init] rmpfsilva stale userRoles cleared');
+    }
+    if (!hasSuperAdmin) {
+      await db.insert(userRoles).values({ userId: targetId, role: 'super_admin' });
+      log('[Init] rmpfsilva super_admin userRole inserted');
+    }
+
+    if (!hasStaleRoles && hasSuperAdmin) {
+      log('[Init] rmpfsilva super_admin already configured correctly');
     }
   } catch (err) {
     console.error('[Init] Error ensuring super admin:', err);
