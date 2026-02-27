@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation, useSearch } from "wouter";
 import { Lock, CheckCircle } from "lucide-react";
-import proForceLogo from "@assets/download_1760019684165.png";
+import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -114,7 +114,7 @@ export default function ResetPasswordPage() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <img src={proForceLogo} alt="ProForce Security" className="h-16 mx-auto mb-4 animate-pulse" />
+          <img src={guardTrackLogo} alt="GuardTrack" className="h-16 mx-auto mb-4 animate-pulse" />
           <p className="text-muted-foreground">Verifying reset token...</p>
         </div>
       </div>
@@ -167,7 +167,7 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src={proForceLogo} alt="ProForce Security" className="h-12 mx-auto mb-4" />
+          <img src={guardTrackLogo} alt="GuardTrack" className="h-12 mx-auto mb-4" />
           <h1 className="text-3xl font-bold">Reset Password</h1>
           <p className="text-muted-foreground mt-2">Enter your new password</p>
         </div>
