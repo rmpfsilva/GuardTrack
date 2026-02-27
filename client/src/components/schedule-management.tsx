@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
-import { Calendar, Plus, Pencil, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Briefcase, X, Handshake, Building2 } from "lucide-react";
+import { Calendar, Plus, Pencil, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, X, Handshake, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -51,6 +51,29 @@ const getRecurrenceLabel = (recurrence: string): string => {
     monthly: "Monthly",
   };
   return labels[recurrence] || recurrence;
+};
+
+const JOB_TITLE_COLORS: Record<string, { strip: string; bg: string; border: string; text: string }> = {
+  "SIA Guard":         { strip: "bg-blue-500",    bg: "bg-blue-500/10 dark:bg-blue-500/15",    border: "border-blue-300 dark:border-blue-700",    text: "text-blue-700 dark:text-blue-300" },
+  "Steward":           { strip: "bg-amber-500",   bg: "bg-amber-500/10 dark:bg-amber-500/15",  border: "border-amber-300 dark:border-amber-700",  text: "text-amber-700 dark:text-amber-300" },
+  "Supervisor":        { strip: "bg-purple-500",  bg: "bg-purple-500/10 dark:bg-purple-500/15",border: "border-purple-300 dark:border-purple-700", text: "text-purple-700 dark:text-purple-300" },
+  "Call Out":          { strip: "bg-rose-500",    bg: "bg-rose-500/10 dark:bg-rose-500/15",    border: "border-rose-300 dark:border-rose-700",    text: "text-rose-700 dark:text-rose-300" },
+  "Door Supervisor":   { strip: "bg-cyan-500",    bg: "bg-cyan-500/10 dark:bg-cyan-500/15",    border: "border-cyan-300 dark:border-cyan-700",    text: "text-cyan-700 dark:text-cyan-300" },
+  "CCTV Operator":     { strip: "bg-indigo-500",  bg: "bg-indigo-500/10 dark:bg-indigo-500/15",border: "border-indigo-300 dark:border-indigo-700", text: "text-indigo-700 dark:text-indigo-300" },
+  "Close Protection":  { strip: "bg-green-600",   bg: "bg-green-500/10 dark:bg-green-500/15",  border: "border-green-300 dark:border-green-700",  text: "text-green-700 dark:text-green-300" },
+  "Key Holder":        { strip: "bg-yellow-500",  bg: "bg-yellow-500/10 dark:bg-yellow-500/15",border: "border-yellow-300 dark:border-yellow-700", text: "text-yellow-700 dark:text-yellow-300" },
+  "Mobile Patrol":     { strip: "bg-sky-500",     bg: "bg-sky-500/10 dark:bg-sky-500/15",      border: "border-sky-300 dark:border-sky-700",      text: "text-sky-700 dark:text-sky-300" },
+  "Receptionist":      { strip: "bg-pink-500",    bg: "bg-pink-500/10 dark:bg-pink-500/15",    border: "border-pink-300 dark:border-pink-700",    text: "text-pink-700 dark:text-pink-300" },
+  "Concierge":         { strip: "bg-emerald-500", bg: "bg-emerald-500/10 dark:bg-emerald-500/15",border: "border-emerald-300 dark:border-emerald-700",text: "text-emerald-700 dark:text-emerald-300" },
+  "Event Marshal":     { strip: "bg-orange-500",  bg: "bg-orange-500/10 dark:bg-orange-500/15",border: "border-orange-300 dark:border-orange-700", text: "text-orange-700 dark:text-orange-300" },
+  "Guard":             { strip: "bg-slate-400",   bg: "bg-slate-500/10 dark:bg-slate-500/15",  border: "border-slate-300 dark:border-slate-600",  text: "text-slate-600 dark:text-slate-400" },
+};
+
+const DEFAULT_JOB_COLOR = { strip: "bg-slate-400", bg: "bg-slate-500/10 dark:bg-slate-500/15", border: "border-slate-300 dark:border-slate-600", text: "text-slate-600 dark:text-slate-400" };
+
+const getJobColor = (jobTitle?: string | null) => {
+  if (!jobTitle) return DEFAULT_JOB_COLOR;
+  return JOB_TITLE_COLORS[jobTitle] ?? DEFAULT_JOB_COLOR;
 };
 
 interface ShiftEntry {
@@ -506,122 +529,138 @@ export default function ScheduleManagement() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-7 gap-2">
-        {weekDays.map((day) => {
-          const dayShifts = getShiftsForDay(day);
-          const isToday = isSameDay(day, new Date());
+      <div className="overflow-x-auto pb-2">
+        <div className="grid grid-cols-7 gap-2 min-w-[840px]">
+          {weekDays.map((day) => {
+            const dayShifts = getShiftsForDay(day);
+            const isToday = isSameDay(day, new Date());
 
-          return (
-            <Card key={day.toISOString()} className={`min-w-0 ${isToday ? "border-primary" : ""}`} data-testid={`day-${format(day, "yyyy-MM-dd")}`}>
-              <CardHeader className="p-3 pb-2">
-                <CardTitle className="text-sm">
-                  <div className="flex items-center justify-between gap-1">
-                    <span>{format(day, "EEE")}</span>
-                    <Badge variant={isToday ? "default" : "outline"} className="text-xs">
-                      {format(day, "d")}
-                    </Badge>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0 space-y-2">
-                {dayShifts.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No shifts</p>
-                ) : (
-                  dayShifts.map((shift) => {
-                    const isJobShare = !!(shift as any).jobShareId;
-                    const fromCompany = (shift as any).jobShareFromCompany;
+            return (
+              <Card key={day.toISOString()} className={`min-w-0 ${isToday ? "border-primary" : ""}`} data-testid={`day-${format(day, "yyyy-MM-dd")}`}>
+                <CardHeader className="p-2 pb-1">
+                  <CardTitle className="text-xs">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-semibold">{format(day, "EEE")}</span>
+                      <Badge variant={isToday ? "default" : "outline"} className="text-xs">
+                        {format(day, "d")}
+                      </Badge>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-2 pt-0 space-y-1.5">
+                  {dayShifts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-1">No shifts</p>
+                  ) : (
+                    dayShifts.map((shift) => {
+                      const isJobShare = !!(shift as any).jobShareId;
+                      const fromCompany = (shift as any).jobShareFromCompany;
+                      const color = getJobColor(shift.jobTitle);
 
-                    return (
-                    <Card key={shift.id} className={`p-2 hover-elevate ${isJobShare ? "bg-accent/30 border-primary/40" : ""}`} data-testid={`shift-${shift.id}`}>
-                      <div className="space-y-1 min-w-0 overflow-hidden">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium truncate flex-1" data-testid={`text-shift-name-${shift.id}`}>
-                            {shift.user.firstName} {shift.user.lastName}
-                          </span>
-                          <div className="flex gap-1 shrink-0">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => handleEdit(shift)}
-                              title="Edit shift"
-                              data-testid={`button-edit-shift-${shift.id}`}
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(shift.id)}
-                              title="Delete shift"
-                              data-testid={`button-delete-shift-${shift.id}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                        {shift.jobTitle && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Briefcase className="w-3 h-3" />
-                            <span className="truncate" data-testid={`text-shift-jobtitle-${shift.id}`}>{shift.jobTitle}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <MapPin className="w-3 h-3" />
-                          <span className="truncate">{shift.site.name}</span>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="w-3 h-3" />
-                            <span>
-                              {format(new Date(shift.startTime), "HH:mm")} - {format(new Date(shift.endTime), "HH:mm")}
-                            </span>
-                          </div>
-                          {shift.checkIn && (
-                            <div className="flex items-center gap-1 text-xs">
-                              <Clock className="w-3 h-3 text-primary" />
-                              <span className="text-primary font-medium">
-                                Actual: {format(new Date(shift.checkIn.checkInTime), "HH:mm")}
-                                {shift.checkIn.checkOutTime && ` - ${format(new Date(shift.checkIn.checkOutTime), "HH:mm")}`}
-                                {!shift.checkIn.checkOutTime && " - (In Progress)"}
+                      return (
+                        <div
+                          key={shift.id}
+                          className={`rounded-md border hover-elevate overflow-visible ${color.bg} ${color.border}`}
+                          data-testid={`shift-${shift.id}`}
+                        >
+                          <div className={`h-1 rounded-t-md ${color.strip}`} />
+                          <div className="p-1.5 space-y-1">
+                            <div className="flex items-start justify-between gap-1">
+                              <span className={`text-[10px] font-bold leading-tight ${color.text}`} data-testid={`text-shift-jobtitle-${shift.id}`}>
+                                {shift.jobTitle || "Guard"}
                               </span>
+                              <div className="flex gap-0.5 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5"
+                                  onClick={() => handleEdit(shift)}
+                                  title="Edit shift"
+                                  data-testid={`button-edit-shift-${shift.id}`}
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 text-destructive"
+                                  onClick={() => handleDelete(shift.id)}
+                                  title="Delete shift"
+                                  data-testid={`button-delete-shift-${shift.id}`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
                             </div>
-                          )}
+                            <p className="text-xs font-medium truncate leading-tight" data-testid={`text-shift-name-${shift.id}`}>
+                              {shift.user.firstName} {shift.user.lastName}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <MapPin className="w-2.5 h-2.5 shrink-0" />
+                              <span className="truncate">{shift.site.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="w-2.5 h-2.5 shrink-0" />
+                              <span>{format(new Date(shift.startTime), "HH:mm")}–{format(new Date(shift.endTime), "HH:mm")}</span>
+                            </div>
+                            {shift.checkIn && (
+                              <div className="flex items-center gap-1 text-xs text-primary font-medium">
+                                <Clock className="w-2.5 h-2.5 shrink-0" />
+                                <span>
+                                  {format(new Date(shift.checkIn.checkInTime), "HH:mm")}
+                                  {shift.checkIn.checkOutTime ? `–${format(new Date(shift.checkIn.checkOutTime), "HH:mm")}` : " (live)"}
+                                </span>
+                              </div>
+                            )}
+                            {(shift.recurrence !== "none" || isJobShare) && (
+                              <div className="flex flex-wrap gap-1 pt-0.5">
+                                {shift.recurrence !== "none" && (
+                                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                                    {getRecurrenceLabel(shift.recurrence)}
+                                  </Badge>
+                                )}
+                                {isJobShare && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="outline" className="text-[10px] px-1 py-0 gap-0.5 cursor-default border-primary/40 text-primary" data-testid={`badge-job-share-${shift.id}`}>
+                                        <Handshake className="w-2.5 h-2.5" />
+                                        Shared
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      <div className="flex items-center gap-1.5 text-xs">
+                                        <Building2 className="w-3.5 h-3.5" />
+                                        <span>Job Share — by <strong>{fromCompany || 'Partner Company'}</strong></span>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        {shift.recurrence !== "none" && (
-                          <Badge variant="secondary" className="text-xs">
-                            {getRecurrenceLabel(shift.recurrence)}
-                          </Badge>
-                        )}
-                        {isJobShare && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="flex items-center gap-1 min-w-0">
-                                <Badge variant="outline" className="text-xs gap-1 cursor-default border-primary/40 text-primary shrink-0" data-testid={`badge-job-share-${shift.id}`}>
-                                  <Handshake className="w-3 h-3" />
-                                  <span className="hidden sm:inline">Job Share</span>
-                                </Badge>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <Building2 className="w-3.5 h-3.5" />
-                                <span>Job Share — by <strong>{fromCompany || 'Partner Company'}</strong></span>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </Card>
-                    );
-                  })
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
+
+      <Card>
+        <CardContent className="p-3">
+          <p className="text-xs text-muted-foreground font-medium mb-2">Role colours</p>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(JOB_TITLE_COLORS).map(([title, color]) => (
+              <div key={title} className="flex items-center gap-1.5">
+                <div className={`w-2.5 h-2.5 rounded-full ${color.strip}`} />
+                <span className="text-xs text-muted-foreground">{title}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent data-testid="dialog-edit-shift">
