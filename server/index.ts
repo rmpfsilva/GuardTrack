@@ -3,6 +3,9 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeSessionStore, storage } from "./storage";
 import { hashPassword } from "./auth";
+import { db } from "./db";
+import { users } from "@shared/schema";
+import { or, eq } from "drizzle-orm";
 
 const app = express();
 app.use(express.json());
@@ -40,36 +43,51 @@ app.use((req, res, next) => {
 
 async function ensureProductionSuperAdmin() {
   try {
-    // Check if rmpfsilva already exists as a proper platform-level super admin
-    const existing = await storage.getSuperAdminByUsername('rmpfsilva');
-    if (existing) {
+    const TARGET_USERNAME = 'rmpfsilva';
+    const TARGET_EMAIL = 'rmpfsilva@gmail.com';
+
+    // Find any user matching EITHER username OR email — handles all database states
+    const matches = await db.select().from(users).where(
+      or(
+        eq(users.username, TARGET_USERNAME),
+        eq(users.email, TARGET_EMAIL)
+      )
+    );
+
+    // Already perfect: username, role, company_id all correct
+    const perfect = matches.find(
+      u => u.username === TARGET_USERNAME && u.role === 'super_admin' && !u.companyId
+    );
+    if (perfect) {
       log('[Init] rmpfsilva super_admin already configured correctly');
       return;
     }
 
-    // Not found as proper super admin — check if they exist under a wrong company_id
-    const allByUsername = await storage.getUsersByUsername('rmpfsilva');
     const initialPassword = await hashPassword('GuardTrack@2024!');
 
-    if (allByUsername.length > 0) {
-      // Fix existing record: clear company_id, set correct email, reset password
-      await storage.updateUser(allByUsername[0].id, {
-        companyId: null,
-        email: 'rmpfsilva@gmail.com',
+    if (matches.length > 0) {
+      // Use whichever record we found (prefer email match, then username match)
+      const target = matches.find(u => u.email === TARGET_EMAIL) ?? matches[0];
+      await db.update(users).set({
+        username: TARGET_USERNAME,
+        email: TARGET_EMAIL,
         password: initialPassword,
         role: 'super_admin',
-      });
-      log('[Init] rmpfsilva super_admin fixed: company_id cleared, email and password updated');
+        companyId: null,
+        updatedAt: new Date(),
+      }).where(eq(users.id, target.id));
+      log(`[Init] rmpfsilva super_admin fixed (was: username=${target.username}, role=${target.role}, companyId=${target.companyId ?? 'null'})`);
     } else {
-      // Create fresh super admin
-      await storage.createUser({
-        username: 'rmpfsilva',
-        email: 'rmpfsilva@gmail.com',
+      // No matching record at all — insert fresh, but first clear any stale email
+      await db.update(users).set({ email: null }).where(eq(users.email, TARGET_EMAIL));
+      await db.insert(users).values({
+        username: TARGET_USERNAME,
+        email: TARGET_EMAIL,
         password: initialPassword,
         role: 'super_admin',
         companyId: null,
       });
-      log('[Init] rmpfsilva super_admin created');
+      log('[Init] rmpfsilva super_admin created fresh');
     }
   } catch (err) {
     console.error('[Init] Error ensuring super admin:', err);
