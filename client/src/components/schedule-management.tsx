@@ -76,6 +76,13 @@ const getJobColor = (jobTitle?: string | null) => {
   return JOB_TITLE_COLORS[jobTitle] ?? DEFAULT_JOB_COLOR;
 };
 
+const getPayRate = (jobTitle: string | null | undefined, site: any): string => {
+  const title = (jobTitle || "").toLowerCase();
+  if (title === "steward") return site?.stewardRate || "18.00";
+  if (title === "supervisor") return site?.supervisorRate || "22.00";
+  return site?.guardRate || "15.00";
+};
+
 interface ShiftEntry {
   id: string;
   startTime: string;
@@ -555,6 +562,7 @@ export default function ScheduleManagement() {
                       const isJobShare = !!(shift as any).jobShareId;
                       const fromCompany = (shift as any).jobShareFromCompany;
                       const color = getJobColor(shift.jobTitle);
+                      const rate = getPayRate(shift.jobTitle, shift.site);
 
                       return (
                         <div
@@ -601,6 +609,9 @@ export default function ScheduleManagement() {
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Clock className="w-2.5 h-2.5 shrink-0" />
                               <span>{format(new Date(shift.startTime), "HH:mm")}–{format(new Date(shift.endTime), "HH:mm")}</span>
+                            </div>
+                            <div className={`text-[10px] font-semibold ${color.text}`} data-testid={`text-shift-rate-${shift.id}`}>
+                              £{rate}/hr
                             </div>
                             {shift.checkIn && (
                               <div className="flex items-center gap-1 text-xs text-primary font-medium">
