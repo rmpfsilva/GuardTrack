@@ -163,6 +163,8 @@ export const checkIns = pgTable("check_ins", {
   checkOutTime: timestamp("check_out_time"),
   latitude: text("latitude"),
   longitude: text("longitude"),
+  checkOutLatitude: text("check_out_latitude"),
+  checkOutLongitude: text("check_out_longitude"),
   workingRole: varchar("working_role").notNull().default('guard'), // Role they were working as: 'guard' | 'steward' | 'supervisor'
   status: varchar("status").notNull().default('active'), // 'active' | 'completed'
   createdAt: timestamp("created_at").defaultNow(),

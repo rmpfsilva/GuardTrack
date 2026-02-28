@@ -296,8 +296,8 @@ export default function GuardApp() {
   });
 
   const checkOutMutation = useMutation({
-    mutationFn: async (checkInId: string) => {
-      return await apiRequest("PATCH", `/api/check-ins/${checkInId}/checkout`, {});
+    mutationFn: async ({ checkInId, latitude, longitude }: { checkInId: string; latitude?: string; longitude?: string }) => {
+      return await apiRequest("PATCH", `/api/check-ins/${checkInId}/checkout`, { latitude, longitude });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/check-ins/active"] });
@@ -400,8 +400,25 @@ export default function GuardApp() {
   };
 
   const handleCheckOut = () => {
-    if (activeCheckIn) {
-      checkOutMutation.mutate(activeCheckIn.id);
+    if (!activeCheckIn) return;
+    const checkInId = activeCheckIn.id;
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          checkOutMutation.mutate({
+            checkInId,
+            latitude: position.coords.latitude.toString(),
+            longitude: position.coords.longitude.toString(),
+          });
+        },
+        (error) => {
+          console.warn("Geolocation error on check-out:", error.message);
+          checkOutMutation.mutate({ checkInId });
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    } else {
+      checkOutMutation.mutate({ checkInId });
     }
   };
 

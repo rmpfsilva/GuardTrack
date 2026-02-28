@@ -739,7 +739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/staff-invoices/invoicable-shifts', isAuthenticated, async (req: any, res) => {
     try {
       const user = req.user;
-      if (!user.companyId) return res.status(400).json({ message: "No company assigned" });
+      if (!user.companyId) return res.json([]);
       const shifts = await storage.getInvoicableShifts(user.id, user.companyId);
       res.json(shifts);
     } catch (error: any) {
@@ -812,7 +812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/staff-invoices', isAuthenticated, async (req: any, res) => {
     try {
       const user = req.user;
-      if (!user.companyId) return res.status(400).json({ message: "No company assigned" });
+      if (!user.companyId && user.role !== 'super_admin') return res.json([]);
 
       const filters: { guardUserId?: string; status?: string } = {};
       if (user.role !== 'admin' && user.role !== 'super_admin') {
@@ -820,7 +820,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (req.query.status) filters.status = req.query.status as string;
 
-      const invoices = await storage.getStaffInvoices(user.companyId, filters);
+      const companyId = user.role === 'super_admin' && req.query.companyId
+        ? req.query.companyId as string
+        : user.companyId;
+      if (!companyId) return res.json([]);
+      const invoices = await storage.getStaffInvoices(companyId, filters);
       res.json(invoices);
     } catch (error: any) {
       console.error("Error fetching staff invoices:", error);
@@ -1623,7 +1627,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      const { overtimeReason } = req.body;
+      const { overtimeReason, latitude, longitude } = req.body;
 
       // Verify this check-in belongs to the user
       const activeCheckIn = await storage.getActiveCheckInForUser(userId);
@@ -1678,7 +1682,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const checkIn = await storage.checkOut(id);
+      const checkIn = await storage.checkOut(id, { latitude, longitude });
       
       // Update Google Sheets asynchronously
       const checkInWithDetails = await storage.getUserRecentCheckIns(userId, 1);

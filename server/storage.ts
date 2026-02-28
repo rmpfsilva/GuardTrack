@@ -158,7 +158,7 @@ export interface IStorage {
   getActiveCheckInForUser(userId: string): Promise<CheckInWithDetails | null>;
   getUserRecentCheckIns(userId: string, limit: number): Promise<CheckInWithDetails[]>;
   createCheckIn(checkIn: InsertCheckIn): Promise<CheckIn>;
-  checkOut(checkInId: string): Promise<CheckIn>;
+  checkOut(checkInId: string, location?: { latitude?: string; longitude?: string }): Promise<CheckIn>;
   getAllActiveCheckIns(): Promise<CheckInWithDetails[]>;
   getAllRecentActivity(limit: number): Promise<CheckInWithDetails[]>;
   getUserWeeklyHours(userId: string, weekStart: Date): Promise<number>;
@@ -756,12 +756,14 @@ export class DatabaseStorage implements IStorage {
     return checkIn;
   }
 
-  async checkOut(checkInId: string): Promise<CheckIn> {
+  async checkOut(checkInId: string, location?: { latitude?: string; longitude?: string }): Promise<CheckIn> {
     const [checkIn] = await db
       .update(checkIns)
       .set({
         checkOutTime: new Date(),
         status: 'completed',
+        checkOutLatitude: location?.latitude || null,
+        checkOutLongitude: location?.longitude || null,
         updatedAt: new Date(),
       })
       .where(eq(checkIns.id, checkInId))
