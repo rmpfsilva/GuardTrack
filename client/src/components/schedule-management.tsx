@@ -93,7 +93,7 @@ export default function ScheduleManagement() {
     userId: "",
     siteId: "",
     jobTitle: "",
-    role: "",
+    role: "all",
     recurrence: "none",
     notes: "",
   });
@@ -106,7 +106,7 @@ export default function ScheduleManagement() {
     userId: "",
     siteId: "",
     jobTitle: "",
-    role: "",
+    role: "all",
     startTime: "",
     endTime: "",
     recurrence: "none",
@@ -200,7 +200,7 @@ export default function ScheduleManagement() {
       userId: "",
       siteId: "",
       jobTitle: "",
-      role: "",
+      role: "all",
       recurrence: "none",
       notes: "",
     });
@@ -375,7 +375,7 @@ export default function ScheduleManagement() {
                     <SelectContent>
                       {filteredEmployees.map((emp) => (
                         <SelectItem key={emp.id} value={emp.id}>
-                          {emp.firstName} {emp.lastName}
+                          {emp.firstName || emp.lastName ? `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() : emp.username}
                           <span className="ml-2 text-muted-foreground text-xs">({JOB_ROLE_LABELS[emp.role] || emp.role})</span>
                         </SelectItem>
                       ))}
@@ -720,7 +720,7 @@ export default function ScheduleManagement() {
                 <SelectContent>
                   {editFilteredEmployees.map((emp) => (
                     <SelectItem key={emp.id} value={emp.id}>
-                      {emp.firstName} {emp.lastName}
+                      {emp.firstName || emp.lastName ? `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() : emp.username}
                       <span className="ml-2 text-muted-foreground text-xs">({JOB_ROLE_LABELS[emp.role] || emp.role})</span>
                     </SelectItem>
                   ))}
