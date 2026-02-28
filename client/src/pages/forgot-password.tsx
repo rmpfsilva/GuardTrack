@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,33 +14,33 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 
 const forgotPasswordSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  identifier: z.string().min(1, "Email or username is required"),
 });
 
 type ForgotPasswordForm = z.infer<typeof forgotPasswordSchema>;
 
 export default function ForgotPasswordPage() {
   const { toast } = useToast();
+  const [submitted, setSubmitted] = useState(false);
 
   const form = useForm<ForgotPasswordForm>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
-      username: "",
+      identifier: "",
     },
   });
 
   const requestResetMutation = useMutation({
-    mutationFn: async (data: { username: string }) => {
-      const res = await apiRequest("POST", "/api/auth/request-password-reset", data);
+    mutationFn: async (data: { identifier: string }) => {
+      const isEmail = data.identifier.includes("@");
+      const payload = isEmail
+        ? { email: data.identifier }
+        : { username: data.identifier };
+      const res = await apiRequest("POST", "/api/auth/request-password-reset", payload);
       return res.json();
     },
-    onSuccess: (data: { message: string }) => {
-      toast({
-        title: "Request Submitted",
-        description: data.message,
-        duration: 8000,
-      });
-      form.reset();
+    onSuccess: () => {
+      setSubmitted(true);
     },
     onError: (error: Error) => {
       toast({
@@ -54,23 +55,54 @@ export default function ForgotPasswordPage() {
     requestResetMutation.mutate(data);
   };
 
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <img src={guardTrackLogo} alt="GuardTrack" className="h-12 mx-auto mb-4" />
+          </div>
+          <Card>
+            <CardContent className="py-8 text-center space-y-4">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                <Mail className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-lg">Check your email</p>
+                <p className="text-muted-foreground text-sm mt-1">
+                  If an account was found, a reset link has been sent to the registered email address. If you don't receive it within a few minutes, contact your administrator.
+                </p>
+              </div>
+              <Link href="/auth">
+                <Button variant="outline" className="gap-2" data-testid="link-back-to-login">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Login
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src={guardTrackLogo} alt="GuardTrack" className="h-12 mx-auto mb-4" />
           <h1 className="text-3xl font-bold">Forgot Password</h1>
-          <p className="text-muted-foreground mt-2">Enter your username to request a password reset</p>
+          <p className="text-muted-foreground mt-2">Enter your email or username to reset your password</p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
-              Password Reset Request
+              Password Reset
             </CardTitle>
             <CardDescription>
-              We'll generate a reset link for your administrator to share with you
+              A reset link will be sent to your registered email address
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -78,15 +110,15 @@ export default function ForgotPasswordPage() {
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField
                   control={form.control}
-                  name="username"
+                  name="identifier"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Username</FormLabel>
+                      <FormLabel>Email or Username</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter your username"
+                          placeholder="your@email.com or your username"
                           {...field}
-                          data-testid="input-username"
+                          data-testid="input-identifier"
                         />
                       </FormControl>
                       <FormMessage />
@@ -100,7 +132,7 @@ export default function ForgotPasswordPage() {
                   disabled={requestResetMutation.isPending}
                   data-testid="button-request-reset"
                 >
-                  {requestResetMutation.isPending ? "Sending Request..." : "Request Password Reset"}
+                  {requestResetMutation.isPending ? "Sending..." : "Send Reset Link"}
                 </Button>
               </form>
             </Form>

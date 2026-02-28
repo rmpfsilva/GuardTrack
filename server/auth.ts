@@ -472,9 +472,13 @@ export function setupAuth(app: Express) {
       else if (username && companyId) {
         user = await storage.getUserByUsername(username, companyId);
       }
-      // Option 3: Look up super admin by username (no company)
+      // Option 3: Look up by username across ALL users (super admin first, then company users)
       else if (username) {
         user = await storage.getSuperAdminByUsername(username);
+        if (!user) {
+          const allUsers = await storage.getAllUsers();
+          user = allUsers.find(u => u.username === username);
+        }
       }
       else {
         return res.status(400).json({ message: "Email or username with company selection is required" });
@@ -510,7 +514,7 @@ export function setupAuth(app: Express) {
             message: "A password reset link has been sent to your email address.",
           });
         } catch (emailError: any) {
-          console.error("Failed to send password reset email:", emailError.message);
+          console.error("Failed to send password reset email:", emailError.message, emailError.stack);
           // Still return success — the reset link is logged for admin fallback
           res.status(200).json({
             message: "Password reset request received. Contact your administrator for the reset link if you don't receive an email.",
