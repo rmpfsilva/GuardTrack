@@ -15,13 +15,8 @@ const JOB_TITLE_COLORS: Record<string, { strip: string; bg: string; border: stri
   "Call Out":         { strip: "bg-rose-500",    bg: "bg-rose-500/10 dark:bg-rose-500/15",     border: "border-rose-300 dark:border-rose-700",    text: "text-rose-700 dark:text-rose-300" },
   "Door Supervisor":  { strip: "bg-cyan-500",    bg: "bg-cyan-500/10 dark:bg-cyan-500/15",     border: "border-cyan-300 dark:border-cyan-700",    text: "text-cyan-700 dark:text-cyan-300" },
   "CCTV Operator":    { strip: "bg-indigo-500",  bg: "bg-indigo-500/10 dark:bg-indigo-500/15", border: "border-indigo-300 dark:border-indigo-700", text: "text-indigo-700 dark:text-indigo-300" },
-  "Close Protection": { strip: "bg-green-600",   bg: "bg-green-500/10 dark:bg-green-500/15",   border: "border-green-300 dark:border-green-700",  text: "text-green-700 dark:text-green-300" },
   "Key Holder":       { strip: "bg-yellow-500",  bg: "bg-yellow-500/10 dark:bg-yellow-500/15", border: "border-yellow-300 dark:border-yellow-700", text: "text-yellow-700 dark:text-yellow-300" },
   "Mobile Patrol":    { strip: "bg-sky-500",     bg: "bg-sky-500/10 dark:bg-sky-500/15",       border: "border-sky-300 dark:border-sky-700",      text: "text-sky-700 dark:text-sky-300" },
-  "Receptionist":     { strip: "bg-pink-500",    bg: "bg-pink-500/10 dark:bg-pink-500/15",     border: "border-pink-300 dark:border-pink-700",    text: "text-pink-700 dark:text-pink-300" },
-  "Concierge":        { strip: "bg-emerald-500", bg: "bg-emerald-500/10 dark:bg-emerald-500/15",border: "border-emerald-300 dark:border-emerald-700",text: "text-emerald-700 dark:text-emerald-300" },
-  "Event Marshal":    { strip: "bg-orange-500",  bg: "bg-orange-500/10 dark:bg-orange-500/15", border: "border-orange-300 dark:border-orange-700", text: "text-orange-700 dark:text-orange-300" },
-  "Guard":            { strip: "bg-slate-400",   bg: "bg-slate-500/10 dark:bg-slate-500/15",   border: "border-slate-300 dark:border-slate-600",  text: "text-slate-600 dark:text-slate-400" },
 };
 const DEFAULT_JOB_COLOR = { strip: "bg-slate-400", bg: "bg-slate-500/10 dark:bg-slate-500/15", border: "border-slate-300 dark:border-slate-600", text: "text-slate-600 dark:text-slate-400" };
 
