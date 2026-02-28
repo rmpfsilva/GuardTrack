@@ -206,6 +206,35 @@ async function backfillJobShareShifts() {
   }
 }
 
+async function ensureLogicloopAdmin() {
+  try {
+    const COMPANY_ID = '1a1c7789-660f-4586-ac07-c88daabfb5e3'; // loogicloopdigital
+    const USERNAME = 'rickown';
+
+    const existing = await db.select().from(users).where(eq(users.username, USERNAME));
+    if (existing.length > 0) {
+      log('[Init] rickown admin already exists');
+      return;
+    }
+
+    const pwd = await hashPassword('GuardTrack@2024!');
+    const [created] = await db.insert(users).values({
+      username: USERNAME,
+      password: pwd,
+      role: 'admin',
+      companyId: COMPANY_ID,
+      email: null,
+    }).returning({ id: users.id });
+
+    // Add admin role to userRoles
+    await db.insert(userRoles).values({ userId: created.id, role: 'admin' });
+
+    log('[Init] rickown admin created for loogicloopdigital company');
+  } catch (err) {
+    console.error('[Init] Error ensuring logicloop admin:', err);
+  }
+}
+
 (async () => {
   try {
     // Initialize session store before starting the server
@@ -213,6 +242,9 @@ async function backfillJobShareShifts() {
 
     // Ensure platform super admin exists in whichever DB this instance connects to
     await ensureProductionSuperAdmin();
+
+    // Restore company admin account for loogicloopdigital test company
+    await ensureLogicloopAdmin();
     
     const server = await registerRoutes(app);
 
