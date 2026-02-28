@@ -1,0 +1,149 @@
+Build a forced-install PWA system for GuardTrack (PWA-only, no APK support).
+
+OBJECTIVE:
+Users must install GuardTrack to their home screen before accessing login. Installation must require maximum 3 taps.
+
+Create dynamic route:
+
+/install/:companyId
+
+When accessed:
+
+Detect device (Android, iOS, Desktop)
+
+Store companyId in localStorage
+
+Apply company branding
+
+Hide all navigation
+
+Hide login completely
+
+Show installation-only interface
+
+Enforce standalone mode globally:
+
+If app is NOT running in standalone mode:
+
+Block access to /login and all protected routes
+
+Redirect to /install/:companyId (if companyId exists)
+
+Standalone detection:
+
+window.matchMedia('(display-mode: standalone)').matches
+
+Only allow login if true.
+
+Add admin toggle:
+“Force Install Before Login” (ON/OFF)
+
+Android Installation (PWA)
+
+Capture beforeinstallprompt event
+
+Store the event
+
+Display large primary button:
+“Install GuardTrack”
+
+When clicked:
+
+Trigger deferredPrompt.prompt()
+
+Clear stored event after acceptance
+
+If beforeinstallprompt is unavailable:
+Show fallback visual guide:
+
+Step 1: Tap browser menu
+Step 2: Tap “Add to Home Screen”
+Step 3: Tap Add
+
+Use large icons. No long text.
+
+iOS Installation
+
+Since no native prompt exists:
+
+Display large visual instructions:
+
+Step 1: Tap Share icon
+Step 2: Tap “Add to Home Screen”
+Step 3: Tap Add
+
+Use animated visuals if possible.
+No paragraphs.
+
+Desktop Behavior
+
+Display QR code pointing to same:
+/install/:companyId link
+
+Message:
+“Open this on your mobile device to install GuardTrack.”
+
+Admin Dashboard Upgrade
+
+Add section:
+
+📲 App Installation
+
+Include:
+
+Company install link display
+
+Copy link button
+
+Generate QR code
+
+Toggle:
+Force Install Before Login
+
+Install tracking metrics:
+
+Install page visits
+
+Install button clicks
+
+First login in standalone mode
+
+UX Rules
+
+No login visible in browser mode
+
+No navigation visible
+
+No long instructions
+
+Large buttons only
+
+Maximum 3 taps to install
+
+Clean branded install page
+
+GOAL:
+Reduce install-related support tickets by at least 70%.
+Make install frictionless for low-technical workforce users.
+
+⚠ Important Extra (Most People Miss This)
+
+Make sure:
+
+Your manifest.json is correct
+
+display is set to "standalone"
+
+You have:
+
+192x192 icon
+
+512x512 icon
+
+Proper theme_color
+
+Proper background_color
+
+Service worker is registering successfully
+
+If any of those are wrong, Android won’t show install prompt reliably.

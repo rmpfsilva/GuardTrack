@@ -13,6 +13,7 @@ import {
   text,
   boolean,
   numeric,
+  integer,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -79,6 +80,9 @@ export const companies = pgTable("companies", {
   subscriptionStatus: varchar("subscription_status").default('active'), // 'trial' | 'active' | 'expired' | 'suspended'
   billingStartDate: timestamp("billing_start_date"),
   stripeAccountId: varchar("stripe_account_id"),
+  forceInstallEnabled: boolean("force_install_enabled").notNull().default(false),
+  pwaPageViews: integer("pwa_page_views").notNull().default(0),
+  pwaInstallClicks: integer("pwa_install_clicks").notNull().default(0),
   xeroAccessToken: text("xero_access_token"),
   xeroRefreshToken: text("xero_refresh_token"),
   xeroExpiresAt: timestamp("xero_expires_at"),

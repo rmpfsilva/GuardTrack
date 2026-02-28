@@ -230,6 +230,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PWA Install routes — public endpoints for install page
+  app.get('/api/install/company-info/:companyUuid', async (req: any, res) => {
+    try {
+      const { companyUuid } = req.params;
+      const companies = await storage.getAllCompanies();
+      const company = companies.find(c => c.isActive && c.id === companyUuid);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      res.json({
+        id: company.id,
+        name: company.name,
+        companyId: company.companyId,
+        forceInstallEnabled: company.forceInstallEnabled,
+        pwaPageViews: company.pwaPageViews,
+        pwaInstallClicks: company.pwaInstallClicks,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch company install info" });
+    }
+  });
+
+  app.post('/api/install/track', async (req: any, res) => {
+    try {
+      const { companyId, event } = req.body; // event: 'page_view' | 'install_click'
+      if (!companyId || !['page_view', 'install_click'].includes(event)) {
+        return res.status(400).json({ message: "Invalid tracking data" });
+      }
+      const companies = await storage.getAllCompanies();
+      const company = companies.find(c => c.id === companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const update: any = {};
+      if (event === 'page_view') update.pwaPageViews = (company.pwaPageViews || 0) + 1;
+      if (event === 'install_click') update.pwaInstallClicks = (company.pwaInstallClicks || 0) + 1;
+      await storage.updateCompany(company.id, update);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to track event" });
+    }
+  });
+
+  app.patch('/api/companies/:id/force-install', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user as any;
+      const { id } = req.params;
+      const { forceInstallEnabled } = req.body;
+      if (user.role !== 'super_admin' && user.companyId !== id) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const updated = await storage.updateCompany(id, { forceInstallEnabled });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update force install setting" });
+    }
+  });
+
   // Company management routes
   app.get('/api/companies', isAuthenticated, isAdmin, async (req: any, res) => {
     try {

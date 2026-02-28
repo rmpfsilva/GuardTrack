@@ -9,7 +9,7 @@ import {
   Users, MapPin, Clock, Activity, Calendar, Settings, Mail, RefreshCw,
   LayoutDashboard, UserCog, CalendarOff, CheckSquare, ClipboardEdit, Megaphone,
   Handshake, Share2, Receipt, CreditCard, BarChart3, MessageSquare,
-  Building2, AlertTriangle, FileText, DollarSign, Shield, LogOut
+  Building2, AlertTriangle, FileText, DollarSign, Shield, LogOut, Smartphone
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -58,6 +58,7 @@ import StaffInvoiceManagement from "@/components/staff-invoice-management";
 import { CompanyStripeSettings } from "@/components/stripe-connect-settings";
 import { XeroSettings } from "@/components/xero-connect-settings";
 import OperationsCommandCentre from "@/components/operations-command-centre";
+import { AppInstallSettings } from "@/components/app-install-settings";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading, isAdmin, logoutMutation } = useAuth();
@@ -395,6 +396,8 @@ export default function AdminDashboard() {
             <CompanySupportMessages />
           </div>
         );
+      case 'app-install':
+        return <AppInstallSettings />;
       default:
         return null;
     }
@@ -596,6 +599,7 @@ export default function AdminDashboard() {
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
+                      {renderSidebarItem('app-install', 'App Install', Smartphone)}
                       {renderSidebarItem('support', 'Support', MessageSquare)}
                     </SidebarMenu>
                   </SidebarGroupContent>

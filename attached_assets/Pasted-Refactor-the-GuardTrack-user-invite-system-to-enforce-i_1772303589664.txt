@@ -1,0 +1,125 @@
+Refactor the GuardTrack user invite system to enforce installation before login.
+
+OBJECTIVE:
+Invited users must install the PWA before accessing login. The login page must never be accessible in browser mode.
+
+Modify Invite Flow:
+
+Currently, invite links redirect to /login.
+
+Change this so invite links redirect to:
+
+/install/:companyId?inviteToken=XYZ
+
+The inviteToken must be preserved through installation.
+
+Install Route Logic:
+
+Create route:
+
+/install/:companyId
+
+When accessed:
+
+Store companyId in localStorage
+
+Store inviteToken in localStorage if present
+
+Hide login page completely
+
+Show installation-only interface
+
+Detect device (Android, iOS, Desktop)
+
+Enforce Standalone Mode:
+
+Globally enforce:
+
+If app is NOT running in standalone mode:
+
+Block access to /login
+
+Block access to password setup
+
+Redirect to /install/:companyId (preserve inviteToken)
+
+Standalone detection:
+
+window.matchMedia('(display-mode: standalone)').matches
+
+Only allow login if true.
+
+Android PWA Install:
+
+Capture beforeinstallprompt
+
+Store deferred prompt
+
+Display large button:
+“Install GuardTrack”
+
+On click:
+
+Trigger deferredPrompt.prompt()
+
+Clear stored prompt after acceptance
+
+If prompt unavailable after 3 seconds:
+
+Show visual fallback instructions:
+Step 1: Tap browser menu
+Step 2: Tap “Add to Home Screen”
+Step 3: Tap Add
+
+After Installation:
+
+When app launches in standalone mode:
+
+If inviteToken exists:
+
+Redirect to /set-password
+
+Auto-validate token
+
+Allow password creation
+
+Clear inviteToken after completion
+
+If no inviteToken:
+
+Redirect to normal /login
+
+Admin Panel Update:
+
+In Company Admin:
+
+Under “User Invitations”:
+
+Invite link must now generate:
+https://guardtrack.app/install/{companyId}?inviteToken=XYZ
+
+Add install tracking:
+
+Invite link opened
+
+Install completed (first standalone login)
+
+Account activated
+
+UX Rules:
+
+Login page must NEVER be visible in browser mode
+
+No navigation visible during install
+
+No long text
+
+Large install button
+
+Maximum 3 taps to install
+
+GOAL:
+Eliminate install confusion.
+Prevent browser logins.
+Reduce support tickets by 70%+.
+Ensure invited guards install before first login.

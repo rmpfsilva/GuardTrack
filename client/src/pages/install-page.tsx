@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { detectBrowser, type BrowserInfo } from "@/lib/browser-detect";
 import { useInstallPWA } from "@/hooks/use-install-pwa";
 import { isNativePlatform } from "@/lib/native";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, Share, Plus, MoreVertical, Smartphone, Monitor, CheckCircle2, ArrowDown, ExternalLink } from "lucide-react";
+import { Download, Share, Plus, MoreVertical, Smartphone, Monitor, CheckCircle2, ArrowDown } from "lucide-react";
 import { SiApple, SiAndroid, SiGooglechrome, SiSafari } from "react-icons/si";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 
@@ -15,19 +15,57 @@ function isStandalone(): boolean {
     (window.navigator as any).standalone === true;
 }
 
+function trackEvent(companyId: string | null, event: 'page_view' | 'install_click') {
+  if (!companyId) return;
+  fetch('/api/install/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyId, event }),
+  }).catch(() => {});
+}
+
+function QRCodeDisplay({ url }: { url: string }) {
+  const encoded = encodeURIComponent(url);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encoded}&bgcolor=ffffff&color=1d4ed8&margin=10`;
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <img src={qrUrl} alt="QR Code" className="w-48 h-48 rounded-lg border border-border" data-testid="img-install-qr" />
+      <p className="text-xs text-muted-foreground text-center">Scan with your mobile device to install</p>
+    </div>
+  );
+}
+
 export default function InstallPage() {
   const [, setLocation] = useLocation();
+  const params = useParams<{ companyId?: string }>();
   const [browser, setBrowser] = useState<BrowserInfo | null>(null);
   const { installApp, hasPrompt, isInstalled } = useInstallPWA();
   const [animStep, setAnimStep] = useState(0);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+
+  const companyId = params?.companyId || localStorage.getItem('installCompanyId');
 
   useEffect(() => {
     if (isNativePlatform() || isStandalone() || isInstalled) {
-      setLocation("/login");
+      const storedCompanyId = localStorage.getItem('installCompanyId');
+      if (storedCompanyId) {
+        setLocation("/login");
+      } else {
+        setLocation("/login");
+      }
       return;
     }
     setBrowser(detectBrowser());
-  }, [isInstalled, setLocation]);
+
+    if (params?.companyId) {
+      localStorage.setItem('installCompanyId', params.companyId);
+      fetch(`/api/install/company-info/${params.companyId}`)
+        .then(r => r.json())
+        .then(data => { if (data.name) setCompanyName(data.name); })
+        .catch(() => {});
+      trackEvent(params.companyId, 'page_view');
+    }
+  }, [isInstalled, setLocation, params?.companyId]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -41,8 +79,16 @@ export default function InstallPage() {
   const isIOSSafari = browser.isIOS && browser.name === 'safari';
   const isIOSChrome = browser.isIOS && browser.name === 'chrome';
   const isIOSOther = browser.isIOS && !isIOSSafari && !isIOSChrome;
-  const isAndroidChrome = browser.isAndroid && (browser.name === 'chrome' || browser.supportsInstallPrompt);
   const isDesktop = !browser.isMobile;
+
+  const installUrl = companyId
+    ? `${window.location.origin}/install/${companyId}`
+    : `${window.location.origin}/install`;
+
+  const handleInstall = async () => {
+    trackEvent(companyId, 'install_click');
+    return installApp();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background flex flex-col items-center justify-center p-4" data-testid="install-page">
@@ -54,20 +100,24 @@ export default function InstallPage() {
             className="h-14 w-auto mx-auto"
             data-testid="img-install-logo"
           />
-          <h1 className="text-2xl font-bold" data-testid="text-install-title">Install GuardTrack</h1>
+          <h1 className="text-2xl font-bold" data-testid="text-install-title">
+            {companyName ? `${companyName}` : "Install GuardTrack"}
+          </h1>
           <p className="text-muted-foreground text-sm">
-            Install the app on your device for the best experience
+            {companyName
+              ? "Install the GuardTrack app on your device to get started"
+              : "Install the app on your device for the best experience"}
           </p>
           <Badge variant="outline" className="text-xs" data-testid="badge-device-info">
-            {browser.isIOS ? "iOS" : browser.isAndroid ? "Android" : "Desktop"} - {browser.name.charAt(0).toUpperCase() + browser.name.slice(1)}
+            {browser.isIOS ? "iOS" : browser.isAndroid ? "Android" : "Desktop"} &mdash; {browser.name.charAt(0).toUpperCase() + browser.name.slice(1)}
           </Badge>
         </div>
 
         {isIOSSafari && <IOSSafariInstructions animStep={animStep} />}
-        {isIOSChrome && <IOSChromeMessage />}
-        {isIOSOther && <IOSOtherMessage />}
-        {browser.isAndroid && <AndroidInstructions installApp={installApp} hasPrompt={hasPrompt} animStep={animStep} />}
-        {isDesktop && <DesktopInstructions installApp={installApp} hasPrompt={hasPrompt} animStep={animStep} />}
+        {isIOSChrome && <IOSChromeMessage installUrl={installUrl} />}
+        {isIOSOther && <IOSOtherMessage installUrl={installUrl} />}
+        {browser.isAndroid && <AndroidInstructions installApp={handleInstall} hasPrompt={hasPrompt} animStep={animStep} />}
+        {isDesktop && <DesktopInstructions installApp={handleInstall} hasPrompt={hasPrompt} animStep={animStep} installUrl={installUrl} />}
 
         <Card>
           <CardContent className="py-4">
@@ -172,9 +222,7 @@ function IOSSafariInstructions({ animStep }: { animStep: number }) {
   );
 }
 
-function IOSChromeMessage() {
-  const currentUrl = window.location.origin + '/install';
-
+function IOSChromeMessage({ installUrl }: { installUrl: string }) {
   return (
     <Card data-testid="install-instructions-ios-chrome">
       <CardContent className="py-5 space-y-4">
@@ -184,27 +232,22 @@ function IOSChromeMessage() {
         </div>
 
         <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg space-y-3">
-          <p className="text-sm font-medium">To install GuardTrack, you need to open this page in Safari.</p>
-          <p className="text-sm text-muted-foreground">
-            Chrome on iOS does not support app installation. Please follow these steps:
-          </p>
-
+          <p className="text-sm font-medium">To install GuardTrack, open this page in Safari.</p>
           <div className="space-y-2">
             <div className="flex items-start gap-2">
               <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs flex-shrink-0 font-bold">1</span>
               <span className="text-sm">Copy this link:</span>
             </div>
-            <div className="bg-muted rounded-md p-2 text-xs break-all font-mono">{currentUrl}</div>
+            <div className="bg-muted rounded-md p-2 text-xs break-all font-mono">{installUrl}</div>
             <Button
               variant="outline"
               size="sm"
               className="w-full"
-              onClick={() => navigator.clipboard.writeText(currentUrl)}
+              onClick={() => navigator.clipboard.writeText(installUrl)}
               data-testid="button-copy-url"
             >
               Copy Link
             </Button>
-
             <div className="flex items-start gap-2 pt-2">
               <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs flex-shrink-0 font-bold">2</span>
               <div className="flex items-center gap-1.5 text-sm">
@@ -213,7 +256,6 @@ function IOSChromeMessage() {
                 <span className="font-medium">Safari</span>
               </div>
             </div>
-
             <div className="flex items-start gap-2 pt-1">
               <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs flex-shrink-0 font-bold">3</span>
               <span className="text-sm">Follow the install instructions there</span>
@@ -225,9 +267,7 @@ function IOSChromeMessage() {
   );
 }
 
-function IOSOtherMessage() {
-  const currentUrl = window.location.origin + '/install';
-
+function IOSOtherMessage({ installUrl }: { installUrl: string }) {
   return (
     <Card data-testid="install-instructions-ios-other">
       <CardContent className="py-5 space-y-4">
@@ -237,12 +277,12 @@ function IOSOtherMessage() {
         </div>
         <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg space-y-3">
           <p className="text-sm">To install GuardTrack on your iOS device, open this link in Safari:</p>
-          <div className="bg-muted rounded-md p-2 text-xs break-all font-mono">{currentUrl}</div>
+          <div className="bg-muted rounded-md p-2 text-xs break-all font-mono">{installUrl}</div>
           <Button
             variant="outline"
             size="sm"
             className="w-full"
-            onClick={() => navigator.clipboard.writeText(currentUrl)}
+            onClick={() => navigator.clipboard.writeText(installUrl)}
             data-testid="button-copy-url-other"
           >
             Copy Link
@@ -329,20 +369,27 @@ function AndroidInstructions({ installApp, hasPrompt, animStep }: { installApp: 
   );
 }
 
-function DesktopInstructions({ installApp, hasPrompt, animStep }: { installApp: () => Promise<boolean>; hasPrompt: boolean; animStep: number }) {
+function DesktopInstructions({ installApp, hasPrompt, animStep, installUrl }: { installApp: () => Promise<boolean>; hasPrompt: boolean; animStep: number; installUrl: string }) {
   const [, setLocation] = useLocation();
 
   return (
     <Card data-testid="install-instructions-desktop">
-      <CardContent className="py-5 space-y-4">
+      <CardContent className="py-5 space-y-5">
         <div className="flex items-center gap-2 mb-2">
           <Monitor className="h-5 w-5 text-blue-500" />
-          <h2 className="font-semibold">Install on Desktop</h2>
+          <h2 className="font-semibold">Mobile App Required</h2>
         </div>
 
-        {hasPrompt ? (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Click the button below to install GuardTrack as a desktop app.</p>
+        <div className="text-center space-y-4">
+          <p className="text-sm text-muted-foreground">
+            GuardTrack is designed for mobile devices. Scan this QR code with your phone to install the app.
+          </p>
+          <QRCodeDisplay url={installUrl} />
+        </div>
+
+        {hasPrompt && (
+          <div className="space-y-3 pt-2 border-t border-border">
+            <p className="text-sm text-muted-foreground text-center">Or install as a desktop app:</p>
             <Button
               className="w-full"
               size="lg"
@@ -350,32 +397,12 @@ function DesktopInstructions({ installApp, hasPrompt, animStep }: { installApp: 
               data-testid="button-desktop-install"
             >
               <Download className="h-5 w-5 mr-2" />
-              Install GuardTrack
+              Install on this device
             </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <StepIndicator step={1} active={animStep === 0} completed={animStep > 0} />
-              <div className={`flex-1 transition-opacity duration-500 ${animStep === 0 ? 'opacity-100' : 'opacity-70'}`}>
-                <p className="font-medium text-sm">Look for the install icon in the address bar</p>
-                <div className={`mt-2 flex items-center gap-2 p-3 bg-muted/50 rounded-lg transition-transform duration-500 ${animStep === 0 ? 'scale-105' : 'scale-100'}`}>
-                  <Download className={`h-6 w-6 text-primary ${animStep === 0 ? 'animate-bounce' : ''}`} />
-                  <span className="text-sm text-muted-foreground">or use browser menu</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <StepIndicator step={2} active={animStep === 1} completed={animStep > 1} />
-              <div className={`flex-1 transition-opacity duration-500 ${animStep === 1 ? 'opacity-100' : 'opacity-70'}`}>
-                <p className="font-medium text-sm">Click "Install" to confirm</p>
-              </div>
-            </div>
           </div>
         )}
 
-        <div className="pt-2 border-t">
+        <div className="pt-2 border-t border-border">
           <Button
             variant="ghost"
             size="sm"
@@ -383,7 +410,7 @@ function DesktopInstructions({ installApp, hasPrompt, animStep }: { installApp: 
             onClick={() => setLocation("/login")}
             data-testid="button-skip-install-desktop"
           >
-            Continue without installing
+            Continue in browser
           </Button>
         </div>
       </CardContent>

@@ -1,5 +1,5 @@
 // Referenced from blueprint:javascript_log_in_with_replit and blueprint:javascript_auth_all_persistance
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -38,23 +38,41 @@ function isMobileDevice(): boolean {
 
 function InstallGate({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
+  const [forceInstall, setForceInstall] = useState<boolean | null>(null);
   const blockedPages = ['/login', '/auth', '/register', '/register-trial', '/forgot-password', '/reset-password'];
 
-  // Never block on native Capacitor — app is already installed
-  const shouldBlock = !isNativePlatform() &&
-    blockedPages.includes(location) &&
-    !isStandalone() &&
-    isMobileDevice();
+  const onBlockedPage = blockedPages.some(p => location === p || location.startsWith(p));
+  const alreadyInstalled = isNativePlatform() || isStandalone();
+  const onInstallPage = location.startsWith('/install');
+
+  // Fetch force-install setting for the company stored in localStorage
+  useEffect(() => {
+    const companyId = localStorage.getItem('installCompanyId');
+    if (!companyId) {
+      setForceInstall(false);
+      return;
+    }
+    fetch(`/api/install/company-info/${companyId}`)
+      .then(r => r.json())
+      .then(data => setForceInstall(data.forceInstallEnabled === true))
+      .catch(() => setForceInstall(false));
+  }, []);
+
+  const shouldBlock =
+    !alreadyInstalled &&
+    onBlockedPage &&
+    !onInstallPage &&
+    isMobileDevice() &&
+    forceInstall !== null; // wait until we've fetched the setting
 
   useEffect(() => {
     if (shouldBlock) {
-      setLocation('/install');
+      const companyId = localStorage.getItem('installCompanyId');
+      setLocation(companyId ? `/install/${companyId}` : '/install');
     }
   }, [shouldBlock, setLocation]);
 
-  if (shouldBlock) {
-    return null;
-  }
+  if (shouldBlock) return null;
 
   return <>{children}</>;
 }
@@ -68,6 +86,7 @@ function Router() {
       <TrialBanner user={user} />
       <InstallGate>
         <Switch>
+          <Route path="/install/:companyId" component={InstallPage} />
           <Route path="/install" component={InstallPage} />
           <Route path="/login" component={AuthPage} />
           <Route path="/auth" component={AuthPage} />
