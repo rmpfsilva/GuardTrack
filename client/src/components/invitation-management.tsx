@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Mail, UserPlus, Ban, Trash2, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Mail, UserPlus, Ban, Trash2, CheckCircle2, Clock, XCircle, Link2, Copy, Check, Share2 } from "lucide-react";
 import { format } from "date-fns";
 import type { Invitation } from "@shared/schema";
 
@@ -30,6 +30,22 @@ export default function InvitationManagement() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const origin = window.location.origin;
+  // user.companyId is the UUID used in install URLs
+  const appInstallLink = user?.companyId ? `${origin}/install/${user.companyId}` : null;
+
+  const copyToClipboard = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      toast({ title: "Link copied", description: "Paste it into WhatsApp, SMS, or any app." });
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      toast({ title: "Copy failed", description: "Please copy the link manually.", variant: "destructive" });
+    }
+  };
 
   const form = useForm<InvitationFormData>({
     resolver: zodResolver(invitationFormSchema),
@@ -192,6 +208,47 @@ export default function InvitationManagement() {
 
   return (
     <div className="space-y-6">
+
+      {/* Share App Install Link */}
+      {appInstallLink && (
+        <Card data-testid="card-share-link">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              Share App Link
+            </CardTitle>
+            <CardDescription>
+              Copy this link and send it via WhatsApp, SMS, or any messenger. Anyone who clicks it can install the app and register.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={appInstallLink}
+                className="font-mono text-sm bg-muted"
+                data-testid="input-app-install-link"
+                onClick={e => (e.target as HTMLInputElement).select()}
+              />
+              <Button
+                variant="outline"
+                onClick={() => copyToClipboard(appInstallLink, 'app-link')}
+                data-testid="button-copy-app-link"
+              >
+                {copiedId === 'app-link' ? (
+                  <><Check className="h-4 w-4 mr-2 text-green-600" />Copied</>
+                ) : (
+                  <><Copy className="h-4 w-4 mr-2" />Copy Link</>
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              This is a general install link — no email or token required. Send it to anyone you want to join your company.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Create Invitation Form */}
       <Card>
         <CardHeader>
@@ -353,6 +410,25 @@ export default function InvitationManagement() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {invitation.status === "pending" && (() => {
+                      const inviteLink = user?.companyId
+                        ? `${origin}/install/${user.companyId}?inviteToken=${invitation.token}`
+                        : `${origin}/register?token=${invitation.token}`;
+                      return (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(inviteLink, invitation.id)}
+                          data-testid={`button-copy-link-${invitation.id}`}
+                        >
+                          {copiedId === invitation.id ? (
+                            <><Check className="h-4 w-4 mr-1 text-green-600" />Copied</>
+                          ) : (
+                            <><Link2 className="h-4 w-4 mr-1" />Copy Link</>
+                          )}
+                        </Button>
+                      );
+                    })()}
                     {invitation.status === "pending" && (
                       <Button
                         variant="outline"
