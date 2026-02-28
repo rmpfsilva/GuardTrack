@@ -146,9 +146,24 @@ export const sites = pgTable("sites", {
   longitude: text("longitude"),
   contactName: varchar("contact_name"),
   contactPhone: varchar("contact_phone"),
-  guardRate: numeric("guard_rate", { precision: 10, scale: 2 }).default('15.00'), // Hourly rate for guards
-  stewardRate: numeric("steward_rate", { precision: 10, scale: 2 }).default('18.00'), // Hourly rate for stewards
-  supervisorRate: numeric("supervisor_rate", { precision: 10, scale: 2 }).default('22.00'), // Hourly rate for supervisors
+  // Staff rates (OUT) — what the company pays each role per hour
+  guardRate: numeric("guard_rate", { precision: 10, scale: 2 }).default('15.00'),
+  stewardRate: numeric("steward_rate", { precision: 10, scale: 2 }).default('18.00'),
+  supervisorRate: numeric("supervisor_rate", { precision: 10, scale: 2 }).default('22.00'),
+  callOutRate: numeric("call_out_rate", { precision: 10, scale: 2 }).default('15.00'),
+  doorSupervisorRate: numeric("door_supervisor_rate", { precision: 10, scale: 2 }).default('15.00'),
+  cctvOperatorRate: numeric("cctv_operator_rate", { precision: 10, scale: 2 }).default('15.00'),
+  keyHolderRate: numeric("key_holder_rate", { precision: 10, scale: 2 }).default('15.00'),
+  mobilePatrolRate: numeric("mobile_patrol_rate", { precision: 10, scale: 2 }).default('15.00'),
+  // Client rates (IN) — what the site/client pays the company per role per hour
+  guardClientRate: numeric("guard_client_rate", { precision: 10, scale: 2 }).default('20.00'),
+  stewardClientRate: numeric("steward_client_rate", { precision: 10, scale: 2 }).default('23.00'),
+  supervisorClientRate: numeric("supervisor_client_rate", { precision: 10, scale: 2 }).default('28.00'),
+  callOutClientRate: numeric("call_out_client_rate", { precision: 10, scale: 2 }).default('20.00'),
+  doorSupervisorClientRate: numeric("door_supervisor_client_rate", { precision: 10, scale: 2 }).default('20.00'),
+  cctvOperatorClientRate: numeric("cctv_operator_client_rate", { precision: 10, scale: 2 }).default('20.00'),
+  keyHolderClientRate: numeric("key_holder_client_rate", { precision: 10, scale: 2 }).default('20.00'),
+  mobilePatrolClientRate: numeric("mobile_patrol_client_rate", { precision: 10, scale: 2 }).default('20.00'),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

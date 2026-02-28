@@ -3257,19 +3257,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Company settings routes (admin only for updates, all authenticated users can view)
-  app.get('/api/company-settings', isAuthenticated, async (req, res) => {
+  app.get('/api/company-settings', isAuthenticated, async (req: any, res) => {
     try {
       let settings = await storage.getCompanySettings();
       
-      // If no settings exist, create default ones with the default company
+      // If no settings exist, return sensible defaults (don't try to create with a fake company ID)
       if (!settings) {
-        settings = await storage.createCompanySettings({
-          companyId: '00000000-0000-0000-0000-000000000000', // Default company
-          companyName: 'ProForce Security & Events Ltd',
-        });
+        const user = req.user;
+        if (user?.companyId) {
+          try {
+            settings = await storage.createCompanySettings({
+              companyId: user.companyId,
+              companyName: '',
+            });
+          } catch {
+            // Creation failed (e.g. FK violation) — just return defaults
+          }
+        }
       }
       
-      res.json(settings);
+      res.json(settings || {
+        companyName: '',
+        invoicePrefix: 'INV',
+        companyAddress: '',
+        companyPhone: '',
+        companyEmail: '',
+        taxId: '',
+        registrationNumber: '',
+        bankName: '',
+        bankAccountNumber: '',
+        bankSortCode: '',
+        invoiceNotes: '',
+        logoUrl: '',
+      });
     } catch (error: any) {
       console.error("Error fetching company settings:", error);
       res.status(500).json({ message: error.message || "Failed to fetch company settings" });

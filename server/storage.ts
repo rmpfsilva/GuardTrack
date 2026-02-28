@@ -1353,19 +1353,15 @@ export class DatabaseStorage implements IStorage {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
 
-    // Build the where conditions
     const conditions = [
       eq(checkIns.status, 'completed'),
       gte(checkIns.checkInTime, weekStart),
       lte(checkIns.checkInTime, weekEnd)
     ];
-
-    // Add company filter if companyId is provided (regular admin)
     if (companyId) {
       conditions.push(eq(sites.companyId, companyId));
     }
 
-    // Get all completed check-ins for the week
     const results = await db
       .select()
       .from(checkIns)
@@ -1374,70 +1370,113 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions))
       .orderBy(checkIns.checkInTime);
 
-    // Group by site and calculate totals
+    // Also fetch scheduled shifts for the same period to resolve job titles
+    const scheduledResults = await db
+      .select()
+      .from(scheduledShifts)
+      .leftJoin(sites, eq(scheduledShifts.siteId, sites.id))
+      .where(
+        and(
+          gte(scheduledShifts.startTime, new Date(weekStart.getTime() - 3 * 60 * 60 * 1000)),
+          lte(scheduledShifts.startTime, weekEnd)
+        )
+      );
+
+    // Build a lookup: userId+siteId+day -> jobTitle
+    const shiftLookup = new Map<string, string>();
+    for (const r of scheduledResults) {
+      if (!r.scheduled_shifts) continue;
+      const ss = r.scheduled_shifts;
+      const day = new Date(ss.startTime).toDateString();
+      const key = `${ss.userId}:${ss.siteId}:${day}`;
+      if (!shiftLookup.has(key)) shiftLookup.set(key, ss.jobTitle || 'SIA Guard');
+    }
+
+    // Rate lookup by job title
+    const getJobRates = (site: any, jobTitle: string): { staffRate: number; clientRate: number } => {
+      const t = jobTitle || 'SIA Guard';
+      const m: Record<string, [string, number, string, number]> = {
+        'SIA Guard':       ['guardRate', 15, 'guardClientRate', 20],
+        'Steward':         ['stewardRate', 18, 'stewardClientRate', 23],
+        'Supervisor':      ['supervisorRate', 22, 'supervisorClientRate', 28],
+        'Call Out':        ['callOutRate', 15, 'callOutClientRate', 20],
+        'Door Supervisor': ['doorSupervisorRate', 15, 'doorSupervisorClientRate', 20],
+        'CCTV Operator':   ['cctvOperatorRate', 15, 'cctvOperatorClientRate', 20],
+        'Key Holder':      ['keyHolderRate', 15, 'keyHolderClientRate', 20],
+        'Mobile Patrol':   ['mobilePatrolRate', 15, 'mobilePatrolClientRate', 20],
+      };
+      const entry = m[t] || m['SIA Guard'];
+      return {
+        staffRate: Number(site[entry[0]]) || entry[1],
+        clientRate: Number(site[entry[2]]) || entry[3],
+      };
+    };
+
+    const roleToJobTitle: Record<string, string> = {
+      'guard': 'SIA Guard', 'steward': 'Steward', 'supervisor': 'Supervisor', 'call_out': 'Call Out',
+    };
+
     const siteBilling = new Map();
 
     for (const row of results) {
       if (!row.check_ins || !row.users || !row.sites) continue;
-
-      const siteId = row.sites.id;
       const checkIn = row.check_ins;
       const user = row.users;
       const site = row.sites;
-
       if (!checkIn.checkOutTime) continue;
 
-      // Calculate payable hours using the new approval-based logic
       const hoursWorked = await this.calculatePayableHours(checkIn);
-
-      // Get the hourly rate based on working role
       const role = checkIn.workingRole || 'guard';
-      let hourlyRate = 15; // default
-      if (role === 'guard') hourlyRate = Number(site.guardRate) || 15;
-      else if (role === 'steward') hourlyRate = Number(site.stewardRate) || 18;
-      else if (role === 'supervisor') hourlyRate = Number(site.supervisorRate) || 22;
 
-      const amount = hoursWorked * hourlyRate;
+      // Try to resolve job title from scheduled shift, fall back to workingRole mapping
+      const day = new Date(checkIn.checkInTime).toDateString();
+      const lookupKey = `${checkIn.userId}:${checkIn.siteId}:${day}`;
+      const jobTitle = shiftLookup.get(lookupKey) || roleToJobTitle[role] || 'SIA Guard';
 
+      const { staffRate, clientRate } = getJobRates(site, jobTitle);
+      const staffAmount = hoursWorked * staffRate;
+      const clientAmount = hoursWorked * clientRate;
+
+      const siteId = site.id;
       if (!siteBilling.has(siteId)) {
         siteBilling.set(siteId, {
-          siteId: siteId,
-          siteName: site.name,
-          siteAddress: site.address,
-          totalHours: 0,
-          totalAmount: 0,
-          guardHours: 0,
-          stewardHours: 0,
-          supervisorHours: 0,
+          siteId, siteName: site.name, siteAddress: site.address,
+          totalHours: 0, clientTotal: 0, staffTotal: 0,
+          roleBreakdown: {} as Record<string, { hours: number; clientAmount: number; staffAmount: number }>,
           shifts: [],
         });
       }
 
       const billing = siteBilling.get(siteId);
       billing.totalHours += hoursWorked;
-      billing.totalAmount += amount;
-      
-      if (role === 'guard') billing.guardHours += hoursWorked;
-      else if (role === 'steward') billing.stewardHours += hoursWorked;
-      else if (role === 'supervisor') billing.supervisorHours += hoursWorked;
+      billing.clientTotal += clientAmount;
+      billing.staffTotal += staffAmount;
+
+      if (!billing.roleBreakdown[jobTitle]) {
+        billing.roleBreakdown[jobTitle] = { hours: 0, clientAmount: 0, staffAmount: 0 };
+      }
+      billing.roleBreakdown[jobTitle].hours += hoursWorked;
+      billing.roleBreakdown[jobTitle].clientAmount += clientAmount;
+      billing.roleBreakdown[jobTitle].staffAmount += staffAmount;
 
       billing.shifts.push({
         id: checkIn.id,
-        workerName: `${user.firstName} ${user.lastName}`,
-        role: role,
+        workerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'Unknown',
+        role, jobTitle,
         checkInTime: checkIn.checkInTime,
         checkOutTime: checkIn.checkOutTime,
-        hoursWorked,
-        hourlyRate,
-        amount,
+        hoursWorked, staffRate, clientRate, staffAmount, clientAmount,
       });
     }
 
+    const sitesArr = Array.from(siteBilling.values());
     return {
       weekStart,
       weekEnd,
-      sites: Array.from(siteBilling.values()),
-      grandTotal: Array.from(siteBilling.values()).reduce((sum, s) => sum + s.totalAmount, 0),
+      sites: sitesArr,
+      grandClientTotal: sitesArr.reduce((s, x) => s + x.clientTotal, 0),
+      grandStaffTotal: sitesArr.reduce((s, x) => s + x.staffTotal, 0),
+      grandTotal: sitesArr.reduce((s, x) => s + x.clientTotal, 0), // backward compat
     };
   }
 
@@ -3831,6 +3870,11 @@ export class DatabaseStorage implements IStorage {
         guardRate: sites.guardRate,
         stewardRate: sites.stewardRate,
         supervisorRate: sites.supervisorRate,
+        callOutRate: sites.callOutRate,
+        doorSupervisorRate: sites.doorSupervisorRate,
+        cctvOperatorRate: sites.cctvOperatorRate,
+        keyHolderRate: sites.keyHolderRate,
+        mobilePatrolRate: sites.mobilePatrolRate,
       })
       .from(scheduledShifts)
       .innerJoin(checkIns, and(
@@ -3858,12 +3902,22 @@ export class DatabaseStorage implements IStorage {
       return true;
     });
 
-    return filtered.map(r => {
-      const role = (r.workingRole || r.jobTitle || 'guard').toLowerCase();
-      let rate = r.guardRate || '15.00';
-      if (role === 'steward') rate = r.stewardRate || rate;
-      if (role === 'supervisor') rate = r.supervisorRate || rate;
+    // Map job title / workingRole to the correct staff rate field
+    const titleToRate = (r: any, jobTitle: string): string => {
+      const t = (jobTitle || '').toLowerCase().trim();
+      if (t.includes('steward'))                            return r.stewardRate      || '18.00';
+      if (t.includes('supervisor') && !t.includes('door')) return r.supervisorRate   || '22.00';
+      if (t.includes('call out') || t === 'call_out')      return r.callOutRate       || '15.00';
+      if (t.includes('door supervisor'))                   return r.doorSupervisorRate || '15.00';
+      if (t.includes('cctv'))                              return r.cctvOperatorRate  || '15.00';
+      if (t.includes('key holder'))                        return r.keyHolderRate     || '15.00';
+      if (t.includes('mobile patrol'))                     return r.mobilePatrolRate  || '15.00';
+      return r.guardRate || '15.00'; // SIA Guard / fallback
+    };
 
+    return filtered.map(r => {
+      const title = r.jobTitle || r.workingRole || 'SIA Guard';
+      const rate = titleToRate(r, title);
       const checkIn = new Date(r.checkInTime!);
       const checkOut = new Date(r.checkOutTime!);
       const hours = Math.round(((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60)) * 100) / 100;
@@ -3881,7 +3935,7 @@ export class DatabaseStorage implements IStorage {
         hours,
         rate,
         amount,
-        jobTitle: r.jobTitle,
+        jobTitle: title,
       };
     });
   }
