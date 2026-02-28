@@ -45,11 +45,21 @@ export default function InstallPage() {
 
   const companyId = params?.companyId || localStorage.getItem('installCompanyId');
 
+  // Read inviteToken from URL query string and persist it
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const inviteToken = urlParams.get('inviteToken');
+    if (inviteToken) {
+      localStorage.setItem('pendingInviteToken', inviteToken);
+    }
+  }, []);
+
   useEffect(() => {
     if (isNativePlatform() || isStandalone() || isInstalled) {
-      const storedCompanyId = localStorage.getItem('installCompanyId');
-      if (storedCompanyId) {
-        setLocation("/login");
+      // After install: if there's a pending invite token, go to registration
+      const pendingToken = localStorage.getItem('pendingInviteToken');
+      if (pendingToken) {
+        setLocation(`/register?token=${pendingToken}`);
       } else {
         setLocation("/login");
       }
@@ -372,6 +382,15 @@ function AndroidInstructions({ installApp, hasPrompt, animStep }: { installApp: 
 function DesktopInstructions({ installApp, hasPrompt, animStep, installUrl }: { installApp: () => Promise<boolean>; hasPrompt: boolean; animStep: number; installUrl: string }) {
   const [, setLocation] = useLocation();
 
+  const handleContinueInBrowser = () => {
+    const pendingToken = localStorage.getItem('pendingInviteToken');
+    if (pendingToken) {
+      setLocation(`/register?token=${pendingToken}`);
+    } else {
+      setLocation("/login");
+    }
+  };
+
   return (
     <Card data-testid="install-instructions-desktop">
       <CardContent className="py-5 space-y-5">
@@ -407,7 +426,7 @@ function DesktopInstructions({ installApp, hasPrompt, animStep, installUrl }: { 
             variant="ghost"
             size="sm"
             className="w-full text-muted-foreground"
-            onClick={() => setLocation("/login")}
+            onClick={handleContinueInBrowser}
             data-testid="button-skip-install-desktop"
           >
             Continue in browser

@@ -9,6 +9,7 @@ interface InvitationEmailData {
   expiresAt?: Date;
   companyName?: string;
   companyCode?: string;
+  companyUuid?: string;
 }
 
 export async function sendInvitationEmail(data: InvitationEmailData): Promise<void> {
@@ -19,27 +20,26 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
     const gmail = await getUncachableGmailClient();
     console.log('[Invitation Email] Gmail client obtained successfully');
     
-    // Build the registration URL - use REPLIT_DOMAINS for production or dev domain
     const domain = process.env.REPLIT_DOMAINS 
       ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
       : (process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000');
-    const registrationUrl = `${domain}/register?token=${data.inviteToken}`;
-    console.log(`[Invitation Email] Registration URL: ${registrationUrl}`);
+
+    // Primary CTA: install link with invite token preserved
+    const installUrl = data.companyUuid
+      ? `${domain}/install/${data.companyUuid}?inviteToken=${data.inviteToken}`
+      : `${domain}/register?token=${data.inviteToken}`;
+
+    console.log(`[Invitation Email] Install URL: ${installUrl}`);
     
     const expiryHtml = data.expiresAt 
-      ? `<p style="color: #666; margin-top: 16px;">This invitation will expire on ${data.expiresAt.toLocaleDateString('en-GB', { 
+      ? `<p style="color: #888; font-size: 13px; margin-top: 8px;">This invitation expires on ${data.expiresAt.toLocaleDateString('en-GB', { 
           day: 'numeric', 
           month: 'long', 
           year: 'numeric' 
         })}.</p>`
       : '';
-    
-    const companyInfoHtml = data.companyName 
-      ? `<div style="background-color: #e0f2fe; border-radius: 6px; padding: 16px; margin-bottom: 16px;">
-          <p style="margin: 0; font-weight: 600; color: #0369a1;">Company: ${data.companyName}</p>
-          ${data.companyCode ? `<p style="margin: 4px 0 0 0; color: #0369a1;">Company ID: <strong>${data.companyCode}</strong></p>` : ''}
-        </div>`
-      : '';
+
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(installUrl)}&bgcolor=ffffff&color=1e40af&margin=8`;
 
     const htmlBody = `
 <!DOCTYPE html>
@@ -48,42 +48,84 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: #f8f9fa; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
-    <h2 style="color: #1e40af; margin-top: 0;">Welcome to GuardTrack</h2>
-    <p>Hello,</p>
-    <p>You have been invited to join <strong>GuardTrack</strong> as a <strong>${data.role}</strong> by ${data.fromName}.</p>
-    ${companyInfoHtml}
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 0; background-color: #f3f4f6;">
+
+  <!-- Header -->
+  <div style="background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%); padding: 32px 24px; text-align: center;">
+    <h1 style="color: white; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">GuardTrack</h1>
+    <p style="color: #bfdbfe; margin: 6px 0 0 0; font-size: 14px;">${data.companyName || 'Security Guard Management'}</p>
   </div>
 
-  <div style="margin-bottom: 24px;">
-    <p><strong>GuardTrack</strong> is a security guard shift management system that helps you:</p>
-    <ul style="color: #555;">
-      <li>Check in and out of shifts with geolocation verification</li>
-      <li>View your scheduled shifts</li>
-      <li>Track your working hours</li>
-      <li>Request annual leave</li>
-      <li>Manage your credentials (SIA Number, Steward ID)</li>
-    </ul>
+  <!-- Main card -->
+  <div style="background: white; margin: 0; padding: 32px 28px;">
+
+    <h2 style="color: #1e3a8a; margin: 0 0 12px 0; font-size: 22px;">You've been invited to GuardTrack</h2>
+    <p style="color: #374151; margin: 0 0 24px 0; font-size: 15px;">
+      To access your shifts and tasks, you must first install the GuardTrack app on your phone.
+    </p>
+
+    <!-- Primary CTA button -->
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${installUrl}"
+         style="display: inline-block; background-color: #1d4ed8; color: white; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 700; font-size: 17px; letter-spacing: 0.2px;">
+        Install GuardTrack App
+      </a>
+    </div>
+
+    <!-- Steps -->
+    <div style="background-color: #f0f9ff; border-radius: 8px; padding: 20px 24px; margin: 24px 0;">
+      <p style="font-weight: 600; color: #1e3a8a; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">After tapping the button above:</p>
+      <table style="border-collapse: collapse; width: 100%;">
+        <tr>
+          <td style="padding: 6px 0; vertical-align: top; width: 28px;">
+            <span style="display: inline-block; background: #1d4ed8; color: white; border-radius: 50%; width: 22px; height: 22px; text-align: center; line-height: 22px; font-size: 12px; font-weight: 700;">1</span>
+          </td>
+          <td style="padding: 6px 0 6px 10px; color: #374151; font-size: 14px;">Follow the install instructions (3 taps)</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; vertical-align: top;">
+            <span style="display: inline-block; background: #1d4ed8; color: white; border-radius: 50%; width: 22px; height: 22px; text-align: center; line-height: 22px; font-size: 12px; font-weight: 700;">2</span>
+          </td>
+          <td style="padding: 6px 0 6px 10px; color: #374151; font-size: 14px;">Open GuardTrack from your home screen</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; vertical-align: top;">
+            <span style="display: inline-block; background: #1d4ed8; color: white; border-radius: 50%; width: 22px; height: 22px; text-align: center; line-height: 22px; font-size: 12px; font-weight: 700;">3</span>
+          </td>
+          <td style="padding: 6px 0 6px 10px; color: #374151; font-size: 14px;">Create your password and sign in</td>
+        </tr>
+      </table>
+    </div>
+
+    ${expiryHtml}
+
+    <!-- Desktop fallback: QR code -->
+    <div style="border-top: 1px solid #e5e7eb; margin-top: 28px; padding-top: 24px; text-align: center;">
+      <p style="color: #6b7280; font-size: 13px; margin: 0 0 14px 0;">
+        <strong>Reading this on a computer?</strong><br>
+        Scan this QR code with your phone to install GuardTrack:
+      </p>
+      <img src="${qrUrl}" alt="QR Code" width="140" height="140" style="border-radius: 8px; border: 1px solid #e5e7eb;" />
+    </div>
+
   </div>
 
-  <div style="text-align: center; margin: 32px 0;">
-    <a href="${registrationUrl}" 
-       style="display: inline-block; background-color: #1e40af; color: white; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-weight: 600; font-size: 16px;">
-      Create Your Account
-    </a>
+  <!-- Footer -->
+  <div style="padding: 20px 28px; text-align: center;">
+    <p style="color: #9ca3af; font-size: 12px; margin: 0 0 6px 0;">
+      Invited by ${data.fromName} &middot; <a href="mailto:${data.fromEmail}" style="color: #6b7280;">${data.fromEmail}</a>
+    </p>
+    <p style="color: #9ca3af; font-size: 11px; margin: 0;">
+      Open this email on your mobile device for the best experience.
+    </p>
   </div>
 
-  ${expiryHtml}
-
-  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; color: #666; font-size: 14px;">
-    <p>If you have any questions, please contact ${data.fromName} at <a href="mailto:${data.fromEmail}" style="color: #1e40af;">${data.fromEmail}</a>.</p>
-    <p style="margin-bottom: 0;">Best regards,<br><strong>GuardTrack Team</strong></p>
-  </div>
 </body>
 </html>`;
 
-    const subject = `Invitation to join GuardTrack`;
+    const subject = data.companyName
+      ? `Install GuardTrack App \u2013 ${data.companyName}`
+      : `Install GuardTrack App`;
     
     const message = [
       `From: ${data.fromName} <${data.fromEmail}>`,

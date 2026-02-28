@@ -2872,6 +2872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             expiresAt: invitation.expiresAt || undefined,
             companyName: company?.name,
             companyCode: company?.companyId,
+            companyUuid: company?.id,
           });
           
           emailSent = true;

@@ -114,9 +114,11 @@ export default function RegisterPage() {
         invitationToken,
       });
 
+      // Clear pending invite token after successful registration
+      localStorage.removeItem('pendingInviteToken');
       toast({
-        title: "Success!",
-        description: "Your account has been created successfully.",
+        title: "Account created!",
+        description: "Welcome to GuardTrack. You can now log in.",
       });
       setLocation("/");
     } catch (error: any) {

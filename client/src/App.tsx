@@ -44,6 +44,7 @@ function InstallGate({ children }: { children: React.ReactNode }) {
   const onBlockedPage = blockedPages.some(p => location === p || location.startsWith(p));
   const alreadyInstalled = isNativePlatform() || isStandalone();
   const onInstallPage = location.startsWith('/install');
+  const hasPendingInvite = !!localStorage.getItem('pendingInviteToken');
 
   // Fetch force-install setting for the company stored in localStorage
   useEffect(() => {
@@ -58,12 +59,14 @@ function InstallGate({ children }: { children: React.ReactNode }) {
       .catch(() => setForceInstall(false));
   }, []);
 
+  // Block when: mobile + not standalone + on auth page + (force install OR pending invite token)
   const shouldBlock =
     !alreadyInstalled &&
     onBlockedPage &&
     !onInstallPage &&
     isMobileDevice() &&
-    forceInstall !== null; // wait until we've fetched the setting
+    forceInstall !== null && // wait until setting is fetched
+    (forceInstall === true || hasPendingInvite);
 
   useEffect(() => {
     if (shouldBlock) {
