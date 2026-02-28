@@ -344,12 +344,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      // Return minimal company info for non-admins (guards, stewards)
-      res.json({
-        id: company.id,
-        name: company.name,
-        companyId: company.companyId,
-      });
+      // Return full company info for admins, minimal for guards/stewards
+      const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+      if (isAdmin) {
+        res.json(company);
+      } else {
+        res.json({
+          id: company.id,
+          name: company.name,
+          companyId: company.companyId,
+        });
+      }
     } catch (error) {
       console.error("Error fetching own company:", error);
       res.status(500).json({ message: "Failed to fetch company" });
