@@ -2853,31 +2853,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let emailError: string | null = null;
       
       try {
-        if (!adminUser.email) {
-          console.warn("[Invitation] Admin user has no email set - skipping email notification");
-          emailError = "Admin user has no email address configured";
-        } else {
-          const adminName = adminUser.firstName && adminUser.lastName 
-            ? `${adminUser.firstName} ${adminUser.lastName}`
-            : adminUser.username;
-          
-          console.log(`[Invitation] Sending email to ${invitation.email} from ${adminUser.email} (${adminName})`);
-          
-          await sendInvitationEmail({
-            toEmail: invitation.email,
-            fromEmail: adminUser.email,
-            fromName: adminName,
-            inviteToken: invitation.token,
-            role: invitation.role,
-            expiresAt: invitation.expiresAt || undefined,
-            companyName: company?.name,
-            companyCode: company?.companyId,
-            companyUuid: company?.id,
-          });
-          
-          emailSent = true;
-          console.log(`[Invitation] Email sent successfully to ${invitation.email}`);
-        }
+        const adminName = adminUser.firstName && adminUser.lastName 
+          ? `${adminUser.firstName} ${adminUser.lastName}`
+          : adminUser.username;
+
+        console.log(`[Invitation] Sending email to ${invitation.email} from ${adminName}`);
+
+        await sendInvitationEmail({
+          toEmail: invitation.email,
+          fromEmail: adminUser.email || undefined,
+          fromName: adminName,
+          inviteToken: invitation.token,
+          role: invitation.role,
+          expiresAt: invitation.expiresAt || undefined,
+          companyName: company?.name,
+          companyCode: company?.companyId,
+          companyUuid: company?.id,
+        });
+
+        emailSent = true;
+        console.log(`[Invitation] Email sent successfully to ${invitation.email}`);
       } catch (err: any) {
         console.error("[Invitation] Failed to send invitation email:", err);
         emailError = err.message || "Failed to send email";

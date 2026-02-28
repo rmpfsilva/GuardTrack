@@ -2,7 +2,7 @@ import { getUncachableGmailClient } from './gmail';
 
 interface InvitationEmailData {
   toEmail: string;
-  fromEmail: string;
+  fromEmail?: string;
   fromName: string;
   inviteToken: string;
   role: string;
@@ -113,7 +113,7 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
   <!-- Footer -->
   <div style="padding: 20px 28px; text-align: center;">
     <p style="color: #9ca3af; font-size: 12px; margin: 0 0 6px 0;">
-      Invited by ${data.fromName} &middot; <a href="mailto:${data.fromEmail}" style="color: #6b7280;">${data.fromEmail}</a>
+      Invited by ${data.fromName}${data.fromEmail ? ` &middot; <a href="mailto:${data.fromEmail}" style="color: #6b7280;">${data.fromEmail}</a>` : ''}
     </p>
     <p style="color: #9ca3af; font-size: 11px; margin: 0;">
       Open this email on your mobile device for the best experience.
@@ -127,8 +127,9 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
       ? `Install GuardTrack App \u2013 ${data.companyName}`
       : `Install GuardTrack App`;
     
+    const senderEmail = data.fromEmail || 'noreply@guardtrack.live';
     const message = [
-      `From: ${data.fromName} <${data.fromEmail}>`,
+      `From: ${data.fromName} <${senderEmail}>`,
       `To: ${data.toEmail}`,
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
