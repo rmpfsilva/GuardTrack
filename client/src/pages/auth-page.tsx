@@ -8,15 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Building2, Loader2, ShieldCheck, Youtube, ExternalLink, Share, Copy, Mail, X, Link2, ArrowRight } from "lucide-react";
+import { Building2, Loader2, ShieldCheck, Youtube, ExternalLink, Share, Copy, Mail, X } from "lucide-react";
 import { SiAndroid, SiApple } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
-
-function isStandalone() {
-  return window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as any).standalone === true;
-}
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -36,34 +31,6 @@ export default function AuthPage() {
   // App store dialogs
   const [showIOSDialog, setShowIOSDialog] = useState(false);
   const [showAndroidDialog, setShowAndroidDialog] = useState(false);
-
-  // Post-install: detect standalone + no pending invite
-  const [standaloneMode] = useState(() => isStandalone());
-  const [hasPendingInvite] = useState(() => !!localStorage.getItem('pendingInviteToken'));
-  const [showInvitePaste, setShowInvitePaste] = useState(false);
-  const [pastedLink, setPastedLink] = useState("");
-  const [inviteLinkError, setInviteLinkError] = useState("");
-
-  const handlePastedInviteLink = () => {
-    setInviteLinkError("");
-    try {
-      const url = new URL(pastedLink.trim());
-      // Accept /install/:companyId?inviteToken=... or /register?token=...
-      const inviteToken = url.searchParams.get('inviteToken') || url.searchParams.get('token');
-      const pathParts = url.pathname.split('/').filter(Boolean);
-      if (inviteToken) {
-        localStorage.setItem('pendingInviteToken', inviteToken);
-        if (pathParts[0] === 'install' && pathParts[1]) {
-          localStorage.setItem('installCompanyId', pathParts[1]);
-        }
-        setLocation(`/register?token=${inviteToken}`);
-      } else {
-        setInviteLinkError("No invite token found in this link. Check you copied the full link from your manager.");
-      }
-    } catch {
-      setInviteLinkError("That doesn't look like a valid link. Paste the full link your manager sent you.");
-    }
-  };
 
   // Redirect if already logged in (using useEffect to avoid setState during render)
   useEffect(() => {
@@ -266,66 +233,17 @@ export default function AuthPage() {
                 </div>
               )}
 
-              {/* In standalone mode without invite: show invite link section instead of generic register */}
-              {standaloneMode && !hasPendingInvite ? (
-                <div className="border-t pt-4 space-y-3">
-                  <p className="text-center text-sm text-muted-foreground">
-                    New here? You need a personal invite link from your manager to register.
-                  </p>
-                  {!showInvitePaste ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setShowInvitePaste(true)}
-                      data-testid="button-have-invite-link"
-                    >
-                      <Link2 className="h-4 w-4 mr-2" />
-                      I have an invite link
-                    </Button>
-                  ) : (
-                    <div className="space-y-2">
-                      <Label className="text-sm">Paste your invite link</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="https://guardtrack.live/install/..."
-                          value={pastedLink}
-                          onChange={e => { setPastedLink(e.target.value); setInviteLinkError(""); }}
-                          className="flex-1 text-sm"
-                          data-testid="input-paste-invite-link"
-                        />
-                        <Button
-                          type="button"
-                          onClick={handlePastedInviteLink}
-                          disabled={!pastedLink.trim()}
-                          data-testid="button-go-invite-link"
-                        >
-                          <ArrowRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {inviteLinkError && (
-                        <p className="text-xs text-destructive" data-testid="text-invite-link-error">
-                          {inviteLinkError}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Copy the link your manager sent via WhatsApp or email and paste it here.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center text-sm">
+              <div className="text-center text-sm">
+                <Link href="/register">
                   <button
                     type="button"
-                    onClick={() => setIsLogin(!isLogin)}
                     className="text-primary hover:underline"
-                    data-testid="button-toggle-auth-mode"
+                    data-testid="link-register"
                   >
-                    {isLogin ? "Need an account? Register" : "Already have an account? Sign in"}
+                    New here? Register with your invite code
                   </button>
-                </div>
-              )}
+                </Link>
+              </div>
             </form>
           </CardContent>
         </Card>

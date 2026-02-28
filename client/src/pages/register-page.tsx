@@ -6,11 +6,12 @@ import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, UserPlus, AlertCircle, Building2, Loader2 } from "lucide-react";
+import { Shield, UserPlus, Loader2, Building2, ArrowRight, KeyRound } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
 
 const registerSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -35,76 +36,76 @@ interface InvitationInfo {
   error?: string;
 }
 
+function extractToken(input: string): string {
+  const trimmed = input.trim();
+  try {
+    const url = new URL(trimmed);
+    const t = url.searchParams.get("inviteToken") || url.searchParams.get("token");
+    if (t) return t;
+  } catch {}
+  if (/^[a-zA-Z0-9_\-\.]+$/.test(trimmed) && trimmed.length > 10) return trimmed;
+  return "";
+}
+
 export default function RegisterPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  const [step, setStep] = useState<"enter-code" | "validating" | "register">("enter-code");
+  const [codeInput, setCodeInput] = useState("");
+  const [codeError, setCodeError] = useState("");
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [invitationInfo, setInvitationInfo] = useState<InvitationInfo | null>(null);
-  const [isValidatingToken, setIsValidatingToken] = useState(true);
-  const [tokenError, setTokenError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-      confirmPassword: "",
-      firstName: "",
-      lastName: "",
-    },
+    defaultValues: { username: "", password: "", confirmPassword: "", firstName: "", lastName: "" },
   });
+
+  const validateToken = async (token: string) => {
+    setStep("validating");
+    setCodeError("");
+    try {
+      const response = await fetch(`/api/invitation/validate/${token}`);
+      const data = await response.json();
+      if (!response.ok || !data.valid) {
+        setCodeError(data.error || "This invite code is invalid or has expired. Ask your manager to send a new one.");
+        setStep("enter-code");
+        return;
+      }
+      setInvitationToken(token);
+      setInvitationInfo(data);
+      setStep("register");
+    } catch {
+      setCodeError("Could not validate the invite code. Check your connection and try again.");
+      setStep("enter-code");
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
-    
+    const urlToken = params.get("token") || params.get("inviteToken");
+    const localToken = localStorage.getItem("pendingInviteToken");
+    const token = urlToken || localToken;
+    if (token) {
+      setCodeInput(token);
+      validateToken(token);
+    }
+  }, []);
+
+  const handleCodeSubmit = () => {
+    const token = extractToken(codeInput);
     if (!token) {
-      toast({
-        title: "Invalid invitation",
-        description: "No invitation token provided. Please use the link from your invitation email.",
-        variant: "destructive",
-      });
-      setLocation("/auth");
+      setCodeError("Paste the full invite link your manager sent, or the invite code itself.");
       return;
     }
-    
-    // Validate the token and get company info
-    const validateToken = async () => {
-      try {
-        const response = await fetch(`/api/invitation/validate/${token}`);
-        const data = await response.json();
-        
-        if (!response.ok || !data.valid) {
-          setTokenError(data.error || "Invalid invitation token");
-          setIsValidatingToken(false);
-          return;
-        }
-        
-        setInvitationInfo(data);
-        setInvitationToken(token);
-        setIsValidatingToken(false);
-      } catch (error) {
-        setTokenError("Failed to validate invitation");
-        setIsValidatingToken(false);
-      }
-    };
-    
-    validateToken();
-  }, [toast, setLocation]);
+    validateToken(token);
+  };
 
   const onSubmit = async (data: RegisterForm) => {
-    if (!invitationToken) {
-      toast({
-        title: "Error",
-        description: "No invitation token found",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!invitationToken) return;
     setIsLoading(true);
-
     try {
       await apiRequest("POST", "/api/register", {
         username: data.username,
@@ -113,206 +114,197 @@ export default function RegisterPage() {
         lastName: data.lastName,
         invitationToken,
       });
-
-      // Clear pending invite token after successful registration
-      localStorage.removeItem('pendingInviteToken');
-      toast({
-        title: "Account created!",
-        description: "Welcome to GuardTrack. You can now log in.",
-      });
+      localStorage.removeItem("pendingInviteToken");
+      toast({ title: "Account created!", description: "Welcome to GuardTrack. You can now log in." });
       setLocation("/");
     } catch (error: any) {
-      toast({
-        title: "Registration failed",
-        description: error.message || "Please try again",
-        variant: "destructive",
-      });
+      toast({ title: "Registration failed", description: error.message || "Please try again", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Show loading state while validating token
-  if (isValidatingToken) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Validating Invitation
-            </CardTitle>
-            <CardDescription>
-              Please wait while we validate your invitation...
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-4">
 
-  // Show error if token is invalid
-  if (tokenError || !invitationToken) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+        {/* Logo */}
+        <div className="flex justify-center pb-2">
+          <img src={guardTrackLogo} alt="GuardTrack" className="h-10 w-auto" data-testid="img-register-logo" />
+        </div>
+
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              Invalid Invitation
+              {step === "register" ? (
+                <><UserPlus className="h-5 w-5" />Create Your Account</>
+              ) : (
+                <><KeyRound className="h-5 w-5" />Enter Your Invite Code</>
+              )}
             </CardTitle>
             <CardDescription>
-              {tokenError || "No invitation token found."}
+              {step === "register" && invitationInfo ? (
+                <span className="flex items-center gap-1.5 text-sm">
+                  <Building2 className="h-4 w-4 shrink-0" />
+                  <span>
+                    Joining <strong>{invitationInfo.companyName}</strong> as <strong>{invitationInfo.role}</strong>
+                    {invitationInfo.email && <> · {invitationInfo.email}</>}
+                  </span>
+                </span>
+              ) : (
+                "Your manager sent you an invite link or code. Paste it below."
+              )}
             </CardDescription>
           </CardHeader>
+
           <CardContent>
-            <Button onClick={() => setLocation("/auth")} className="w-full" data-testid="button-go-to-login">
-              Go to Login
-            </Button>
+            {/* Step 1: Enter invite code */}
+            {(step === "enter-code" || step === "validating") && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="invite-code">Invite link or code</Label>
+                  <Input
+                    id="invite-code"
+                    placeholder="Paste your invite link here..."
+                    value={codeInput}
+                    onChange={e => { setCodeInput(e.target.value); setCodeError(""); }}
+                    onKeyDown={e => e.key === "Enter" && handleCodeSubmit()}
+                    disabled={step === "validating"}
+                    data-testid="input-invite-code"
+                  />
+                  {codeError && (
+                    <p className="text-sm text-destructive" data-testid="text-code-error">{codeError}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    This is the link your manager sent via WhatsApp, email, or SMS. You can paste the full link or just the code.
+                  </p>
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={handleCodeSubmit}
+                  disabled={step === "validating" || !codeInput.trim()}
+                  data-testid="button-validate-code"
+                >
+                  {step === "validating" ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Validating...</>
+                  ) : (
+                    <><ArrowRight className="h-4 w-4 mr-2" />Continue</>
+                  )}
+                </Button>
+
+                <div className="text-center text-sm text-muted-foreground">
+                  <button
+                    type="button"
+                    onClick={() => setLocation("/auth")}
+                    className="text-primary hover:underline"
+                    data-testid="link-go-to-login"
+                  >
+                    Already have an account? Sign in
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Registration form */}
+            {step === "register" && (
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="John" data-testid="input-first-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Smith" data-testid="input-last-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Username</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="johnsmith" autoCapitalize="none" data-testid="input-username" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="password" placeholder="Min. 6 characters" data-testid="input-password" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirm Password</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="password" placeholder="Repeat your password" data-testid="input-confirm-password" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-create-account">
+                    {isLoading ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating account...</>
+                    ) : (
+                      <><Shield className="h-4 w-4 mr-2" />Create Account</>
+                    )}
+                  </Button>
+
+                  <div className="text-center text-sm">
+                    <button
+                      type="button"
+                      onClick={() => { setStep("enter-code"); setInvitationToken(null); setInvitationInfo(null); }}
+                      className="text-muted-foreground hover:underline text-xs"
+                      data-testid="button-back-to-code"
+                    >
+                      Use a different invite code
+                    </button>
+                  </div>
+                </form>
+              </Form>
+            )}
           </CardContent>
         </Card>
       </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <div className="flex items-center justify-center mb-4">
-            <div className="p-3 rounded-full bg-primary/10">
-              <Shield className="h-8 w-8 text-primary" />
-            </div>
-          </div>
-          <CardTitle className="text-center text-2xl">Create Your Account</CardTitle>
-          <CardDescription className="text-center">
-            Complete your registration to join GuardTrack
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {invitationInfo && (
-            <Alert className="mb-6 bg-primary/5 border-primary/20">
-              <Building2 className="h-4 w-4" />
-              <AlertTitle>Joining {invitationInfo.companyName}</AlertTitle>
-              <AlertDescription className="mt-2 space-y-1">
-                <p>You're registering as a <strong>{invitationInfo.role}</strong> for:</p>
-                <div className="bg-background rounded-md p-3 mt-2">
-                  <p className="font-semibold">{invitationInfo.companyName}</p>
-                  <p className="text-sm text-muted-foreground">Company ID: {invitationInfo.companyCode}</p>
-                  <p className="text-sm text-muted-foreground">Email: {invitationInfo.email}</p>
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="John"
-                          {...field}
-                          data-testid="input-first-name"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Smith"
-                          {...field}
-                          data-testid="input-last-name"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Username</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="johnsmith"
-                        {...field}
-                        data-testid="input-username"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        {...field}
-                        data-testid="input-password"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="confirmPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confirm Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        {...field}
-                        data-testid="input-confirm-password"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-                data-testid="button-register"
-              >
-                {isLoading ? "Creating Account..." : "Create Account"}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
     </div>
   );
 }
