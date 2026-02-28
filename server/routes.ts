@@ -2845,8 +2845,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const validatedData = insertInvitationSchema.parse(invitationData);
-      
-      const invitation = await storage.createInvitation(validatedData);
+
+      // Upsert: if a pending invitation already exists for this email+company, update it
+      let invitation: any;
+      const existing = companyId
+        ? await storage.getInvitationByEmailAndCompany(validatedData.email, companyId)
+        : undefined;
+
+      if (existing && existing.status === 'pending') {
+        invitation = await storage.updateInvitation(existing.id, {
+          role: validatedData.role,
+          token: validatedData.token,
+          expiresAt: validatedData.expiresAt,
+          invitedBy: validatedData.invitedBy,
+        });
+      } else {
+        invitation = await storage.createInvitation(validatedData);
+      }
       
       // Send invitation email
       let emailSent = false;

@@ -202,6 +202,8 @@ export interface IStorage {
   createInvitation(invitation: InsertInvitation): Promise<Invitation>;
   getInvitationByToken(token: string): Promise<Invitation | undefined>;
   getInvitationByEmail(email: string): Promise<Invitation | undefined>;
+  getInvitationByEmailAndCompany(email: string, companyId: string): Promise<Invitation | undefined>;
+  updateInvitation(id: string, data: Partial<InsertInvitation>): Promise<Invitation>;
   getInvitationById(id: string): Promise<Invitation | undefined>;
   getAllInvitations(): Promise<Invitation[]>;
   acceptInvitation(token: string): Promise<Invitation>;
@@ -1913,6 +1915,18 @@ export class DatabaseStorage implements IStorage {
   async getInvitationByEmail(email: string): Promise<Invitation | undefined> {
     const [invitation] = await db.select().from(invitations).where(eq(invitations.email, email));
     return invitation;
+  }
+
+  async getInvitationByEmailAndCompany(email: string, companyId: string): Promise<Invitation | undefined> {
+    const [invitation] = await db.select().from(invitations).where(
+      and(eq(invitations.email, email), eq(invitations.companyId, companyId))
+    );
+    return invitation;
+  }
+
+  async updateInvitation(id: string, data: Partial<InsertInvitation>): Promise<Invitation> {
+    const [updated] = await db.update(invitations).set(data).where(eq(invitations.id, id)).returning();
+    return updated;
   }
 
   async getInvitationById(id: string): Promise<Invitation | undefined> {
