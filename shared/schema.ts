@@ -80,6 +80,7 @@ export const companies = pgTable("companies", {
   subscriptionStatus: varchar("subscription_status").default('active'), // 'trial' | 'active' | 'expired' | 'suspended'
   billingStartDate: timestamp("billing_start_date"),
   stripeAccountId: varchar("stripe_account_id"),
+  brandColor: varchar("brand_color"),
   forceInstallEnabled: boolean("force_install_enabled").notNull().default(false),
   pwaPageViews: integer("pwa_page_views").notNull().default(0),
   pwaInstallClicks: integer("pwa_install_clicks").notNull().default(0),
@@ -119,6 +120,7 @@ export const users = pgTable("users", {
 }, (table) => ({
   // Username must be unique within a company (or unique among super admins with null companyId)
   usernameCompanyUnique: uniqueIndex('users_username_company_unique').on(table.username, table.companyId),
+  emailUnique: uniqueIndex('users_email_unique').on(table.email),
 }));
 
 // Valid role types for the system
@@ -443,6 +445,19 @@ export const jobShares = pgTable("job_shares", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+export const companyMemberships = pgTable("company_memberships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  role: varchar("role").notNull().default('guard'),
+  status: varchar("status").notNull().default('active'), // pending|active|suspended
+  invitedBy: varchar("invited_by").references(() => users.id),
+  invitedAt: timestamp("invited_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userCompanyUnique: uniqueIndex('memberships_user_company_unique').on(table.userId, table.companyId),
+}));
 
 export const jobShareMessages = pgTable("job_share_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1221,6 +1236,12 @@ export const updateGuardAppTabSchema = createInsertSchema(guardAppTabs).omit({
   updatedAt: true,
 }).partial();
 
+export const insertCompanyMembershipSchema = createInsertSchema(companyMemberships).omit({
+  id: true,
+  createdAt: true,
+  invitedAt: true,
+});
+
 export const insertStaffInvoiceSchema = createInsertSchema(staffInvoices).omit({
   id: true,
   createdAt: true,
@@ -1355,6 +1376,15 @@ export type GuardAppTab = typeof guardAppTabs.$inferSelect;
 export type InsertGuardAppTab = z.infer<typeof insertGuardAppTabSchema>;
 export type UpdateGuardAppTab = z.infer<typeof updateGuardAppTabSchema>;
 
+export type CompanyMembership = typeof companyMemberships.$inferSelect;
+export type InsertCompanyMembership = z.infer<typeof insertCompanyMembershipSchema>;
+
+export type CompanyMembershipWithCompany = CompanyMembership & {
+  companyName: string;
+  companyUuid: string;
+  brandColor?: string | null;
+};
+
 // Joined types for frontend use
 export type CheckInWithDetails = CheckIn & {
   user: User;
@@ -1369,6 +1399,9 @@ export type ScheduledShiftWithDetails = ScheduledShift & {
   user: User;
   site: Site;
   checkIn?: CheckIn | null; // Actual check-in data for this shift (if exists)
+  companyName?: string | null; // Company name (for multi-company guard views)
+  brandColor?: string | null; // Company brand color (for multi-company guard views)
+  companyId?: string | null; // Resolved company ID from site (for multi-company filtering)
 };
 
 export type LeaveRequestWithDetails = LeaveRequest & {

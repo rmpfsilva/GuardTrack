@@ -97,9 +97,8 @@ export default function GuardApp() {
   }, []);
   
   // Login form state
-  const [loginUsername, setLoginUsername] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [loginCompanyId, setLoginCompanyId] = useState<string>("");
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -499,9 +498,8 @@ export default function GuardApp() {
     e.preventDefault();
     // Guards always login to a company, so companyId is required
     loginMutation.mutate({ 
-      username: loginUsername, 
-      password: loginPassword, 
-      companyId: loginCompanyId || null 
+      email: loginEmail,
+      password: loginPassword,
     });
   };
 
@@ -852,15 +850,15 @@ export default function GuardApp() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="email">Email address</Label>
                   <Input
-                    id="username"
-                    type="text"
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value)}
-                    placeholder="Enter your username"
+                    id="email"
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="Enter your email"
                     required
-                    data-testid="input-guard-username"
+                    data-testid="input-guard-email"
                   />
                 </div>
 

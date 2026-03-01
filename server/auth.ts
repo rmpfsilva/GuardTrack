@@ -103,10 +103,13 @@ export function setupAuth(app: Express) {
     
     // Sanitize and include the effective role
     const sanitized = sanitizeUser(user);
+    const activeMemberships = await storage.getActiveMemberships(id);
     const userWithRoles = {
       ...sanitized,
       role: effectiveRole, // Override with highest priority role from userRoles
-      roles: userRoles.length > 0 ? userRoles : [user.role] // Include all roles
+      roles: userRoles.length > 0 ? userRoles : [user.role], // Include all roles
+      memberships: activeMemberships, // [{companyId, companyName, brandColor, role, status}]
+      isMultiCompany: activeMemberships.length > 1,
     };
     
     done(null, userWithRoles);
@@ -197,6 +200,23 @@ export function setupAuth(app: Express) {
         companyId: invitation.companyId,
       });
 
+      await storage.upsertMembership({
+        userId: user.id,
+        companyId: invitation.companyId,
+        role: invitation.role,
+        status: 'active',
+        invitedBy: invitation.invitedBy || undefined,
+      });
+
+      // Get all pending memberships for this email (Case C: invited to multiple companies before activating)
+      const otherInvitations = await storage.getPendingInvitationsByEmail(invitation.email);
+      for (const inv of otherInvitations) {
+        if (inv.companyId !== invitation.companyId) {
+          await storage.upsertMembership({ userId: user.id, companyId: inv.companyId, role: inv.role, status: 'active' });
+          await storage.acceptInvitation(inv.token);
+        }
+      }
+
       await storage.acceptInvitation(invitationToken);
 
       const company = invitation.companyId ? await storage.getCompany(invitation.companyId) : null;
@@ -271,6 +291,25 @@ export function setupAuth(app: Express) {
         companyId: invitation.companyId,
         isActivated: true,
       });
+
+      await storage.upsertMembership({
+        userId: user.id,
+        companyId: invitation.companyId,
+        role: invitation.role,
+        status: 'active',
+        invitedBy: invitation.invitedBy || undefined,
+      });
+
+      // Get all pending memberships for this email (Case C: invited to multiple companies before activating)
+      if (invitation.email) {
+        const otherInvitations = await storage.getPendingInvitationsByEmail(invitation.email);
+        for (const inv of otherInvitations) {
+          if (inv.companyId !== invitation.companyId) {
+            await storage.upsertMembership({ userId: user.id, companyId: inv.companyId, role: inv.role, status: 'active' });
+            await storage.acceptInvitation(inv.token);
+          }
+        }
+      }
 
       await storage.acceptInvitation(token);
 

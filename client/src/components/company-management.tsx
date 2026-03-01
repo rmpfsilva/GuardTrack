@@ -63,6 +63,7 @@ export default function CompanyManagement() {
       taxId: "",
       registrationNumber: "",
       logoUrl: "",
+      brandColor: "#3b82f6",
       isActive: true,
     },
   });
@@ -197,6 +198,7 @@ export default function CompanyManagement() {
       taxId: company.taxId || "",
       registrationNumber: company.registrationNumber || "",
       logoUrl: company.logoUrl || "",
+      brandColor: company.brandColor || "#3b82f6",
       isActive: company.isActive,
     });
   };
@@ -322,6 +324,31 @@ export default function CompanyManagement() {
                       <FormLabel>Logo URL</FormLabel>
                       <FormControl>
                         <Input {...field} data-testid="input-company-logo-url" placeholder="https://example.com/logo.png" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="brandColor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Brand Color</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            {...field} 
+                            type="color" 
+                            data-testid="input-company-brand-color" 
+                            className="w-12 h-10 p-1 rounded-md" 
+                          />
+                          <Input 
+                            {...field} 
+                            data-testid="input-company-brand-color-text" 
+                            placeholder="#3b82f6" 
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -557,6 +584,31 @@ export default function CompanyManagement() {
                       <FormLabel>Logo URL</FormLabel>
                       <FormControl>
                         <Input {...field} data-testid="input-edit-company-logo-url" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="brandColor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Brand Color</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            {...field} 
+                            type="color" 
+                            data-testid="input-edit-company-brand-color" 
+                            className="w-12 h-10 p-1 rounded-md" 
+                          />
+                          <Input 
+                            {...field} 
+                            data-testid="input-edit-company-brand-color-text" 
+                            placeholder="#3b82f6" 
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

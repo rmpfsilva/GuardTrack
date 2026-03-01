@@ -1365,13 +1365,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/users/:id', isAuthenticated, isAdmin, async (req, res) => {
+  app.patch('/api/admin/users/:userId/suspend-membership', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const adminUser = req.user;
+      
+      // Admin can only suspend memberships for their own company
+      if (!adminUser.companyId) {
+        return res.status(403).json({ message: "Admin must be associated with a company" });
+      }
+
+      const membership = await storage.getMembership(userId, adminUser.companyId);
+      if (!membership) {
+        return res.status(404).json({ message: "Membership not found for this user in your company" });
+      }
+
+      await storage.updateMembershipStatus(userId, adminUser.companyId, 'suspended');
+      
+      // Check if user has any other active memberships
+      const activeMemberships = await storage.getActiveMemberships(userId);
+      if (activeMemberships.length === 0) {
+        // If no more active memberships, also set isActivated = false
+        await storage.updateUser(userId, { isActivated: false });
+      }
+
+      res.json({ message: "Membership suspended successfully" });
+    } catch (error: any) {
+      console.error("Error suspending membership:", error);
+      res.status(500).json({ message: error.message || "Failed to suspend membership" });
+    }
+  });
+
+  app.delete('/api/admin/users/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      await storage.deleteUser(id);
+      const adminUser = req.user;
+
+      if (!adminUser.companyId) {
+        return res.status(403).json({ message: "Admin must be associated with a company" });
+      }
+
+      // Soft delete: suspends membership rather than deleting global user account
+      await storage.updateMembershipStatus(id, adminUser.companyId, 'suspended');
+      
+      // Check if user has any other active memberships
+      const activeMemberships = await storage.getActiveMemberships(id);
+      if (activeMemberships.length === 0) {
+        // If no more active memberships, also set isActivated = false
+        await storage.updateUser(id, { isActivated: false });
+      }
+
       res.status(204).send();
     } catch (error: any) {
-      console.error("Error deleting user:", error);
+      console.error("Error deleting user (suspending membership):", error);
       res.status(400).json({ message: error.message || "Failed to delete user" });
     }
   });
@@ -2141,6 +2187,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         shifts = await storage.getUserScheduledShifts(userId);
       }
 
+      // enriched company data is already returned by getUserScheduledShifts for guards
+      // for admins, we might need to ensure it's enriched if not already
+      
       const jobShareIds = [...new Set(shifts.filter((s: any) => s.jobShareId).map((s: any) => s.jobShareId))];
       if (jobShareIds.length > 0) {
         const allCompanies = await storage.getAllCompanies();
@@ -2838,14 +2887,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Determine the company ID
       const companyId = admin.role === 'super_admin' ? req.body.companyId : admin.companyId;
+      if (!companyId) {
+        return res.status(400).json({ message: "Company ID is required" });
+      }
       
       // Get company details for the email
-      const company = companyId ? await storage.getCompany(companyId) : null;
+      const company = await storage.getCompany(companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
       
+      const adminName = adminUser.firstName && adminUser.lastName 
+        ? `${adminUser.firstName} ${adminUser.lastName}`
+        : adminUser.username;
+
+      const inviteEmail = req.body.email;
+      if (!inviteEmail) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      // Check if a user with this email already exists
+      const existingUsers = await storage.getUsersByEmail(inviteEmail);
+      const existingUser = existingUsers.find(u => u.companyId === companyId) || existingUsers[0];
+
+      if (existingUser) {
+        if (existingUser.isActivated) {
+          // Case B — user exists AND isActivated=true
+          await storage.upsertMembership({
+            userId: existingUser.id,
+            companyId: companyId,
+            role: req.body.role || 'guard',
+            status: 'active',
+            invitedBy: admin.id
+          });
+
+          try {
+            const { sendAddedToCompanyEmail } = await import('./emailService');
+            await sendAddedToCompanyEmail(existingUser.email || inviteEmail, company.name, adminName);
+          } catch (emailErr) {
+            console.error("[Invitation] Failed to send direct membership email:", emailErr);
+          }
+
+          return res.json({ 
+            success: true, 
+            type: 'direct_membership', 
+            message: 'User added directly to company' 
+          });
+        } else {
+          // Case C — user exists AND isActivated=false
+          // Create/upsert invitation (pending)
+          const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+          const invitationData = {
+            ...req.body,
+            token,
+            invitedBy: admin.id,
+            companyId,
+          };
+          const validatedData = insertInvitationSchema.parse(invitationData);
+          
+          await storage.createInvitation(validatedData);
+          await storage.upsertMembership({
+            userId: existingUser.id,
+            companyId: companyId,
+            role: req.body.role || 'guard',
+            status: 'pending',
+            invitedBy: admin.id
+          });
+
+          try {
+            const { sendAddedToAnotherCompanyEmail } = await import('./emailService');
+            await sendAddedToAnotherCompanyEmail(existingUser.email || inviteEmail, company.name);
+          } catch (emailErr) {
+            console.error("[Invitation] Failed to send pending membership email:", emailErr);
+          }
+
+          return res.json({ 
+            success: true, 
+            type: 'pending_membership', 
+            message: 'Invite sent, awaiting activation' 
+          });
+        }
+      }
+
+      // Case A — no existing user: existing flow
       // Generate a unique token
       const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
       
-      // SECURITY: Set companyId from admin's company for regular admins
       const invitationData = {
         ...req.body,
         token,
@@ -2857,9 +2984,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Upsert: if a pending invitation already exists for this email+company, update it
       let invitation: any;
-      const existing = companyId
-        ? await storage.getInvitationByEmailAndCompany(validatedData.email, companyId)
-        : undefined;
+      const existing = await storage.getInvitationByEmailAndCompany(validatedData.email, companyId);
 
       if (existing && existing.status === 'pending') {
         invitation = await storage.updateInvitation(existing.id, {
@@ -2877,10 +3002,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let emailError: string | null = null;
       
       try {
-        const adminName = adminUser.firstName && adminUser.lastName 
-          ? `${adminUser.firstName} ${adminUser.lastName}`
-          : adminUser.username;
-
         console.log(`[Invitation] Sending email to ${invitation.email} from ${adminName}`);
 
         await sendInvitationEmail({
@@ -2890,9 +3011,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           inviteToken: invitation.token,
           role: invitation.role,
           expiresAt: invitation.expiresAt || undefined,
-          companyName: company?.name,
-          companyCode: company?.companyId,
-          companyUuid: company?.id,
+          companyName: company.name,
+          companyCode: company.companyId,
+          companyUuid: company.id,
         });
 
         emailSent = true;

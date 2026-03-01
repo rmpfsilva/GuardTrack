@@ -440,3 +440,147 @@ export async function sendTrialInvitationEmail(toEmail: string, subject: string,
     throw error;
   }
 }
+
+export async function sendAddedToCompanyEmail(toEmail: string, companyName: string, inviterName: string): Promise<void> {
+  try {
+    console.log(`[Email] Sending direct membership notification to: ${toEmail}`);
+    
+    const gmail = await getUncachableGmailClient();
+    
+    let senderEmail = 'noreply@guardtrack.com';
+    try {
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      senderEmail = profile.data.emailAddress || senderEmail;
+    } catch (profileError) {
+      console.warn('[Email] Could not fetch user profile, using default sender');
+    }
+    
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #f8f9fa; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+    <h2 style="color: #1e40af; margin-top: 0;">Added to ${companyName}</h2>
+    <p>Hello,</p>
+    <p>You have been added to <strong>${companyName}</strong> on GuardTrack by <strong>${inviterName}</strong>.</p>
+    <p>You can now see shifts and tasks from this company when you log in to your account.</p>
+  </div>
+
+  <div style="text-align: center; margin: 32px 0;">
+    <a href="https://guardtrack.live" 
+       style="display: inline-block; background-color: #1e40af; color: white; text-decoration: none; padding: 14px 36px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+      Log In to GuardTrack
+    </a>
+  </div>
+
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; color: #666; font-size: 14px;">
+    <p style="margin-bottom: 0;">Best regards,<br><strong>GuardTrack Team</strong></p>
+  </div>
+</body>
+</html>`;
+
+    const message = [
+      `From: GuardTrack <${senderEmail}>`,
+      `To: ${toEmail}`,
+      `Subject: You've been added to ${companyName} on GuardTrack`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage,
+      },
+    });
+
+    console.log(`✅ [Email] Direct membership email sent successfully to ${toEmail}`);
+  } catch (error: any) {
+    console.error('❌ [Email] Error sending direct membership email:', error.message);
+    throw error;
+  }
+}
+
+export async function sendAddedToAnotherCompanyEmail(toEmail: string, companyName: string): Promise<void> {
+  try {
+    console.log(`[Email] Sending pending membership notification to: ${toEmail}`);
+    
+    const gmail = await getUncachableGmailClient();
+    
+    let senderEmail = 'noreply@guardtrack.com';
+    try {
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      senderEmail = profile.data.emailAddress || senderEmail;
+    } catch (profileError) {
+      console.warn('[Email] Could not fetch user profile, using default sender');
+    }
+    
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #f8f9fa; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+    <h2 style="color: #1e40af; margin-top: 0;">New Invitation for ${companyName}</h2>
+    <p>Hello,</p>
+    <p>You have been invited to join <strong>${companyName}</strong> on GuardTrack.</p>
+    <p>Since you already have a pending registration, please complete your account activation to access all your companies in one place.</p>
+  </div>
+
+  <div style="text-align: center; margin: 32px 0;">
+    <a href="https://guardtrack.live/activate" 
+       style="display: inline-block; background-color: #1e40af; color: white; text-decoration: none; padding: 14px 36px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+      Activate Your Account
+    </a>
+  </div>
+
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; color: #666; font-size: 14px;">
+    <p style="margin-bottom: 0;">Best regards,<br><strong>GuardTrack Team</strong></p>
+  </div>
+</body>
+</html>`;
+
+    const message = [
+      `From: GuardTrack <${senderEmail}>`,
+      `To: ${toEmail}`,
+      `Subject: New invitation for ${companyName} on GuardTrack`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage,
+      },
+    });
+
+    console.log(`✅ [Email] Pending membership email sent successfully to ${toEmail}`);
+  } catch (error: any) {
+    console.error('❌ [Email] Error sending pending membership email:', error.message);
+    throw error;
+  }
+}

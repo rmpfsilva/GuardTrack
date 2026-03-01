@@ -4,8 +4,8 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeSessionStore, storage } from "./storage";
 import { hashPassword } from "./auth";
 import { db } from "./db";
-import { users, userRoles } from "@shared/schema";
-import { or, eq } from "drizzle-orm";
+import { users, userRoles, companyMemberships } from "@shared/schema";
+import { or, eq, and, isNotNull } from "drizzle-orm";
 
 const app = express();
 app.use(express.json());
@@ -235,6 +235,44 @@ async function ensureLogicloopAdmin() {
   }
 }
 
+async function migrateExistingUserMemberships() {
+  try {
+    const allUsers = await db.select().from(users).where(isNotNull(users.companyId));
+    let totalCreated = 0;
+
+    for (const user of allUsers) {
+      if (!user.companyId) continue;
+
+      const existing = await db.select()
+        .from(companyMemberships)
+        .where(
+          and(
+            eq(companyMemberships.userId, user.id),
+            eq(companyMemberships.companyId, user.companyId)
+          )
+        );
+
+      if (existing.length === 0) {
+        await db.insert(companyMemberships).values({
+          userId: user.id,
+          companyId: user.companyId,
+          role: user.role,
+          status: 'active',
+        });
+        totalCreated++;
+      }
+    }
+
+    if (totalCreated > 0) {
+      log(`[Migration] Created ${totalCreated} membership records`);
+    } else {
+      log(`[Migration] No new membership records needed`);
+    }
+  } catch (error) {
+    console.error("[Migration] Error migrating user memberships:", error);
+  }
+}
+
 (async () => {
   try {
     // Initialize session store before starting the server
@@ -245,6 +283,9 @@ async function ensureLogicloopAdmin() {
 
     // Restore company admin account for loogicloopdigital test company
     await ensureLogicloopAdmin();
+
+    // T002: Backfill memberships for all existing users
+    await migrateExistingUserMemberships();
     
     const server = await registerRoutes(app);
 

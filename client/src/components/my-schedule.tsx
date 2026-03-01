@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ScheduledShiftWithDetails } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import { getCompanyColor } from "@/lib/utils";
 
 const JOB_TITLE_COLORS: Record<string, { strip: string; bg: string; border: string; text: string }> = {
   "SIA Guard":        { strip: "bg-blue-500",    bg: "bg-blue-500/10 dark:bg-blue-500/15",     border: "border-blue-300 dark:border-blue-700",    text: "text-blue-700 dark:text-blue-300" },
@@ -33,7 +35,9 @@ function getHourlyRate(jobTitle: string | null | undefined, site: any): string {
 }
 
 export default function MySchedule() {
+  const { user } = useAuth();
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [companyFilter, setCompanyFilter] = useState<string | null>(null);
 
   const { data: shifts = [], isLoading } = useQuery<ScheduledShiftWithDetails[]>({
     queryKey: ["/api/scheduled-shifts"],
@@ -41,31 +45,72 @@ export default function MySchedule() {
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
 
+  const filteredShifts = companyFilter
+    ? shifts.filter(s => s.companyId === companyFilter)
+    : shifts;
+
   const getShiftsForDay = (date: Date) =>
-    shifts.filter(shift => isSameDay(new Date(shift.startTime), date));
+    filteredShifts.filter(shift => isSameDay(new Date(shift.startTime), date));
 
   if (isLoading) {
     return <div className="p-4" data-testid="loading-my-schedule">Loading your schedule...</div>;
   }
 
+  const isMultiCompany = (user as any)?.isMultiCompany;
+  const memberships = (user as any)?.memberships || [];
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-semibold">My Schedule</h3>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-semibold">My Schedule</h3>
+            </div>
+            {isMultiCompany && (
+              <p className="text-xs text-muted-foreground ml-7">
+                Across {memberships.length} Companies
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))} data-testid="button-prev-week-guard">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))} data-testid="button-today-guard">
+              Today
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))} data-testid="button-next-week-guard">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))} data-testid="button-prev-week-guard">
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))} data-testid="button-today-guard">
-            Today
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))} data-testid="button-next-week-guard">
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
+
+        {isMultiCompany && memberships.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <Badge
+              variant={companyFilter === null ? "default" : "outline"}
+              onClick={() => setCompanyFilter(null)}
+              className="cursor-pointer"
+              data-testid="badge-filter-company-all"
+            >
+              All
+            </Badge>
+            {memberships.map((m: any) => (
+              <Badge
+                key={m.companyId}
+                variant={companyFilter === m.companyId ? "default" : "outline"}
+                onClick={() => setCompanyFilter(m.companyId)}
+                style={companyFilter === m.companyId ? { backgroundColor: getCompanyColor(m.companyId, m.brandColor) } : {}}
+                className="cursor-pointer whitespace-nowrap"
+                data-testid={`badge-filter-company-${m.companyId}`}
+              >
+                {m.companyName}
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="text-sm text-muted-foreground mb-2">
@@ -101,13 +146,25 @@ export default function MySchedule() {
                           key={shift.id}
                           className={`rounded-md border overflow-hidden hover-elevate ${color.bg} ${color.border}`}
                           data-testid={`guard-shift-${shift.id}`}
+                          style={isMultiCompany ? { borderLeft: `4px solid ${getCompanyColor(shift.companyId || '', shift.brandColor)}` } : undefined}
                         >
                           <div className={`h-1.5 ${color.strip}`} />
                           <div className="p-3 space-y-2">
                             <div className="flex items-start justify-between gap-2">
-                              <span className={`text-sm font-bold leading-tight ${color.text}`} data-testid={`text-guard-shift-jobtitle-${shift.id}`}>
-                                {shift.jobTitle || "Guard"}
-                              </span>
+                              <div className="flex flex-col gap-1">
+                                {isMultiCompany && shift.companyName && (
+                                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5" data-testid={`text-guard-shift-company-${shift.id}`}>
+                                    <span 
+                                      className="inline-block w-2 h-2 rounded-full" 
+                                      style={{ backgroundColor: getCompanyColor(shift.companyId || '', shift.brandColor) }} 
+                                    />
+                                    {shift.companyName}
+                                  </div>
+                                )}
+                                <span className={`text-sm font-bold leading-tight ${color.text}`} data-testid={`text-guard-shift-jobtitle-${shift.id}`}>
+                                  {shift.jobTitle || "Guard"}
+                                </span>
+                              </div>
                               <div className="flex flex-col items-end gap-1 shrink-0">
                                 <span className="text-xs font-semibold text-muted-foreground flex items-center gap-0.5" data-testid={`text-guard-shift-rate-${shift.id}`}>
                                   <PoundSterling className="w-3 h-3" />{rate}/hr

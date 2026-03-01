@@ -105,8 +105,12 @@ import {
   type JobShareMessage,
   staffInvoices,
   invoiceShifts,
+  companyMemberships,
   type StaffInvoice,
   type InvoiceShift,
+  type CompanyMembership,
+  type InsertCompanyMembership,
+  type CompanyMembershipWithCompany,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
@@ -205,6 +209,7 @@ export interface IStorage {
   getInvitationByToken(token: string): Promise<Invitation | undefined>;
   getInvitationByEmail(email: string): Promise<Invitation | undefined>;
   getInvitationByEmailAndCompany(email: string, companyId: string): Promise<Invitation | undefined>;
+  getPendingInvitationsByEmail(email: string): Promise<Invitation[]>;
   updateInvitation(id: string, data: Partial<InsertInvitation>): Promise<Invitation>;
   getInvitationById(id: string): Promise<Invitation | undefined>;
   getAllInvitations(): Promise<Invitation[]>;
@@ -306,6 +311,15 @@ export interface IStorage {
   // Job share message operations
   getJobShareMessages(jobShareId: string): Promise<any[]>;
   createJobShareMessage(data: { jobShareId: string; senderCompanyId: string; senderUserId: string; message: string }): Promise<any>;
+
+  // Membership operations
+  getUserMemberships(userId: string): Promise<CompanyMembershipWithCompany[]>;
+  getActiveMemberships(userId: string): Promise<CompanyMembershipWithCompany[]>;
+  createMembership(data: InsertCompanyMembership): Promise<CompanyMembership>;
+  getMembership(userId: string, companyId: string): Promise<CompanyMembership | undefined>;
+  updateMembershipStatus(userId: string, companyId: string, status: string): Promise<void>;
+  getMembershipsByCompany(companyId: string): Promise<CompanyMembershipWithCompany[]>;
+  upsertMembership(data: InsertCompanyMembership): Promise<CompanyMembership>;
 
   // Trial management operations
   setCompanyTrial(companyId: string, trialDays: number): Promise<Company>;
@@ -1176,6 +1190,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserScheduledShifts(userId: string, startDate?: Date, endDate?: Date): Promise<ScheduledShiftWithDetails[]> {
+    const memberships = await this.getActiveMemberships(userId);
+    const companyIds = memberships.map(m => m.companyId);
+
     let whereConditions = and(
       eq(scheduledShifts.userId, userId),
       eq(scheduledShifts.isActive, true)
@@ -1191,10 +1208,16 @@ export class DatabaseStorage implements IStorage {
     }
 
     const results = await db
-      .select()
+      .select({
+        scheduled_shifts: scheduledShifts,
+        users: users,
+        sites: sites,
+        companies: companies,
+      })
       .from(scheduledShifts)
       .leftJoin(users, eq(scheduledShifts.userId, users.id))
       .leftJoin(sites, eq(scheduledShifts.siteId, sites.id))
+      .leftJoin(companies, eq(sites.companyId, companies.id))
       .where(whereConditions)
       .orderBy(scheduledShifts.startTime);
 
@@ -1204,6 +1227,10 @@ export class DatabaseStorage implements IStorage {
         ...r.scheduled_shifts,
         user: r.users!,
         site: r.sites!,
+        companyName: r.companies?.name || null,
+        brandColor: r.companies?.brandColor || null,
+        // Attach the company ID from the site's company for frontend filtering
+        companyId: r.companies?.id || r.sites?.companyId || null,
         checkIn: null as CheckIn | null,
       }));
 
@@ -1987,6 +2014,13 @@ export class DatabaseStorage implements IStorage {
       and(eq(invitations.email, email), eq(invitations.companyId, companyId))
     );
     return invitation;
+  }
+
+  async getPendingInvitationsByEmail(email: string): Promise<Invitation[]> {
+    return await db
+      .select()
+      .from(invitations)
+      .where(and(eq(invitations.email, email), eq(invitations.status, 'pending')));
   }
 
   async updateInvitation(id: string, data: Partial<InsertInvitation>): Promise<Invitation> {
@@ -3223,6 +3257,107 @@ export class DatabaseStorage implements IStorage {
     return plan;
   }
 
+  // Membership operations
+  async getUserMemberships(userId: string): Promise<CompanyMembershipWithCompany[]> {
+    const results = await db
+      .select({
+        id: companyMemberships.id,
+        userId: companyMemberships.userId,
+        companyId: companyMemberships.companyId,
+        role: companyMemberships.role,
+        status: companyMemberships.status,
+        invitedBy: companyMemberships.invitedBy,
+        invitedAt: companyMemberships.invitedAt,
+        createdAt: companyMemberships.createdAt,
+        companyName: companies.name,
+        companyUuid: companies.companyId,
+        brandColor: companies.brandColor,
+      })
+      .from(companyMemberships)
+      .innerJoin(companies, eq(companyMemberships.companyId, companies.id))
+      .where(eq(companyMemberships.userId, userId));
+    return results as CompanyMembershipWithCompany[];
+  }
+
+  async getActiveMemberships(userId: string): Promise<CompanyMembershipWithCompany[]> {
+    const results = await db
+      .select({
+        id: companyMemberships.id,
+        userId: companyMemberships.userId,
+        companyId: companyMemberships.companyId,
+        role: companyMemberships.role,
+        status: companyMemberships.status,
+        invitedBy: companyMemberships.invitedBy,
+        invitedAt: companyMemberships.invitedAt,
+        createdAt: companyMemberships.createdAt,
+        companyName: companies.name,
+        companyUuid: companies.companyId,
+        brandColor: companies.brandColor,
+      })
+      .from(companyMemberships)
+      .innerJoin(companies, eq(companyMemberships.companyId, companies.id))
+      .where(and(eq(companyMemberships.userId, userId), eq(companyMemberships.status, 'active')));
+    return results as CompanyMembershipWithCompany[];
+  }
+
+  async createMembership(data: InsertCompanyMembership): Promise<CompanyMembership> {
+    const [membership] = await db.insert(companyMemberships).values(data).returning();
+    return membership;
+  }
+
+  async getMembership(userId: string, companyId: string): Promise<CompanyMembership | undefined> {
+    const [membership] = await db
+      .select()
+      .from(companyMemberships)
+      .where(and(eq(companyMemberships.userId, userId), eq(companyMemberships.companyId, companyId)));
+    return membership;
+  }
+
+  async updateMembershipStatus(userId: string, companyId: string, status: string): Promise<void> {
+    await db
+      .update(companyMemberships)
+      .set({ status })
+      .where(and(eq(companyMemberships.userId, userId), eq(companyMemberships.companyId, companyId)));
+  }
+
+  async getMembershipsByCompany(companyId: string): Promise<CompanyMembershipWithCompany[]> {
+    const results = await db
+      .select({
+        id: companyMemberships.id,
+        userId: companyMemberships.userId,
+        companyId: companyMemberships.companyId,
+        role: companyMemberships.role,
+        status: companyMemberships.status,
+        invitedBy: companyMemberships.invitedBy,
+        invitedAt: companyMemberships.invitedAt,
+        createdAt: companyMemberships.createdAt,
+        companyName: companies.name,
+        companyUuid: companies.companyId,
+        brandColor: companies.brandColor,
+      })
+      .from(companyMemberships)
+      .innerJoin(companies, eq(companyMemberships.companyId, companies.id))
+      .where(eq(companyMemberships.companyId, companyId));
+    return results as CompanyMembershipWithCompany[];
+  }
+
+  async upsertMembership(data: InsertCompanyMembership): Promise<CompanyMembership> {
+    const [membership] = await db
+      .insert(companyMemberships)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [companyMemberships.userId, companyMemberships.companyId],
+        set: {
+          role: data.role,
+          status: data.status,
+          invitedBy: data.invitedBy,
+        },
+      })
+      .returning();
+    return membership;
+  }
+
+  // Trial management operations
   async setCompanyTrial(companyId: string, trialDays: number): Promise<Company> {
     const trialEndDate = new Date();
     trialEndDate.setDate(trialEndDate.getDate() + trialDays);
