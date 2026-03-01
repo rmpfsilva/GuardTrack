@@ -24,10 +24,8 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
       ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
       : (process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000');
 
-    // Primary CTA: install link with invite token preserved
-    const installUrl = data.companyUuid
-      ? `${domain}/install/${data.companyUuid}?inviteToken=${data.inviteToken}`
-      : `${domain}/register?token=${data.inviteToken}`;
+    // Primary CTA: direct activation link (bypasses PWA install gate)
+    const installUrl = `${domain}/activate?token=${data.inviteToken}`;
 
     console.log(`[Invitation Email] Install URL: ${installUrl}`);
     

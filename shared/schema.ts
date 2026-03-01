@@ -113,6 +113,7 @@ export const users = pgTable("users", {
   stewardIdExpiryDate: timestamp("steward_id_expiry_date"),
   stripeConnectedAccountId: varchar("stripe_connected_account_id"),
   fcmToken: varchar("fcm_token"),
+  isActivated: boolean("is_activated").notNull().default(true), // false = invited but not yet activated
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

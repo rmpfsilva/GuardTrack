@@ -132,6 +132,8 @@ export interface IStorage {
   getUserByUsername(username: string, companyId: string | null): Promise<User | undefined>;
   getUsersByUsername(username: string): Promise<User[]>; // Get all users with this username (for login without company ID)
   getSuperAdminByUsername(username: string): Promise<User | undefined>; // For super admins who have null companyId
+  getUsersByEmail(email: string): Promise<User[]>; // Find all users with this email (multi-company detection)
+  getSuperAdminByEmail(email: string): Promise<User | undefined>; // For super admin email login
   createUser(user: InsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
@@ -540,6 +542,28 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(
       and(
         eq(users.username, username),
+        sql`${users.companyId} IS NULL`,
+        eq(users.role, 'super_admin')
+      )
+    );
+    return user;
+  }
+
+  async getUsersByEmail(email: string): Promise<User[]> {
+    // Find all users with this email across all companies (for multi-company email conflict detection)
+    return await db.select().from(users).where(
+      and(
+        eq(users.email, email),
+        sql`${users.companyId} IS NOT NULL`
+      )
+    );
+  }
+
+  async getSuperAdminByEmail(email: string): Promise<User | undefined> {
+    // Look up super admin by email (companyId is null, role is super_admin)
+    const [user] = await db.select().from(users).where(
+      and(
+        eq(users.email, email),
         sql`${users.companyId} IS NULL`,
         eq(users.role, 'super_admin')
       )

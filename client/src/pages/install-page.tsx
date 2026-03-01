@@ -59,7 +59,7 @@ export default function InstallPage() {
       // After install: if there's a pending invite token, go to registration
       const pendingToken = localStorage.getItem('pendingInviteToken');
       if (pendingToken) {
-        setLocation(`/register?token=${pendingToken}`);
+        setLocation(`/activate?token=${pendingToken}`);
       } else {
         setLocation("/login");
       }
@@ -385,7 +385,7 @@ function DesktopInstructions({ installApp, hasPrompt, animStep, installUrl }: { 
   const handleContinueInBrowser = () => {
     const pendingToken = localStorage.getItem('pendingInviteToken');
     if (pendingToken) {
-      setLocation(`/register?token=${pendingToken}`);
+      setLocation(`/activate?token=${pendingToken}`);
     } else {
       setLocation("/login");
     }

@@ -1,0 +1,315 @@
+GuardTrack Authentication & Invite Flow Refactor (Remove Company ID)
+🚨 OBJECTIVE
+
+Eliminate Company ID from the Guard login flow entirely.
+
+Implement a professional SaaS-standard authentication system:
+
+Login using Email + Password only
+
+Company context inferred automatically
+
+Proper invite activation flow with secure token
+
+Zero manual Company ID input required anywhere in guard onboarding
+
+This must NOT break:
+
+Existing companies
+
+Existing activated users
+
+Admin login flow
+
+Role-based access
+
+Stripe integration
+
+Scheduled shifts
+
+Job sharing
+
+🔴 PART 1 — REMOVE COMPANY ID FROM LOGIN UI
+File(s) likely involved:
+
+guard login page/component
+
+auth form component
+
+Remove:
+
+Company ID input field
+
+Any validation requiring Company ID
+
+Replace login form with:
+
+Fields:
+
+Email (required)
+
+Password (required)
+
+Buttons:
+
+Sign In
+
+Forgot Password
+
+Optional:
+
+“Haven’t activated your account?” link
+
+🔴 PART 2 — BACKEND AUTH UPDATE
+
+Authentication must:
+
+Look up user by email
+
+Validate password
+
+Retrieve associated companyId from database
+
+Attach companyId to session/token internally
+
+Important:
+
+Email must be unique per user
+
+If same email exists in multiple companies, system must block and return error (do NOT silently guess)
+
+Return clear error:
+“Multiple company accounts detected. Please contact your administrator.”
+
+🔴 PART 3 — IMPLEMENT PROPER INVITE ACTIVATION FLOW
+
+This is critical.
+
+Currently invites instruct user to install then login manually.
+
+We are fixing this.
+
+STEP 1 — INVITE TOKEN SYSTEM
+
+When an admin invites a user:
+
+Generate:
+
+Secure random activation token
+
+Expiry timestamp (e.g. 7 days)
+
+Store in database:
+
+Table addition (if not existing):
+
+activationToken
+
+activationExpires
+
+isActivated (boolean)
+
+Token must be:
+
+Single-use
+
+Invalidated after activation
+
+STEP 2 — UPDATE INVITE EMAIL / LINK
+
+Instead of generic install instructions, send:
+
+Example:
+
+https://guardtrack.app/activate?token=SECURETOKEN
+
+Email instructions:
+
+Tap the activation link
+
+Install GuardTrack if not installed
+
+Create your password
+
+Start using the app
+
+STEP 3 — CREATE ACTIVATION ROUTE
+
+New frontend route:
+
+/activate
+
+Logic:
+
+Read token from query param
+
+Call backend endpoint:
+GET /api/activate?token=xxx
+
+Backend validates:
+
+Token exists
+
+Not expired
+
+Not already used
+
+If valid:
+Return:
+
+Company name
+
+User email
+
+Username (if applicable)
+
+STEP 4 — ACTIVATION SCREEN UI
+
+Display:
+
+Header:
+“Welcome to [Company Name]”
+
+Fields:
+
+Email (read-only)
+
+Create Password
+
+Confirm Password
+
+Button:
+Activate Account
+
+No Company ID.
+No login form.
+
+STEP 5 — ACTIVATION SUCCESS
+
+On submit:
+
+Backend:
+
+Hash password
+
+Mark user as activated
+
+Remove activation token
+
+Set isActivated = true
+
+Frontend:
+
+Auto-login user
+
+Redirect to Guard Dashboard
+
+🔴 PART 4 — PROTECT LOGIN FROM NON-ACTIVATED USERS
+
+If user attempts login and:
+
+isActivated = false
+
+Return error:
+
+“Please activate your account using the link sent to your email.”
+
+Do not allow login until activated.
+
+🔴 PART 5 — INSTALL FLOW IMPROVEMENT (IMPORTANT)
+
+When user opens app normally:
+
+If no token:
+→ Show Login screen
+
+If token present:
+→ Auto-redirect to Activation screen
+
+Make sure deep linking works for:
+
+iOS
+
+Android
+
+PWA installed version
+
+Do NOT break existing install detection logic.
+
+🔴 PART 6 — MIGRATION SAFETY
+
+Important:
+
+Existing activated users:
+
+Must continue logging in using email + password
+
+Must not require reactivation
+
+Must not be logged out automatically
+
+Company ID must still exist in database, but never be user-facing.
+
+🔴 PART 7 — OPTIONAL (RECOMMENDED)
+
+Add “Forgot Password” flow if not already fully implemented:
+
+Email reset token
+
+Secure reset page
+
+Expiry time
+
+Modern SaaS standard.
+
+🔴 PART 8 — TESTING REQUIREMENTS
+
+Before deployment:
+
+Test scenarios:
+
+New user invite → activation → login
+
+Expired token
+
+Reused token
+
+Existing activated user login
+
+Wrong password
+
+Email not found
+
+User with multiple companies (should block cleanly)
+
+Install + deep link on mobile
+
+Nothing else should break.
+
+🔵 EXPECTED OUTCOME
+
+After this change:
+
+No one ever types Company ID again
+
+Activation is seamless
+
+Guard onboarding feels modern
+
+Confusion disappears
+
+Adoption increases
+
+Support tickets reduce
+
+GuardTrack should now feel like:
+
+Deputy
+
+Guardhouse
+
+Connecteam
+
+Modern SaaS apps
+
+Not a custom internal system

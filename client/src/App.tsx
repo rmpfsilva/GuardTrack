@@ -16,6 +16,7 @@ import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
 import RegisterPage from "@/pages/register-page";
+import ActivatePage from "@/pages/activate-page";
 import TrialRegistrationPage from "@/pages/trial-registration";
 import GuardDashboard from "@/pages/guard-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
@@ -39,7 +40,7 @@ function isMobileDevice(): boolean {
 function InstallGate({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const [forceInstall, setForceInstall] = useState<boolean | null>(null);
-  const blockedPages = ['/login', '/auth', '/register', '/register-trial', '/forgot-password', '/reset-password'];
+  const blockedPages = ['/login', '/auth', '/register', '/activate', '/register-trial', '/forgot-password', '/reset-password'];
 
   const onBlockedPage = blockedPages.some(p => location === p || location.startsWith(p));
   const alreadyInstalled = isNativePlatform() || isStandalone();
@@ -93,6 +94,7 @@ function Router() {
           <Route path="/install" component={InstallPage} />
           <Route path="/login" component={AuthPage} />
           <Route path="/auth" component={AuthPage} />
+          <Route path="/activate" component={ActivatePage} />
           <Route path="/register" component={RegisterPage} />
           <Route path="/register-trial" component={TrialRegistrationPage} />
           <Route path="/forgot-password" component={ForgotPasswordPage} />

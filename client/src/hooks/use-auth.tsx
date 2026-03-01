@@ -25,16 +25,17 @@ export type CompanyOption = {
   companyCode: string;
 };
 
-type LoginData = {
-  username: string;
+export type LoginData = {
+  email: string;
   password: string;
-  companyId?: string | null; // Only needed if multiple companies have same username
-  isSuperAdmin?: boolean; // For platform admin login
+  isSuperAdmin?: boolean;
 };
 
 type LoginResponse = SelectUser | {
-  requiresCompanySelection: boolean;
-  companies: CompanyOption[];
+  requiresCompanySelection?: boolean;
+  multipleCompanies?: boolean;
+  needsActivation?: boolean;
+  companies?: CompanyOption[];
   message: string;
 };
 
@@ -51,33 +52,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async (credentials: LoginData): Promise<LoginResponse> => {
+    mutationFn: async (credentials: LoginData): Promise<SelectUser> => {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(credentials),
         credentials: "include",
       });
-      
       const data = await res.json();
-      
-      // Handle multi-company conflict (status 300)
-      if (res.status === 300 && data.requiresCompanySelection) {
-        return data as LoginResponse;
-      }
-      
       if (!res.ok) {
-        throw new Error(typeof data === 'string' ? data : data.message || "Login failed");
+        const err = new Error(typeof data === 'string' ? data : data.message || "Login failed") as any;
+        err.needsActivation = data.needsActivation;
+        err.multipleCompanies = data.multipleCompanies;
+        throw err;
       }
-      
       return data as SelectUser;
     },
-    onSuccess: (result: LoginResponse) => {
-      // Only set user data if it's an actual user (not a conflict response)
-      if ('id' in result) {
-        queryClient.setQueryData(["/api/user"], result);
-      }
-      // If requiresCompanySelection, the UI will handle it
+    onSuccess: (user: SelectUser) => {
+      queryClient.setQueryData(["/api/user"], user);
     },
     onError: (error: Error) => {
       toast({

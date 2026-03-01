@@ -211,104 +211,175 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // ─── Validate activation token (public — no auth required) ──────────────────
+  app.get("/api/activate", async (req, res) => {
+    try {
+      const { token } = req.query as { token: string };
+      if (!token) return res.status(400).json({ valid: false, error: "Token is required" });
+
+      const invitation = await storage.getInvitationByToken(token);
+      if (!invitation) return res.status(404).json({ valid: false, error: "Invalid or expired activation link. Please ask your manager to resend the invite." });
+      if (invitation.status !== 'pending') return res.status(400).json({ valid: false, error: "This activation link has already been used. Please sign in." });
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) return res.status(400).json({ valid: false, error: "This activation link has expired. Please ask your manager to resend the invite." });
+
+      const company = invitation.companyId ? await storage.getCompany(invitation.companyId) : null;
+      res.json({
+        valid: true,
+        email: invitation.email,
+        role: invitation.role,
+        companyName: company?.name || 'Your Company',
+        expiresAt: invitation.expiresAt,
+      });
+    } catch (error: any) {
+      console.error("Error validating activation token:", error);
+      res.status(500).json({ valid: false, error: "Failed to validate token" });
+    }
+  });
+
+  // ─── Activate account (public — creates user + logs them in) ─────────────────
+  app.post("/api/activate", async (req, res, next) => {
+    try {
+      const { token, password, firstName, lastName } = req.body;
+      const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString() || '';
+      const userAgent = req.headers['user-agent'] || '';
+
+      if (!token || !password) return res.status(400).json({ message: "Token and password are required" });
+      if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+
+      const invitation = await storage.getInvitationByToken(token);
+      if (!invitation) return res.status(400).json({ message: "Invalid or expired activation link. Please ask your manager to resend the invite." });
+      if (invitation.status !== 'pending') return res.status(400).json({ message: "This activation link has already been used. Please sign in." });
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) return res.status(400).json({ message: "This activation link has expired. Please ask your manager to resend the invite." });
+
+      // Use email as username (unique identifier), or generate from email prefix
+      const baseUsername = (invitation.email || '').split('@')[0].replace(/[^a-z0-9._-]/gi, '').toLowerCase() || `user${Date.now()}`;
+      // Ensure username is unique within the company
+      let username = baseUsername;
+      let attempt = 0;
+      while (await storage.getUserByUsername(username, invitation.companyId)) {
+        attempt++;
+        username = `${baseUsername}${attempt}`;
+      }
+
+      const user = await storage.createUser({
+        username,
+        password: await hashPassword(password),
+        firstName: firstName || '',
+        lastName: lastName || '',
+        role: invitation.role as 'guard' | 'steward' | 'supervisor' | 'admin',
+        email: invitation.email || '',
+        companyId: invitation.companyId,
+        isActivated: true,
+      });
+
+      await storage.acceptInvitation(token);
+
+      const company = invitation.companyId ? await storage.getCompany(invitation.companyId) : null;
+      storage.createAuthActivityLog({ eventType: 'register', status: 'success', username, email: invitation.email || undefined, userId: user.id, companyId: invitation.companyId, companyName: company?.name || undefined, ipAddress, userAgent }).catch(() => {});
+
+      req.login(sanitizeUser(user), (err) => {
+        if (err) return next(err);
+        res.status(201).json(sanitizeUser(user));
+      });
+    } catch (error: any) {
+      console.error('Activation error:', error);
+      res.status(400).json({ message: error.message || "Activation failed" });
+    }
+  });
+
+  // ─── Login — email-based ──────────────────────────────────────────────────────
   app.post("/api/login", async (req, res, next) => {
     try {
-      const { username, password, companyId, isSuperAdmin } = req.body;
+      const { email, password, isSuperAdmin } = req.body;
       const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString() || '';
       const userAgent = req.headers['user-agent'] || '';
       
-      if (!username || !password) {
-        storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Missing username or password' }).catch(() => {});
-        return res.status(400).json({ message: "Username and password are required" });
+      if (!email || !password) {
+        storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, ipAddress, userAgent, errorReason: 'Missing email or password' }).catch(() => {});
+        return res.status(400).json({ message: "Email and password are required" });
       }
       
       let user: SelectUser | undefined;
       
       if (isSuperAdmin) {
-        user = await storage.getSuperAdminByUsername(username);
+        // Super admin lookup: try by email first, then by username (backward compat)
+        user = await storage.getSuperAdminByEmail(email);
         if (!user) {
-          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Super admin not found' }).catch(() => {});
+          // Fallback: try username lookup for existing super admins who log in with username
+          user = await storage.getSuperAdminByUsername(email);
+        }
+        if (!user) {
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, ipAddress, userAgent, errorReason: 'Super admin not found' }).catch(() => {});
           return res.status(401).json({ message: "Invalid credentials" });
         }
         const passwordMatch = await comparePasswords(password, user.password);
         if (!passwordMatch) {
-          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, userId: user.id, ipAddress, userAgent, errorReason: 'Invalid password (super admin)' }).catch(() => {});
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, userId: user.id, ipAddress, userAgent, errorReason: 'Invalid password (super admin)' }).catch(() => {});
           return res.status(401).json({ message: "Invalid credentials" });
         }
-      }
-      else if (companyId) {
-        user = await storage.getUserByUsername(username, companyId);
-        if (!user) {
-          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, companyId, ipAddress, userAgent, errorReason: 'User not found in company' }).catch(() => {});
-          return res.status(401).json({ message: "Invalid credentials" });
-        }
-        const passwordMatch = await comparePasswords(password, user.password);
-        if (!passwordMatch) {
-          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, userId: user.id, companyId, ipAddress, userAgent, errorReason: 'Invalid password' }).catch(() => {});
-          return res.status(401).json({ message: "Invalid credentials" });
-        }
-      }
-      else {
-        const matchingUsers = await storage.getUsersByUsername(username);
+      } else {
+        // Regular user login by email
+        const matchingUsers = await storage.getUsersByEmail(email);
         
         if (matchingUsers.length === 0) {
-          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Username not found' }).catch(() => {});
+          // No user found — check if there's a pending invite for this email
+          const pendingInvite = await storage.getInvitationByEmail(email).catch(() => null);
+          if (pendingInvite) {
+            return res.status(401).json({ 
+              message: "Your account hasn't been activated yet. Please check your email for an activation link.",
+              needsActivation: true,
+            });
+          }
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, ipAddress, userAgent, errorReason: 'Email not found' }).catch(() => {});
           return res.status(401).json({ message: "Invalid credentials" });
         }
         
+        // Check passwords for all matching users
         const validUsers: SelectUser[] = [];
         for (const u of matchingUsers) {
           const passwordMatch = await comparePasswords(password, u.password);
-          if (passwordMatch) {
-            validUsers.push(u);
-          }
+          if (passwordMatch) validUsers.push(u);
         }
         
         if (validUsers.length === 0) {
-          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, ipAddress, userAgent, errorReason: 'Invalid password' }).catch(() => {});
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, ipAddress, userAgent, errorReason: 'Invalid password' }).catch(() => {});
           return res.status(401).json({ message: "Invalid credentials" });
         }
         
+        // Multiple companies with same email and password — block with clear message
         if (validUsers.length > 1) {
-          const companyOptions = await Promise.all(
-            validUsers.map(async (u) => {
-              if (u.companyId) {
-                const company = await storage.getCompany(u.companyId);
-                return {
-                  companyId: u.companyId,
-                  companyName: company?.name || 'Unknown Company',
-                  companyCode: company?.companyId || '',
-                };
-              }
-              return null;
-            })
-          );
-          
-          return res.status(300).json({
-            message: "Multiple companies found. Please select your company.",
-            requiresCompanySelection: true,
-            companies: companyOptions.filter(Boolean),
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, ipAddress, userAgent, errorReason: 'Multiple company accounts' }).catch(() => {});
+          return res.status(409).json({ 
+            message: "Multiple company accounts detected for this email. Please contact your administrator.",
+            multipleCompanies: true,
           });
         }
         
         user = validUsers[0];
+        
+        // Check if account is activated
+        if (user.isActivated === false) {
+          return res.status(401).json({ 
+            message: "Your account hasn't been activated yet. Please check your email for an activation link.",
+            needsActivation: true,
+          });
+        }
       }
       
+      // Check trial status for company users
       if (user.role !== 'super_admin' && user.companyId) {
         try {
           const trialStatus = await storage.checkTrialStatus(user.companyId);
-          
           if (!trialStatus.isActive && trialStatus.status === 'expired') {
             const company = await storage.getCompany(user.companyId);
             if (company && company.email) {
               await sendTrialInvitationEmail(
                 company.email,
                 'Trial Period Expired - GuardTrack',
-                `Dear ${company.name} Team,\n\nYour trial period for GuardTrack has expired. To continue using the platform, please contact our support team to upgrade to a full account.\n\nThank you for trying GuardTrack.\n\nBest regards,\nGuardTrack Team`
+                `Dear ${company.name} Team,\n\nYour trial period for GuardTrack has expired. Please contact support to upgrade.\n\nGuardTrack Team`
               );
             }
-            
-            storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username, userId: user.id, companyId: user.companyId, companyName: company?.name || undefined, ipAddress, userAgent, errorReason: 'Trial expired' }).catch(() => {});
+            storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, userId: user.id, companyId: user.companyId, ipAddress, userAgent, errorReason: 'Trial expired' }).catch(() => {});
             return res.status(403).json({ 
               message: "Your trial period has expired. An email has been sent to your company administrator. Please contact support to upgrade.",
               trialExpired: true 
@@ -320,22 +391,12 @@ export function setupAuth(app: Express) {
       }
       
       req.login(user, async (loginErr) => {
-        if (loginErr) {
-          return next(loginErr);
-        }
-        
+        if (loginErr) return next(loginErr);
         try {
-          await storage.createUserLogin({
-            userId: user!.id,
-            companyId: user!.companyId || null,
-          });
-        } catch (trackingError) {
-          console.error('Error tracking user login:', trackingError);
-        }
-        
+          await storage.createUserLogin({ userId: user!.id, companyId: user!.companyId || null });
+        } catch (e) { console.error('Error tracking login:', e); }
         const company = user!.companyId ? await storage.getCompany(user!.companyId) : null;
-        storage.createAuthActivityLog({ eventType: 'login', status: 'success', username, email: user!.email || undefined, userId: user!.id, companyId: user!.companyId || undefined, companyName: company?.name || undefined, ipAddress, userAgent }).catch(() => {});
-        
+        storage.createAuthActivityLog({ eventType: 'login', status: 'success', username: email, email: user!.email || undefined, userId: user!.id, companyId: user!.companyId || undefined, companyName: company?.name || undefined, ipAddress, userAgent }).catch(() => {});
         return res.status(200).json(sanitizeUser(user as SelectUser));
       });
     } catch (error: any) {
