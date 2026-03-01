@@ -1,0 +1,403 @@
+REPLIT AGENT MASTER PROMPT
+Multi-Company Membership + Unified Guard Schedule (Non-Breaking Refactor)
+🚨 CRITICAL RULES
+
+DO NOT break existing live companies.
+
+DO NOT break authentication.
+
+DO NOT break scheduling.
+
+DO NOT modify existing API contracts unless explicitly instructed.
+
+This must be implemented in phases.
+
+Backward compatibility is required during migration.
+
+🎯 OBJECTIVE
+
+Transform GuardTrack from:
+
+One user → one company
+
+Into:
+
+One user → multiple companies
+With:
+
+Unified personal guard schedule across all memberships.
+
+This must:
+
+Avoid duplicate accounts
+
+Avoid duplicate passwords
+
+Avoid company switching for guards
+
+Keep strict company data isolation
+
+Preserve admin scoping per company
+
+🏗 PART 1 — ARCHITECTURE CHANGE
+1️⃣ Users Table Becomes Global Identity
+
+Ensure users table structure:
+
+users
+
+id
+
+email (UNIQUE)
+
+passwordHash
+
+isActivated
+
+createdAt
+
+updatedAt
+
+REMOVE dependency on users.companyId for access control.
+
+Keep field temporarily for migration.
+
+2️⃣ Create New Table: company_memberships
+
+Create new table:
+
+company_memberships
+
+id (uuid)
+
+userId (foreign key → users.id)
+
+companyId (foreign key → companies.id)
+
+role (guard | admin | supervisor)
+
+status (pending | active | suspended)
+
+invitedBy
+
+invitedAt
+
+createdAt
+
+Add index on:
+(userId, companyId)
+
+🔄 PART 2 — MIGRATION STRATEGY (DO NOT SKIP)
+
+For all existing users:
+
+For each user:
+
+Create membership record using existing users.companyId
+
+Set role based on current role
+
+Set status = active
+
+Do NOT delete users.companyId yet.
+
+Refactor queries gradually to use memberships.
+
+🔐 PART 3 — LOGIN FLOW (MULTI-COMPANY SAFE)
+
+Login remains:
+
+Email + Password.
+
+After authentication:
+
+Fetch:
+
+SELECT * FROM company_memberships
+WHERE userId = user.id
+AND status = 'active'
+
+Cases:
+
+0 memberships
+→ Show “No active companies assigned.”
+
+1 membership
+→ Load guard dashboard (filtered by that company)
+
+2+ memberships
+→ Load unified personal dashboard (see UI section below)
+
+No company switching required.
+
+Company context becomes optional filter, not required state.
+
+📨 PART 4 — INVITE FLOW (CRITICAL)
+When Admin Invites User
+
+System checks:
+
+Does user with email exist?
+
+Case A — User does NOT exist
+
+Create user
+
+Generate activation token
+
+Create membership (status = pending)
+
+Send activation email
+
+Upon activation:
+
+isActivated = true
+
+membership status = active
+
+Case B — User already exists AND isActivated = true
+
+Create new membership (status = active)
+
+Send email:
+
+“You’ve been added to [Company Name]. Log in to view your shifts.”
+
+DO NOT:
+
+Generate activation token
+
+Ask for password reset
+
+Duplicate user
+
+Case C — User exists BUT isActivated = false
+
+Create new membership (pending)
+
+Do NOT generate second activation token
+
+Send email:
+
+“You’ve been added to another company. Please activate your account to access all companies.”
+
+Once activated:
+
+All memberships with status pending → become active
+
+📅 PART 5 — UNIFIED GUARD SCHEDULE LOGIC
+
+Replace current schedule query logic.
+
+Instead of:
+
+WHERE companyId = activeCompanyId
+
+Use:
+
+WHERE userId = currentUser.id
+AND companyId IN (all active memberships)
+
+Return:
+
+shiftId
+
+companyId
+
+companyName
+
+companyColor (new field, see below)
+
+role
+
+site
+
+startTime
+
+endTime
+
+status
+
+Sort by startTime ASC.
+
+🎨 PART 6 — COMPANY VISUAL IDENTITY (REQUIRED)
+
+Add new column to companies table:
+
+brandColor (HSL string)
+
+If not set:
+Generate default color algorithmically based on companyId hash.
+
+This will be used for schedule color coding.
+
+🖥 PART 7 — GUARD UI DESIGN (UNIFIED MULTI-COMPANY)
+
+Modify guard dashboard schedule page.
+
+HEADER
+
+Title:
+“My Schedule”
+
+Subtext:
+“Across X Companies”
+
+If more than one membership:
+Display filter chips:
+
+[All] [Company A] [Company B] [Company C]
+
+Default: All.
+
+SHIFT CARDS (List View)
+
+Each shift card must display:
+
+Top-left:
+Company Badge (colored)
+
+Example:
+● Company A (blue dot)
+
+Below:
+Site Name
+Role
+Date
+Start – End
+
+Add subtle left border in company color.
+
+Do NOT use heavy backgrounds.
+Keep clean card UI.
+
+CALENDAR VIEW (If exists)
+
+Each shift event must:
+
+Be tinted using company brandColor
+
+Show role abbreviation
+
+On hover/tap → show company name clearly
+
+TODAY VIEW (Home Screen)
+
+If multiple companies:
+
+Group by time order, not company.
+
+Example:
+
+🔵 Company A
+Arena Stadium
+18:00 – 23:00
+Role: Steward
+
+🟢 Company B
+Central Bar
+23:30 – 03:00
+Role: Door Supervisor
+
+COMPANY FILTER BEHAVIOR
+
+If user taps Company B filter:
+
+Only show Company B shifts.
+
+Do NOT reload app.
+Just filter in UI.
+
+🔐 PART 8 — DATA ISOLATION
+
+Even though guard sees all shifts:
+
+Guard must NOT:
+
+See company staff lists
+
+See company reports
+
+See job sharing data
+
+See notices from other companies (unless explicitly assigned)
+
+Only their own shift data is cross-company.
+
+Everything else remains company-scoped.
+
+🧾 PART 9 — INVOICE PREPARATION (NO STRIPE)
+
+Invoice creation must:
+
+Group shifts by company automatically
+
+Allow invoice creation per company only
+
+Prevent cross-company invoice merging
+
+Example:
+
+User selects week:
+System splits by company:
+
+Company A → Invoice A
+Company B → Invoice B
+
+🔄 PART 10 — MEMBERSHIP REMOVAL
+
+If Company A removes user:
+
+Set membership status = suspended.
+
+User still:
+
+Logs in normally
+
+Sees other companies
+
+Does NOT see Company A shifts anymore
+
+Never delete global user.
+
+🧪 PART 11 — TEST SCENARIOS
+
+Must test:
+
+User invited to first company
+
+User invited to second company
+
+User logs in with 2 companies
+
+User invited while not activated
+
+Company removes membership
+
+Schedule loads correctly across companies
+
+Filtering works correctly
+
+No data leaks between companies
+
+🎯 FINAL RESULT
+
+After this refactor:
+
+One login per contractor
+
+Unlimited company memberships
+
+Unified personal schedule
+
+No company switching friction
+
+Professional SaaS architecture
+
+Future-ready for growth
+
+Clean invite logic
+
+No duplicate accounts
+
+GuardTrack becomes contractor-aware, not just company-aware.
