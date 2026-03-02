@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -124,6 +124,9 @@ export default function GuardApp() {
   };
 
   const shouldShowInstallOverlay = isInstallable && !isInstalled && showInstallOverlay && !installDismissed;
+
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   // Company lookup state
   const [companyCode, setCompanyCode] = useState("");
@@ -925,6 +928,29 @@ export default function GuardApp() {
       ]
     : defaultNavItems;
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+    const currentIndex = navItems.findIndex(item => item.key === activeTab);
+    if (currentIndex === -1) return;
+    if (deltaX < 0) {
+      const nextIndex = (currentIndex + 1) % navItems.length;
+      setActiveTab(navItems[nextIndex].key);
+    } else {
+      const prevIndex = (currentIndex - 1 + navItems.length) % navItems.length;
+      setActiveTab(navItems[prevIndex].key);
+    }
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
@@ -1457,7 +1483,12 @@ export default function GuardApp() {
             </div>
           )}
 
-          <main className="flex-1 overflow-auto p-4 pb-24">
+          <main
+            className="flex-1 overflow-auto p-4 pb-24"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            data-testid="main-swipe-area"
+          >
             {renderContent()}
           </main>
 
