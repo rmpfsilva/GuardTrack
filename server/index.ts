@@ -246,7 +246,7 @@ async function ensureLogicloopAdmin() {
     const USERNAME = 'rickown';
     const EMAIL = 'rickownapp@gmail.com';
 
-    // Ensure the Logicloopdigital company exists first
+    // Ensure the company exists and is active
     const existingCompany = await db.select().from(companies).where(eq(companies.id, COMPANY_ID));
     if (existingCompany.length === 0) {
       await db.insert(companies).values({
@@ -258,29 +258,51 @@ async function ensureLogicloopAdmin() {
         subscriptionStatus: 'active',
       });
       log('[Init] Logicloopdigital company created');
+    } else if (!existingCompany[0].isActive) {
+      await db.update(companies).set({ isActive: true, trialStatus: 'full', subscriptionStatus: 'active' }).where(eq(companies.id, COMPANY_ID));
+      log('[Init] Logicloopdigital company activated');
     }
 
-    // Check if rickown user already exists
-    const existing = await db.select().from(users).where(eq(users.username, USERNAME));
-    if (existing.length > 0) {
-      log('[Init] rickown admin already exists');
-      return;
-    }
-
+    // Always ensure the password is correct — upsert by username
     const pwd = await hashPassword('Welcome123');
-    const [created] = await db.insert(users).values({
-      username: USERNAME,
-      password: pwd,
-      role: 'admin',
-      companyId: COMPANY_ID,
-      email: EMAIL,
-      isActivated: true,
-    }).returning({ id: users.id });
+    const existing = await db.select().from(users).where(eq(users.username, USERNAME));
 
-    await db.insert(userRoles).values({ userId: created.id, role: 'admin' });
-    await db.insert(companyMemberships).values({ userId: created.id, companyId: COMPANY_ID, role: 'admin', status: 'active' });
+    let userId: string;
+    if (existing.length === 0) {
+      const [created] = await db.insert(users).values({
+        username: USERNAME,
+        password: pwd,
+        role: 'admin',
+        companyId: COMPANY_ID,
+        email: EMAIL,
+        isActivated: true,
+      }).returning({ id: users.id });
+      userId = created.id;
+      log('[Init] rickown admin created');
+    } else {
+      userId = existing[0].id;
+      await db.update(users).set({
+        password: pwd,
+        role: 'admin',
+        companyId: COMPANY_ID,
+        email: EMAIL,
+        isActivated: true,
+        updatedAt: new Date(),
+      }).where(eq(users.id, userId));
+      log('[Init] rickown admin password reset and verified');
+    }
 
-    log('[Init] rickown admin created for Logicloopdigital company');
+    // Ensure userRoles entry exists
+    const existingRole = await db.select().from(userRoles).where(and(eq(userRoles.userId, userId), eq(userRoles.role, 'admin')));
+    if (existingRole.length === 0) {
+      await db.insert(userRoles).values({ userId, role: 'admin' });
+    }
+
+    // Ensure membership exists
+    const existingMembership = await db.select().from(companyMemberships).where(and(eq(companyMemberships.userId, userId), eq(companyMemberships.companyId, COMPANY_ID)));
+    if (existingMembership.length === 0) {
+      await db.insert(companyMemberships).values({ userId, companyId: COMPANY_ID, role: 'admin', status: 'active' });
+    }
   } catch (err) {
     console.error('[Init] Error ensuring logicloop admin:', err);
   }
