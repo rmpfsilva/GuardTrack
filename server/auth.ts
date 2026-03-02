@@ -329,7 +329,8 @@ export function setupAuth(app: Express) {
   // ─── Login — email-based ──────────────────────────────────────────────────────
   app.post("/api/login", async (req, res, next) => {
     try {
-      const { email, password, isSuperAdmin } = req.body;
+      const { password, isSuperAdmin } = req.body;
+      const email = req.body.email || req.body.username; // accept both old (username) and new (email) field names
       const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString() || '';
       const userAgent = req.headers['user-agent'] || '';
       
