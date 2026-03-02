@@ -49,6 +49,61 @@ const defaultFormData = (): InsertSite => ({
   mobilePatrolClientRate: "20.00",
 });
 
+function SiteFormFields({ formData, setFormData }: { formData: any; setFormData: (d: any) => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="name">Site Name *</Label>
+        <Input
+          id="name"
+          placeholder="Downtown Office"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          data-testid="input-site-name"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="address">Address *</Label>
+        <Textarea
+          id="address"
+          placeholder="123 Main Street, City, State 12345"
+          value={formData.address}
+          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+          rows={2}
+          data-testid="input-site-address"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label htmlFor="contactName">Contact Name</Label>
+          <Input
+            id="contactName"
+            placeholder="John Smith"
+            value={formData.contactName || ""}
+            onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+            data-testid="input-contact-name"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="contactPhone">Contact Phone</Label>
+          <Input
+            id="contactPhone"
+            type="tel"
+            placeholder="+44 20 1234 5678"
+            value={formData.contactPhone || ""}
+            onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+            data-testid="input-contact-phone"
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Hourly Rates per Role</Label>
+        <RateTable formData={formData} setFormData={setFormData} />
+      </div>
+    </div>
+  );
+}
+
 function RateTable({ formData, setFormData }: { formData: any; setFormData: (d: any) => void }) {
   return (
     <div className="space-y-3">
@@ -194,59 +249,6 @@ export default function SiteManagement() {
     }
   };
 
-  const SiteFormFields = () => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="name">Site Name *</Label>
-        <Input
-          id="name"
-          placeholder="Downtown Office"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          data-testid="input-site-name"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="address">Address *</Label>
-        <Textarea
-          id="address"
-          placeholder="123 Main Street, City, State 12345"
-          value={formData.address}
-          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-          rows={2}
-          data-testid="input-site-address"
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label htmlFor="contactName">Contact Name</Label>
-          <Input
-            id="contactName"
-            placeholder="John Smith"
-            value={formData.contactName || ""}
-            onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-            data-testid="input-contact-name"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="contactPhone">Contact Phone</Label>
-          <Input
-            id="contactPhone"
-            type="tel"
-            placeholder="+44 20 1234 5678"
-            value={formData.contactPhone || ""}
-            onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-            data-testid="input-contact-phone"
-          />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label className="font-semibold">Hourly Rates per Role</Label>
-        <RateTable formData={formData} setFormData={setFormData} />
-      </div>
-    </div>
-  );
-
   return (
     <Card>
       <CardHeader>
@@ -275,7 +277,7 @@ export default function SiteManagement() {
               </DialogHeader>
               <ScrollArea className="max-h-[70vh] pr-4">
                 <div className="py-2">
-                  <SiteFormFields />
+                  <SiteFormFields formData={formData} setFormData={setFormData} />
                 </div>
               </ScrollArea>
               <DialogFooter>
@@ -365,7 +367,7 @@ export default function SiteManagement() {
           </DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-4">
             <div className="py-2">
-              <SiteFormFields />
+              <SiteFormFields formData={formData} setFormData={setFormData} />
             </div>
           </ScrollArea>
           <DialogFooter>
