@@ -1,113 +1,100 @@
-const CACHE_NAME = 'guardtrack-v1.1.0';
-const urlsToCache = [
+const CACHE_NAME = 'guardtrack-v3';
+const OFFLINE_URL = '/offline.html';
+const STATIC_ASSETS = [
   '/',
+  '/guard/app',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
-  '/guardtrack-icon.png'
+  '/icon-maskable.png',
+  '/offline.html',
 ];
 
-// Install event - cache essential files
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(urlsToCache);
-      })
-      .then(() => self.skipWaiting()) // Activate immediately
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(STATIC_ASSETS).catch((err) => {
+        console.warn('[SW] Some assets failed to cache:', err);
+        return cache.add(OFFLINE_URL).catch(() => {});
+      });
+    }).then(() => self.skipWaiting())
   );
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => self.clients.claim()) // Take control immediately
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
-// Fetch event - network first, fallback to cache
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request)
+            .then((cached) => cached || caches.match(OFFLINE_URL));
+        })
+    );
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Clone the response before caching
-        const responseToCache = response.clone();
-        
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-        
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
         return response;
       })
-      .catch(() => {
-        // If network fails, try cache
-        return caches.match(event.request);
-      })
+      .catch(() => caches.match(event.request))
   );
 });
 
-// Push event - handle incoming push notifications
 self.addEventListener('push', (event) => {
-  let data = {};
-  
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch (e) {
-      data = {
-        title: 'GuardTrack Notification',
-        body: event.data.text() || 'You have a new notification',
-      };
-    }
+  if (!event.data) return;
+  let data;
+  try {
+    data = event.data.json();
+  } catch {
+    data = { title: 'GuardTrack', body: event.data.text() };
   }
-
-  const title = data.title || 'GuardTrack';
-  const options = {
-    body: data.body || 'New notification',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    data: data,
-    tag: data.tag || 'default',
-    requireInteraction: data.requireInteraction || false,
-  };
-
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    self.registration.showNotification(data.title || 'GuardTrack', {
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: data.url ? { url: data.url } : {},
+    })
   );
 });
 
-// Notification click event - handle when user clicks notification
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  const data = event.notification.data || {};
-  const relativeUrl = data.url || '/';
-  
-  // Normalize to absolute URL for proper comparison
-  const absoluteUrl = new URL(relativeUrl, self.location.origin).href;
-
+  const url = event.notification.data?.url || '/guard/app';
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((windowClients) => {
-        // Check if there's already a window open with this URL
-        for (let i = 0; i < windowClients.length; i++) {
-          const client = windowClients[i];
-          if (client.url === absoluteUrl && 'focus' in client) {
-            return client.focus();
-          }
-        }
-        // If no matching window found, open a new one
-        if (clients.openWindow) {
-          return clients.openWindow(absoluteUrl);
-        }
-      })
+    clients.matchAll({ type: 'window' }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url === url && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
   );
 });

@@ -1,12 +1,11 @@
 {
-  "id": "/guard/app",
+  "id": "/",
   "name": "GuardTrack - Security Guard App",
   "short_name": "GuardTrack",
   "description": "Security Guard Shift Check-in, Schedule & Attendance Tracking App",
   "start_url": "/guard/app",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#1e3a5f",
   "theme_color": "#2563eb",
   "orientation": "portrait-primary",
@@ -47,15 +46,6 @@
       "description": "View your shift schedule",
       "url": "/guard/app?tab=schedule",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "GuardTrack Guard App"
     }
   ],
   "prefer_related_applications": false

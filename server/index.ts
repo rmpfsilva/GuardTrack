@@ -3,7 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeSessionStore, storage } from "./storage";
 import { hashPassword } from "./auth";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { users, userRoles, companyMemberships, companies } from "@shared/schema";
 import { or, eq, and, isNotNull } from "drizzle-orm";
 
@@ -40,6 +40,40 @@ app.use((req, res, next) => {
 
   next();
 });
+
+async function runStartupMigrations() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS company_memberships (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        company_id VARCHAR NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        role VARCHAR NOT NULL DEFAULT 'guard',
+        status VARCHAR NOT NULL DEFAULT 'active',
+        invited_by VARCHAR REFERENCES users(id),
+        invited_at TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT memberships_user_company_unique UNIQUE (user_id, company_id)
+      )
+    `);
+
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'companies' AND column_name = 'brand_color'
+        ) THEN
+          ALTER TABLE companies ADD COLUMN brand_color VARCHAR;
+        END IF;
+      END $$;
+    `);
+
+    log('[Migration] Schema migrations complete');
+  } catch (err) {
+    console.error('[Migration] Error running startup migrations:', err);
+  }
+}
 
 async function ensureProductionSuperAdmin() {
   try {
@@ -294,6 +328,9 @@ async function migrateExistingUserMemberships() {
   try {
     // Initialize session store before starting the server
     await initializeSessionStore();
+
+    // Run schema migrations first so all tables/columns exist in production DB
+    await runStartupMigrations();
 
     // Ensure platform super admin exists in whichever DB this instance connects to
     await ensureProductionSuperAdmin();
