@@ -4,7 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeSessionStore, storage } from "./storage";
 import { hashPassword } from "./auth";
 import { db } from "./db";
-import { users, userRoles, companyMemberships } from "@shared/schema";
+import { users, userRoles, companyMemberships, companies } from "@shared/schema";
 import { or, eq, and, isNotNull } from "drizzle-orm";
 
 const app = express();
@@ -208,28 +208,45 @@ async function backfillJobShareShifts() {
 
 async function ensureLogicloopAdmin() {
   try {
-    const COMPANY_ID = '1a1c7789-660f-4586-ac07-c88daabfb5e3'; // loogicloopdigital
+    const COMPANY_ID = '1a1c7789-660f-4586-ac07-c88daabfb5e3';
     const USERNAME = 'rickown';
+    const EMAIL = 'rickownapp@gmail.com';
 
+    // Ensure the Logicloopdigital company exists first
+    const existingCompany = await db.select().from(companies).where(eq(companies.id, COMPANY_ID));
+    if (existingCompany.length === 0) {
+      await db.insert(companies).values({
+        id: COMPANY_ID,
+        name: 'Logicloopdigital',
+        companyId: 'LOGICLOOP',
+        isActive: true,
+        trialStatus: 'full',
+        subscriptionStatus: 'active',
+      });
+      log('[Init] Logicloopdigital company created');
+    }
+
+    // Check if rickown user already exists
     const existing = await db.select().from(users).where(eq(users.username, USERNAME));
     if (existing.length > 0) {
       log('[Init] rickown admin already exists');
       return;
     }
 
-    const pwd = await hashPassword('GuardTrack@2024!');
+    const pwd = await hashPassword('Welcome123');
     const [created] = await db.insert(users).values({
       username: USERNAME,
       password: pwd,
       role: 'admin',
       companyId: COMPANY_ID,
-      email: null,
+      email: EMAIL,
+      isActivated: true,
     }).returning({ id: users.id });
 
-    // Add admin role to userRoles
     await db.insert(userRoles).values({ userId: created.id, role: 'admin' });
+    await db.insert(companyMemberships).values({ userId: created.id, companyId: COMPANY_ID, role: 'admin', status: 'active' });
 
-    log('[Init] rickown admin created for loogicloopdigital company');
+    log('[Init] rickown admin created for Logicloopdigital company');
   } catch (err) {
     console.error('[Init] Error ensuring logicloop admin:', err);
   }
