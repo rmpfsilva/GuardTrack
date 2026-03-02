@@ -66,14 +66,14 @@ export default function AuthPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">{isSuperAdmin ? "Email or username" : "Email address"}</Label>
+                <Label htmlFor="email">Email or username</Label>
                 <Input
                   id="email"
-                  type={isSuperAdmin ? "text" : "email"}
-                  placeholder={isSuperAdmin ? "Email or username" : "you@example.com"}
+                  type="text"
+                  placeholder="Email or username"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  autoComplete="email"
+                  autoComplete="username"
                   required
                   data-testid="input-email"
                 />

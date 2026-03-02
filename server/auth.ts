@@ -357,8 +357,16 @@ export function setupAuth(app: Express) {
           return res.status(401).json({ message: "Invalid credentials" });
         }
       } else {
-        // Regular user login by email
-        const matchingUsers = await storage.getUsersByEmail(email);
+        // Regular user login: try email first, then fall back to username for accounts without email
+        let matchingUsers = await storage.getUsersByEmail(email);
+        
+        if (matchingUsers.length === 0) {
+          // Fallback: try username lookup (supports accounts created before email-based auth)
+          const usernameMatches = await storage.getUsersByUsername(email).catch(() => []);
+          if (usernameMatches.length > 0) {
+            matchingUsers = usernameMatches;
+          }
+        }
         
         if (matchingUsers.length === 0) {
           // No user found — check if there's a pending invite for this email
@@ -369,7 +377,7 @@ export function setupAuth(app: Express) {
               needsActivation: true,
             });
           }
-          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, ipAddress, userAgent, errorReason: 'Email not found' }).catch(() => {});
+          storage.createAuthActivityLog({ eventType: 'login', status: 'failed', username: email, ipAddress, userAgent, errorReason: 'Email/username not found' }).catch(() => {});
           return res.status(401).json({ message: "Invalid credentials" });
         }
         

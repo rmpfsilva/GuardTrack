@@ -130,7 +130,7 @@ export default function GuardApp() {
   const [resolvedCompany, setResolvedCompany] = useState<{ id: string; name: string; companyId: string } | null>(null);
   const [lookupPending, setLookupPending] = useState(false);
 
-  // Lookup company when code changes
+  // Lookup company when code changes (display only — no longer needed for login)
   useEffect(() => {
     const trimmedCode = companyCode.trim();
     if (trimmedCode.length >= 3) {
@@ -141,14 +141,11 @@ export default function GuardApp() {
           if (response.ok) {
             const company = await response.json();
             setResolvedCompany(company);
-            setLoginCompanyId(company.id);
           } else {
             setResolvedCompany(null);
-            setLoginCompanyId("");
           }
         } catch {
           setResolvedCompany(null);
-          setLoginCompanyId("");
         } finally {
           setLookupPending(false);
         }
@@ -156,7 +153,6 @@ export default function GuardApp() {
       return () => clearTimeout(timeoutId);
     } else {
       setResolvedCompany(null);
-      setLoginCompanyId("");
     }
   }, [companyCode]);
 
@@ -850,13 +846,13 @@ export default function GuardApp() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email address</Label>
+                  <Label htmlFor="email">Email or username</Label>
                   <Input
                     id="email"
-                    type="email"
+                    type="text"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="Enter your email"
+                    placeholder="Enter your email or username"
                     required
                     data-testid="input-guard-email"
                   />
