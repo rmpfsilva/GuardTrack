@@ -1457,9 +1457,34 @@ export default function GuardApp() {
             </div>
           )}
 
-          <main className="flex-1 overflow-auto p-4">
+          <main className="flex-1 overflow-auto p-4 pb-24">
             {renderContent()}
           </main>
+
+          {/* Bottom Navigation Bar — always visible for one-tap navigation */}
+          <nav className="sticky bottom-0 z-50 bg-background border-t border-border" data-testid="bottom-nav">
+            <div className="flex overflow-x-auto scrollbar-none">
+              {navItems.map((item) => {
+                const IconComponent = iconMap[item.icon] || Home;
+                const isActive = activeTab === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setActiveTab(item.key)}
+                    className={`flex-1 min-w-[56px] flex flex-col items-center justify-center py-2 px-1 gap-0.5 border-t-2 transition-colors ${
+                      isActive
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                    data-testid={`bottom-nav-${item.key}`}
+                  >
+                    <IconComponent className="h-5 w-5" />
+                    <span className="text-[10px] leading-tight text-center line-clamp-1 max-w-[54px]">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
         </div>
       </div>
     </SidebarProvider>
