@@ -5195,12 +5195,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Check if a company with this name already exists and has trial status
+      // Block trial invites for any company that already exists (trial or full)
       if (validatedData.companyName) {
         const existingCompany = await storage.findCompanyByNameOrEmail(validatedData.companyName);
-        if (existingCompany && existingCompany.trialStatus === 'trial') {
+        if (existingCompany) {
           return res.status(400).json({ 
-            message: `A trial already exists for company "${validatedData.companyName}". Super Admin authorization required for additional trials.` 
+            message: `A company named "${existingCompany.name}" already exists (${existingCompany.companyId}). To add more users to it, use the regular invite flow from the admin dashboard instead.`,
+            existingCompanyId: existingCompany.id,
+            existingCompanyName: existingCompany.name,
           });
         }
       }
@@ -5322,42 +5324,73 @@ GuardTrack Team`;
         return res.status(404).json({ message: "Invitation not found or expired" });
       }
       
-      // Note: Username uniqueness is per-company, and we're creating a new company,
-      // so no need to check for existing username in the new company
-      
       // Import hash password function
       const { hashPassword } = await import("./auth");
-      
-      // Generate unique company ID
+
+      const effectiveCompanyName = (invitation.companyName || companyName).trim();
+
+      // Split adminName into first/last
+      const nameParts = adminName.trim().split(/\s+/);
+      const firstName = nameParts[0] || adminName;
+      const lastName = nameParts.slice(1).join(' ') || '';
+      const hashedPassword = await hashPassword(password);
+
+      // === SAFETY CHECK: join existing company instead of creating a duplicate ===
+      const existingCompany = await storage.findCompanyByNameOrEmail(effectiveCompanyName);
+      if (existingCompany) {
+        // Company already exists — add this person as an admin to the existing one
+        const newUser = await storage.createUser({
+          companyId: existingCompany.id,
+          username,
+          password: hashedPassword,
+          firstName,
+          lastName,
+          email: invitation.email,
+          role: 'admin',
+          isActivated: true,
+        });
+
+        await storage.upsertMembership({
+          userId: newUser.id,
+          companyId: existingCompany.id,
+          role: 'admin',
+          status: 'active',
+        });
+
+        await storage.markTrialInvitationAccepted(token);
+        console.log(`[Trial] ${invitation.email} joined existing company "${existingCompany.name}" (${existingCompany.companyId}) instead of creating duplicate`);
+
+        return res.json({
+          message: "Registration successful! Your account has been added to the existing company. You can now log in.",
+          company: {
+            id: existingCompany.id,
+            name: existingCompany.name,
+            joinedExisting: true,
+          }
+        });
+      }
+
+      // No existing company — create new (normal flow)
       const allCompanies = await storage.getAllCompanies();
       const maxCompanyNum = allCompanies.reduce((max, c) => {
         const match = c.companyId.match(/COMP(\d+)/);
         return match ? Math.max(max, parseInt(match[1])) : max;
       }, 0);
       const newCompanyId = `COMP${String(maxCompanyNum + 1).padStart(3, '0')}`;
-      
-      // Calculate trial end date
+
       const trialDays = parseInt(invitation.durationDays as string);
       const trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
-      
-      // Create company with trial settings
+
       const company = await storage.createCompany({
         companyId: newCompanyId,
-        name: invitation.companyName || companyName,
+        name: effectiveCompanyName,
         email: invitation.email,
         isActive: true,
         trialStatus: 'trial',
         trialEndDate,
         trialDays: trialDays.toString(),
       });
-      
-      // Split adminName into first and last name (simple split by space)
-      const nameParts = adminName.trim().split(/\s+/);
-      const firstName = nameParts[0] || adminName;
-      const lastName = nameParts.slice(1).join(' ') || '';
-      
-      // Create admin user
-      const hashedPassword = await hashPassword(password);
+
       const adminUser = await storage.createUser({
         companyId: company.id,
         username,
@@ -5366,11 +5399,19 @@ GuardTrack Team`;
         lastName,
         email: invitation.email,
         role: 'admin',
+        isActivated: true,
       });
-      
+
+      await storage.upsertMembership({
+        userId: adminUser.id,
+        companyId: company.id,
+        role: 'admin',
+        status: 'active',
+      });
+
       // Mark invitation as accepted
       await storage.markTrialInvitationAccepted(token);
-      
+
       res.json({ 
         message: "Registration successful! You can now log in.",
         company: {
