@@ -12,6 +12,7 @@ import { ProtectedRoute } from "@/lib/protected-route";
 import { TrialBanner } from "@/components/trial-banner";
 import { isNativePlatform } from "@/lib/native";
 import { useFCMNotifications } from "@/hooks/use-fcm-notifications";
+import { useCompanyTheme } from "@/hooks/use-company-theme";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing-page";
 import AuthPage from "@/pages/auth-page";
@@ -84,6 +85,7 @@ function InstallGate({ children }: { children: React.ReactNode }) {
 function Router() {
   const { user } = useAuth();
   useFCMNotifications(!!user);
+  useCompanyTheme();
 
   return (
     <>
