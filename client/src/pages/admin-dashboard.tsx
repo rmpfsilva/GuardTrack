@@ -599,6 +599,16 @@ export default function AdminDashboard() {
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
+                      <SidebarMenuItem key="settings-link">
+                        <SidebarMenuButton
+                          data-testid="tab-settings"
+                          tooltip="Settings"
+                          onClick={() => setLocation('/settings')}
+                        >
+                          <Settings className="h-4 w-4" />
+                          <span>Settings</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
                       {renderSidebarItem('app-install', 'App Install', Smartphone)}
                       {renderSidebarItem('support', 'Support', MessageSquare)}
                     </SidebarMenu>
