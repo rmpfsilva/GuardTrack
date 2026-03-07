@@ -466,6 +466,13 @@ export default function ClientManagement() {
                       <CardTitle className="flex items-center gap-2">
                         <Building2 className="h-5 w-5" />
                         {client.name}
+                        <button
+                          onClick={() => { setSelectedClient(client); setIsBrandingDialogOpen(true); }}
+                          title="Set brand colour"
+                          className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-background shadow-sm hover:scale-110 transition-transform"
+                          style={{ background: (client as any).brandColor || '#2563eb' }}
+                          data-testid={`swatch-header-${client.id}`}
+                        />
                       </CardTitle>
                       <CardDescription>
                         {client.companyId} • {client.email}
@@ -636,13 +643,19 @@ export default function ClientManagement() {
           <div className="grid gap-4">
             {clients.filter(c => c.trialStatus === 'trial').map((client) => (
               <Card key={client.id} data-testid={`card-trial-client-${client.id}`}>
-                {/* Same card content as "all" tab */}
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <CardTitle className="flex items-center gap-2">
                         <Building2 className="h-5 w-5" />
                         {client.name}
+                        <button
+                          onClick={() => { setSelectedClient(client); setIsBrandingDialogOpen(true); }}
+                          title="Set brand colour"
+                          className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-background shadow-sm hover:scale-110 transition-transform"
+                          style={{ background: (client as any).brandColor || '#2563eb' }}
+                          data-testid={`swatch-header-trial-${client.id}`}
+                        />
                       </CardTitle>
                       <CardDescription>
                         {client.companyId} • {client.email}
@@ -748,6 +761,18 @@ export default function ClientManagement() {
                       <Mail className="h-4 w-4 mr-2" />
                       Send Message
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsBrandingDialogOpen(true);
+                      }}
+                      data-testid={`button-brand-colour-trial-${client.id}`}
+                    >
+                      <Palette className="h-4 w-4 mr-2" />
+                      Brand Colour
+                    </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
                         Block reason: {client.blockReason}
@@ -764,13 +789,19 @@ export default function ClientManagement() {
           <div className="grid gap-4">
             {clients.filter(c => c.trialStatus === 'full').map((client) => (
               <Card key={client.id} data-testid={`card-full-client-${client.id}`}>
-                {/* Same card content */}
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <CardTitle className="flex items-center gap-2">
                         <Building2 className="h-5 w-5" />
                         {client.name}
+                        <button
+                          onClick={() => { setSelectedClient(client); setIsBrandingDialogOpen(true); }}
+                          title="Set brand colour"
+                          className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-background shadow-sm hover:scale-110 transition-transform"
+                          style={{ background: (client as any).brandColor || '#2563eb' }}
+                          data-testid={`swatch-header-full-${client.id}`}
+                        />
                       </CardTitle>
                       <CardDescription>
                         {client.companyId} • {client.email}
@@ -851,6 +882,18 @@ export default function ClientManagement() {
                       <Mail className="h-4 w-4 mr-2" />
                       Send Message
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsBrandingDialogOpen(true);
+                      }}
+                      data-testid={`button-brand-colour-full-${client.id}`}
+                    >
+                      <Palette className="h-4 w-4 mr-2" />
+                      Brand Colour
+                    </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
                         Block reason: {client.blockReason}
@@ -867,13 +910,19 @@ export default function ClientManagement() {
           <div className="grid gap-4">
             {clients.filter(c => c.trialStatus === 'expired').map((client) => (
               <Card key={client.id} data-testid={`card-expired-client-${client.id}`}>
-                {/* Same card content */}
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <CardTitle className="flex items-center gap-2">
                         <Building2 className="h-5 w-5" />
                         {client.name}
+                        <button
+                          onClick={() => { setSelectedClient(client); setIsBrandingDialogOpen(true); }}
+                          title="Set brand colour"
+                          className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-background shadow-sm hover:scale-110 transition-transform"
+                          style={{ background: (client as any).brandColor || '#2563eb' }}
+                          data-testid={`swatch-header-expired-${client.id}`}
+                        />
                       </CardTitle>
                       <CardDescription>
                         {client.companyId} • {client.email}
@@ -938,6 +987,18 @@ export default function ClientManagement() {
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete Client
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsBrandingDialogOpen(true);
+                      }}
+                      data-testid={`button-brand-colour-expired-${client.id}`}
+                    >
+                      <Palette className="h-4 w-4 mr-2" />
+                      Brand Colour
                     </Button>
                   </div>
                 </CardContent>
