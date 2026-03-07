@@ -2,7 +2,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
 import { users, breaks, checkIns, sites, companies, JOB_SHARE_ROLES } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
@@ -413,6 +413,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting company:", error);
       res.status(400).json({ message: error.message || "Failed to delete company" });
+    }
+  });
+
+  // Merge two companies: moves all data from sourceId into targetId, then deletes sourceId
+  app.post('/api/companies/:sourceId/merge-into/:targetId', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    const { sourceId, targetId } = req.params;
+    if (sourceId === targetId) {
+      return res.status(400).json({ message: "Cannot merge a company into itself" });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. users
+      await client.query(`UPDATE users SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 2. user_logins
+      await client.query(`UPDATE user_logins SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 3. sites
+      await client.query(`UPDATE sites SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 4. invitations
+      await client.query(`UPDATE invitations SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 5. support_messages
+      await client.query(`UPDATE support_messages SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 6. company_memberships — unique on (user_id, company_id), so delete conflicts first
+      await client.query(`
+        DELETE FROM company_memberships
+        WHERE company_id = $1
+          AND user_id IN (SELECT user_id FROM company_memberships WHERE company_id = $2)
+      `, [sourceId, targetId]);
+      await client.query(`UPDATE company_memberships SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 7. subscription_payments
+      await client.query(`UPDATE subscription_payments SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 8. invoices
+      await client.query(`UPDATE invoices SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 9. staff_invoices
+      await client.query(`UPDATE staff_invoices SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 10. error_logs
+      await client.query(`UPDATE error_logs SET company_id = $1 WHERE company_id = $2`, [targetId, sourceId]);
+
+      // 11. company_settings — unique on company_id; delete source's settings (target's are kept)
+      await client.query(`DELETE FROM company_settings WHERE company_id = $1`, [sourceId]);
+
+      // 12. company_partnerships
+      await client.query(`UPDATE company_partnerships SET from_company_id = $1 WHERE from_company_id = $2`, [targetId, sourceId]);
+      await client.query(`UPDATE company_partnerships SET to_company_id = $1 WHERE to_company_id = $2`, [targetId, sourceId]);
+
+      // 13. job_shares
+      await client.query(`UPDATE job_shares SET from_company_id = $1 WHERE from_company_id = $2`, [targetId, sourceId]);
+      await client.query(`UPDATE job_shares SET to_company_id = $1 WHERE to_company_id = $2`, [targetId, sourceId]);
+
+      // 14. job_share_messages
+      await client.query(`UPDATE job_share_messages SET sender_company_id = $1 WHERE sender_company_id = $2`, [targetId, sourceId]);
+
+      // 15. Delete the source company (all remaining cascade-delete children will clean up)
+      await client.query(`DELETE FROM companies WHERE id = $1`, [sourceId]);
+
+      await client.query('COMMIT');
+
+      const targetCompany = await storage.getCompany(targetId);
+      console.log(`[Merge] Company ${sourceId} merged into ${targetId} (${targetCompany?.name})`);
+      res.json({ success: true, message: `Companies merged successfully`, targetCompany });
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error("Error merging companies:", error);
+      res.status(500).json({ message: error.message || "Failed to merge companies" });
+    } finally {
+      client.release();
     }
   });
 

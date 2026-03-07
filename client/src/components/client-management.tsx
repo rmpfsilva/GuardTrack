@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle, Shield, Check, X } from "lucide-react";
+import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle, Shield, Check, X, GitMerge } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Company } from "@shared/schema";
 import {
@@ -89,6 +89,8 @@ export default function ClientManagement() {
   // Plan assignment state
   const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState<string>("");
 
   const { data: clients = [], isLoading } = useQuery<ClientWithStatus[]>({
     queryKey: ["/api/super-admin/clients"],
@@ -192,6 +194,30 @@ export default function ClientManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete client",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const mergeCompanyMutation = useMutation({
+    mutationFn: async ({ sourceId, targetId }: { sourceId: string; targetId: string }) => {
+      return await apiRequest("POST", `/api/companies/${sourceId}/merge-into/${targetId}`);
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      setIsMergeDialogOpen(false);
+      setSelectedClient(null);
+      setMergeTargetId("");
+      toast({
+        title: "Companies merged",
+        description: `All data has been moved to the target company. The duplicate has been removed.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Merge failed",
+        description: error.message || "Failed to merge companies",
         variant: "destructive",
       });
     },
@@ -527,6 +553,19 @@ export default function ClientManagement() {
                       size="sm"
                       onClick={() => {
                         setSelectedClient(client);
+                        setMergeTargetId("");
+                        setIsMergeDialogOpen(true);
+                      }}
+                      data-testid={`button-merge-${client.id}`}
+                    >
+                      <GitMerge className="h-4 w-4 mr-2" />
+                      Merge Into...
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
                         setIsMessageDialogOpen(true);
                       }}
                       data-testid={`button-message-${client.id}`}
@@ -675,6 +714,19 @@ export default function ClientManagement() {
                       size="sm"
                       onClick={() => {
                         setSelectedClient(client);
+                        setMergeTargetId("");
+                        setIsMergeDialogOpen(true);
+                      }}
+                      data-testid={`button-merge-${client.id}`}
+                    >
+                      <GitMerge className="h-4 w-4 mr-2" />
+                      Merge Into...
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
                         setIsMessageDialogOpen(true);
                       }}
                       data-testid={`button-message-${client.id}`}
@@ -759,6 +811,19 @@ export default function ClientManagement() {
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete Client
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setMergeTargetId("");
+                        setIsMergeDialogOpen(true);
+                      }}
+                      data-testid={`button-merge-${client.id}`}
+                    >
+                      <GitMerge className="h-4 w-4 mr-2" />
+                      Merge Into...
                     </Button>
                     <Button
                       variant="outline"
@@ -1560,6 +1625,74 @@ export default function ClientManagement() {
               data-testid="button-close-permissions"
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge Companies Dialog */}
+      <Dialog open={isMergeDialogOpen} onOpenChange={(open) => {
+        setIsMergeDialogOpen(open);
+        if (!open) { setMergeTargetId(""); setSelectedClient(null); }
+      }}>
+        <DialogContent data-testid="dialog-merge-company">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitMerge className="h-5 w-5 text-primary" />
+              Merge Company
+            </DialogTitle>
+            <DialogDescription>
+              Move all data from <strong>{selectedClient?.name}</strong> into another company, then permanently delete this duplicate.
+              This cannot be undone. Users, sites, shifts, invoices, and all other data will be transferred.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="merge-target">Merge into (keep this company)</Label>
+              <Select value={mergeTargetId} onValueChange={setMergeTargetId}>
+                <SelectTrigger id="merge-target" data-testid="select-merge-target">
+                  <SelectValue placeholder="Select the company to keep..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients
+                    .filter(c => c.id !== selectedClient?.id)
+                    .map(c => (
+                      <SelectItem key={c.id} value={c.id} data-testid={`merge-option-${c.id}`}>
+                        {c.name} ({c.companyId})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {mergeTargetId && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-300 space-y-1">
+                <p className="font-semibold">What will happen:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-xs">
+                  <li>All users, sites, shifts, and data from <strong>{selectedClient?.name}</strong> will move to <strong>{clients.find(c => c.id === mergeTargetId)?.name}</strong></li>
+                  <li><strong>{selectedClient?.name}</strong> will be permanently deleted</li>
+                  <li>Users who belong to both companies will be deduplicated automatically</li>
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setIsMergeDialogOpen(false)} data-testid="button-cancel-merge">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!mergeTargetId || mergeCompanyMutation.isPending}
+              onClick={() => {
+                if (selectedClient && mergeTargetId) {
+                  mergeCompanyMutation.mutate({ sourceId: selectedClient.id, targetId: mergeTargetId });
+                }
+              }}
+              data-testid="button-confirm-merge"
+            >
+              {mergeCompanyMutation.isPending ? "Merging..." : "Confirm Merge"}
             </Button>
           </DialogFooter>
         </DialogContent>
