@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle, Shield, Check, X, GitMerge } from "lucide-react";
+import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle, Shield, Check, X, GitMerge, Palette } from "lucide-react";
+import { BrandingSettings } from "@/components/branding-settings";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Company } from "@shared/schema";
 import {
@@ -91,6 +92,7 @@ export default function ClientManagement() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
+  const [isBrandingDialogOpen, setIsBrandingDialogOpen] = useState(false);
 
   const { data: clients = [], isLoading } = useQuery<ClientWithStatus[]>({
     queryKey: ["/api/super-admin/clients"],
@@ -597,6 +599,18 @@ export default function ClientManagement() {
                     >
                       <Crown className="h-4 w-4 mr-2" />
                       Assign Plan
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setIsBrandingDialogOpen(true);
+                      }}
+                      data-testid={`button-brand-colour-${client.id}`}
+                    >
+                      <Palette className="h-4 w-4 mr-2" />
+                      Brand Colour
                     </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
@@ -1627,6 +1641,32 @@ export default function ClientManagement() {
               Close
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Brand Colour Dialog */}
+      <Dialog open={isBrandingDialogOpen} onOpenChange={(open) => {
+        setIsBrandingDialogOpen(open);
+        if (!open) setSelectedClient(null);
+      }}>
+        <DialogContent className="max-w-lg" data-testid="dialog-brand-colour">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Palette className="h-5 w-5 text-primary" />
+              Brand Colour
+            </DialogTitle>
+            <DialogDescription>
+              Set a brand colour for <strong>{selectedClient?.name}</strong>. This themes their GuardTrack dashboard.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedClient && (
+            <BrandingSettings
+              companyId={selectedClient.id}
+              companyName={selectedClient.name}
+              currentColour={(selectedClient as any).brandColor ?? null}
+              isSuperAdmin={true}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import InvoiceSettings from "@/components/invoice-settings";
 import CompanySupportMessages from "@/components/company-support-messages";
 import GuardAppTabSettings from "@/components/guard-app-tab-settings";
+import { BrandingSettings } from "@/components/branding-settings";
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -337,6 +338,16 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Brand Colour — admins can set their own company colour */}
+            {company && (user?.role === 'admin' || user?.role === 'super_admin') && (
+              <BrandingSettings
+                companyId={company.id}
+                companyName={company.name}
+                currentColour={company.brandColor}
+                isSuperAdmin={user?.role === 'super_admin'}
+              />
             )}
 
             {/* Profile Update Section */}

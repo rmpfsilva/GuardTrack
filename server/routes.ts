@@ -405,6 +405,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Brand colour: company admin sets their own company colour ─────────────
+  app.patch('/api/admin/companies/:id/branding', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { brand_colour } = req.body as { brand_colour: string };
+
+      if (!brand_colour || !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(brand_colour)) {
+        return res.status(400).json({ error: "Invalid hex colour" });
+      }
+
+      const adminUser = req.user as any;
+      // Super admins can edit any company; regular admins only their own
+      if (adminUser.role !== 'super_admin' && adminUser.companyId !== id) {
+        return res.status(403).json({ error: "Forbidden: can only update your own company" });
+      }
+
+      const company = await storage.updateCompany(id, { brandColor: brand_colour } as any);
+      res.json({ success: true, company });
+    } catch (error: any) {
+      console.error("Error updating brand colour:", error);
+      res.status(500).json({ error: error.message || "Failed to update brand colour" });
+    }
+  });
+
+  // ── AI brand colour analysis: super admin only ────────────────────────────
+  app.post('/api/admin/companies/:id/branding/analyse', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    const { website_url } = req.body as { website_url: string };
+    if (!website_url) return res.status(400).json({ error: "website_url is required" });
+
+    let url: string;
+    try {
+      const parsed = new URL(website_url.startsWith("http") ? website_url : `https://${website_url}`);
+      url = parsed.toString();
+    } catch {
+      return res.status(400).json({ error: "Invalid URL" });
+    }
+
+    try {
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+      // Fetch the website
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      let html = "";
+      try {
+        const fetchRes = await fetch(url, {
+          signal: controller.signal,
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; GuardTrack-BrandBot/1.0)", Accept: "text/html" },
+        });
+        if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status}`);
+        html = await fetchRes.text();
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      // Extract colours
+      const hexColours = [...html.matchAll(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g)].map(m => m[0]);
+      const rgbColours = [...html.matchAll(/rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/g)].map(m => m[0]);
+      const all = [...new Set([...hexColours, ...rgbColours])].filter(c => {
+        if (!c.startsWith('#')) return true;
+        const hex = c.replace('#', '');
+        const full = hex.length === 3 ? hex.split('').map((x: string) => x+x).join('') : hex;
+        const r = parseInt(full.slice(0,2), 16), g = parseInt(full.slice(2,4), 16), b = parseInt(full.slice(4,6), 16);
+        return !(Math.abs(r-g)<20 && Math.abs(g-b)<20) && !(r<30&&g<30&&b<30) && !(r>225&&g>225&&b>225);
+      }).slice(0, 40);
+
+      const themeMatch = html.match(/<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)["']/i);
+      const themeColor = themeMatch ? themeMatch[1].trim() : null;
+      const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+      const ogImageUrl = ogMatch ? ogMatch[1].trim() : null;
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      const siteTitle = titleMatch ? titleMatch[1].trim() : null;
+      const cssBlocks = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(m => m[1]);
+      const rawCssSnippet = cssBlocks.join('\n').slice(0, 3000);
+
+      // Fetch og:image for Claude Vision
+      let imageContent: any = null;
+      if (ogImageUrl) {
+        try {
+          const imgRes = await fetch(ogImageUrl, { signal: AbortSignal.timeout(8000) });
+          if (imgRes.ok) {
+            const ct = imgRes.headers.get("content-type") ?? "image/jpeg";
+            const mt = ct.split(";")[0].trim();
+            if (["image/jpeg","image/png","image/gif","image/webp"].includes(mt)) {
+              const buf = await imgRes.arrayBuffer();
+              imageContent = { type: "image", source: { type: "base64", media_type: mt, data: Buffer.from(buf).toString("base64") } };
+            }
+          }
+        } catch { /* silently skip image */ }
+      }
+
+      const userContent: any[] = [];
+      if (imageContent) userContent.push(imageContent);
+      userContent.push({
+        type: "text",
+        text: `Analyse brand colours for: ${url}\nSite: ${siteTitle ?? "Unknown"}\n${themeColor ? `Theme-color: ${themeColor}\n` : ""}Colours from CSS: ${all.length > 0 ? all.join(", ") : "None"}\nCSS snippet:\n${rawCssSnippet || "N/A"}\n${imageContent ? "og:image included above." : ""}\n\nReturn ONLY valid JSON — no markdown.`,
+      });
+
+      const claudeRes = await anthropic.messages.create({
+        model: "claude-opus-4-5",
+        max_tokens: 1000,
+        system: `You are a brand colour analyst for GuardTrack (B2B security SaaS). Recommend a single primary brand colour for use as a UI theme in a dark-sidebar enterprise dashboard. It must: be clearly the primary brand colour, work on white and dark backgrounds, have HSL lightness < 70%, not be grey/black/white, feel professional for security industry. Respond ONLY with valid JSON:\n{"recommended":{"hex":"#xxxxxx","name":"...","reason":"..."},"palette":[{"hex":"#xxxxxx","name":"...","usage":"..."}],"brandNotes":"..."}`,
+        messages: [{ role: "user", content: userContent }],
+      });
+
+      const rawText = claudeRes.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
+      const clean = rawText.replace(/```json|```/g, "").trim();
+      const result = JSON.parse(clean);
+
+      return res.json({ success: true, url, siteTitle, ...result });
+    } catch (err: any) {
+      console.error("[branding/analyse]", err);
+      if (err.name === "AbortError") return res.status(408).json({ error: "Website took too long to respond. Try entering a colour manually." });
+      if (err instanceof SyntaxError) return res.status(500).json({ error: "AI response could not be parsed. Please try again." });
+      return res.status(500).json({ error: err.message ?? "Analysis failed" });
+    }
+  });
+
   app.delete('/api/companies/:id', isAuthenticated, isSuperAdmin, async (req, res) => {
     try {
       const { id } = req.params;
