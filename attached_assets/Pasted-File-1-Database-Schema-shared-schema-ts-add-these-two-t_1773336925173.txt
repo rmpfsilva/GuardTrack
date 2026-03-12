@@ -1,0 +1,314 @@
+File 1 — Database Schema
+shared/schema.ts — add these two tables:
+
+import { pgTable, serial, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+export const issues = pgTable("issues", {
+  id: serial("id").primaryKey(),
+  issueId: text("issue_id").notNull().unique(),
+  dateLogged: timestamp("date_logged").defaultNow(),
+  title: text("title").notNull(),
+  description: text("description"),
+  reportedBy: text("reported_by"),
+  assignedTo: text("assigned_to"),
+  priority: text("priority").default("Medium"),        // Low, Medium, High
+  category: text("category"),
+  severity: text("severity").default("Moderate"),      // Low, Moderate, Severe, Critical
+  department: text("department").default("Management"),
+  status: text("status").default("Open"),              // Open, In progress, Resolved, Closed, Reopened
+  dueDate: timestamp("due_date"),
+  resolutionDate: timestamp("resolution_date"),
+  rootCause: text("root_cause"),
+  comments: text("comments"),
+  siteName: text("site_name"),
+  remedialAction: text("remedial_action"),
+  proposedAction: text("proposed_action"),
+  reportContent: text("report_content"),               // AI-generated NCR
+  reportGeneratedAt: timestamp("report_generated_at"),
+  isArchived: boolean("is_archived").default(false),
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertIssueSchema = createInsertSchema(issues).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertIssue = z.infer<typeof insertIssueSchema>;
+export type Issue = typeof issues.$inferSelect;
+export const issueSettings = pgTable("issue_settings", {
+  id: serial("id").primaryKey(),
+  settingType: text("setting_type").notNull(), // 'department', 'responsible', 'category', 'status', 'severity', 'priority'
+  value: text("value").notNull(),
+  isActive: boolean("is_active").default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertIssueSettingSchema = createInsertSchema(issueSettings).omit({ id: true, createdAt: true });
+export type InsertIssueSetting = z.infer<typeof insertIssueSettingSchema>;
+export type IssueSetting = typeof issueSettings.$inferSelect;
+File 2 — Storage Methods
+server/storage.ts — add these methods to your storage class:
+
+// Issues
+async getAllIssues(includeArchived: boolean = false): Promise<Issue[]> {
+  if (includeArchived) {
+    return db.select().from(issues).orderBy(desc(issues.dateLogged));
+  }
+  return db.select().from(issues)
+    .where(or(eq(issues.isArchived, false), isNull(issues.isArchived)))
+    .orderBy(desc(issues.dateLogged));
+}
+async getArchivedIssues(): Promise<Issue[]> {
+  return db.select().from(issues)
+    .where(eq(issues.isArchived, true))
+    .orderBy(desc(issues.archivedAt));
+}
+async archiveIssue(id: number): Promise<Issue | undefined> {
+  const result = await db.update(issues)
+    .set({ isArchived: true, archivedAt: new Date(), updatedAt: new Date() })
+    .where(eq(issues.id, id)).returning();
+  return result[0];
+}
+async unarchiveIssue(id: number): Promise<Issue | undefined> {
+  const result = await db.update(issues)
+    .set({ isArchived: false, archivedAt: null, updatedAt: new Date() })
+    .where(eq(issues.id, id)).returning();
+  return result[0];
+}
+async getIssueById(id: number): Promise<Issue | undefined> {
+  const result = await db.select().from(issues).where(eq(issues.id, id));
+  return result[0];
+}
+async createIssue(issue: InsertIssue): Promise<Issue> {
+  let issueId = issue.issueId;
+  if (!issueId) {
+    const all = await db.select({ issueId: issues.issueId }).from(issues);
+    let max = 0;
+    for (const i of all) {
+      const m = i.issueId?.match(/^I-(\d+)$/);
+      if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+    }
+    issueId = `I-${String(max + 1).padStart(3, '0')}`;
+  }
+  const result = await db.insert(issues).values({
+    ...issue,
+    issueId,
+    dateLogged: issue.dateLogged ? new Date(issue.dateLogged) : new Date(),
+    dueDate: issue.dueDate ? new Date(issue.dueDate) : null,
+    resolutionDate: issue.resolutionDate ? new Date(issue.resolutionDate) : null,
+    reportGeneratedAt: issue.reportGeneratedAt ? new Date(issue.reportGeneratedAt) : null,
+  }).returning();
+  return result[0];
+}
+async updateIssue(id: number, issue: Partial<InsertIssue>): Promise<Issue | undefined> {
+  const p: any = { ...issue, updatedAt: new Date() };
+  if (issue.dateLogged) p.dateLogged = new Date(issue.dateLogged);
+  if (issue.dueDate) p.dueDate = new Date(issue.dueDate);
+  if (issue.resolutionDate) p.resolutionDate = new Date(issue.resolutionDate);
+  if (issue.reportGeneratedAt) p.reportGeneratedAt = new Date(issue.reportGeneratedAt);
+  const result = await db.update(issues).set(p).where(eq(issues.id, id)).returning();
+  return result[0];
+}
+async deleteIssue(id: number): Promise<void> {
+  await db.delete(issues).where(eq(issues.id, id));
+}
+async getIssueStats() {
+  const all = await this.getAllIssues();
+  const now = new Date();
+  const stats = {
+    total: all.length,
+    open: all.filter(i => i.status === 'Open').length,
+    inProgress: all.filter(i => i.status === 'In progress').length,
+    resolved: all.filter(i => i.status === 'Resolved' || i.status === 'Resloved').length,
+    closed: all.filter(i => i.status === 'Closed').length,
+    overdue: all.filter(i => i.dueDate && new Date(i.dueDate) < now && i.status !== 'Closed' && i.status !== 'Resolved').length,
+    byPriority: {} as Record<string, number>,
+    byCategory: {} as Record<string, number>,
+    bySeverity: {} as Record<string, number>,
+    byDepartment: {} as Record<string, number>,
+    byAssignee: {} as Record<string, number>,
+  };
+  all.forEach(i => {
+    if (i.priority)    stats.byPriority[i.priority]       = (stats.byPriority[i.priority]       || 0) + 1;
+    if (i.category)    stats.byCategory[i.category]       = (stats.byCategory[i.category]       || 0) + 1;
+    if (i.severity)    stats.bySeverity[i.severity]       = (stats.bySeverity[i.severity]       || 0) + 1;
+    if (i.department)  stats.byDepartment[i.department]   = (stats.byDepartment[i.department]   || 0) + 1;
+    if (i.assignedTo)  stats.byAssignee[i.assignedTo]     = (stats.byAssignee[i.assignedTo]     || 0) + 1;
+  });
+  return stats;
+}
+// Issue Settings
+async getIssueSettings(type?: string): Promise<IssueSetting[]> {
+  if (type) return db.select().from(issueSettings).where(eq(issueSettings.settingType, type)).orderBy(asc(issueSettings.sortOrder));
+  return db.select().from(issueSettings).orderBy(asc(issueSettings.sortOrder));
+}
+async createIssueSetting(setting: InsertIssueSetting): Promise<IssueSetting> {
+  const result = await db.insert(issueSettings).values(setting).returning();
+  return result[0];
+}
+async deleteIssueSetting(id: number): Promise<void> {
+  await db.delete(issueSettings).where(eq(issueSettings.id, id));
+}
+async initDefaultIssueSettings(): Promise<void> {
+  const existing = await this.getIssueSettings();
+  if (existing.length > 0) return;
+  const defaults = [
+    { settingType: 'department', value: 'Management',      sortOrder: 1 },
+    { settingType: 'department', value: 'Office Manager',  sortOrder: 2 },
+    { settingType: 'department', value: 'Health & Safety', sortOrder: 3 },
+    { settingType: 'category',   value: 'Customer Complaint', sortOrder: 1 },
+    { settingType: 'category',   value: 'Staff Complaint', sortOrder: 2 },
+    { settingType: 'category',   value: 'Compliance',      sortOrder: 3 },
+    { settingType: 'status',     value: 'Open',            sortOrder: 1 },
+    { settingType: 'status',     value: 'In progress',     sortOrder: 2 },
+    { settingType: 'status',     value: 'Resolved',        sortOrder: 3 },
+    { settingType: 'status',     value: 'Closed',          sortOrder: 4 },
+    { settingType: 'status',     value: 'Reopened',        sortOrder: 5 },
+    { settingType: 'severity',   value: 'Low',             sortOrder: 1 },
+    { settingType: 'severity',   value: 'Moderate',        sortOrder: 2 },
+    { settingType: 'severity',   value: 'Severe',          sortOrder: 3 },
+    { settingType: 'severity',   value: 'Critical',        sortOrder: 4 },
+    { settingType: 'priority',   value: 'Low',             sortOrder: 1 },
+    { settingType: 'priority',   value: 'Medium',          sortOrder: 2 },
+    { settingType: 'priority',   value: 'High',            sortOrder: 3 },
+  ];
+  for (const s of defaults) await this.createIssueSetting(s);
+}
+File 3 — API Routes
+server/routes.ts — add these routes inside your registerRoutes function:
+
+// ── Issue Tracker ──────────────────────────────────────────────────────────
+app.get("/api/issues", async (req, res) => {
+  try { res.json(await storage.getAllIssues()); }
+  catch (e) { res.status(500).json({ error: "Failed to fetch issues" }); }
+});
+app.get("/api/issues/stats", async (req, res) => {
+  try { res.json(await storage.getIssueStats()); }
+  catch (e) { res.status(500).json({ error: "Failed to fetch stats" }); }
+});
+app.get("/api/issues/archived", async (req, res) => {
+  try { res.json(await storage.getArchivedIssues()); }
+  catch (e) { res.status(500).json({ error: "Failed to fetch archived issues" }); }
+});
+app.get("/api/issues/:id", async (req, res) => {
+  try {
+    const issue = await storage.getIssueById(parseInt(req.params.id));
+    issue ? res.json(issue) : res.status(404).json({ error: "Issue not found" });
+  } catch (e) { res.status(500).json({ error: "Failed to fetch issue" }); }
+});
+app.post("/api/issues", async (req, res) => {
+  try { res.status(201).json(await storage.createIssue(req.body)); }
+  catch (e) { res.status(500).json({ error: "Failed to create issue" }); }
+});
+app.patch("/api/issues/:id", async (req, res) => {
+  try {
+    const updated = await storage.updateIssue(parseInt(req.params.id), req.body);
+    updated ? res.json(updated) : res.status(404).json({ error: "Issue not found" });
+  } catch (e) { res.status(500).json({ error: "Failed to update issue" }); }
+});
+app.delete("/api/issues/:id", async (req, res) => {
+  try { await storage.deleteIssue(parseInt(req.params.id)); res.status(204).send(); }
+  catch (e) { res.status(500).json({ error: "Failed to delete issue" }); }
+});
+app.post("/api/issues/:id/archive", async (req, res) => {
+  try {
+    const issue = await storage.archiveIssue(parseInt(req.params.id));
+    issue ? res.json(issue) : res.status(404).json({ error: "Issue not found" });
+  } catch (e) { res.status(500).json({ error: "Failed to archive issue" }); }
+});
+app.post("/api/issues/:id/unarchive", async (req, res) => {
+  try {
+    const issue = await storage.unarchiveIssue(parseInt(req.params.id));
+    issue ? res.json(issue) : res.status(404).json({ error: "Issue not found" });
+  } catch (e) { res.status(500).json({ error: "Failed to unarchive issue" }); }
+});
+app.get("/api/issue-settings", async (req, res) => {
+  try { res.json(await storage.getIssueSettings(req.query.type as string | undefined)); }
+  catch (e) { res.status(500).json({ error: "Failed to fetch settings" }); }
+});
+app.post("/api/issue-settings", async (req, res) => {
+  try { res.status(201).json(await storage.createIssueSetting(req.body)); }
+  catch (e) { res.status(500).json({ error: "Failed to create setting" }); }
+});
+app.delete("/api/issue-settings/:id", async (req, res) => {
+  try { await storage.deleteIssueSetting(parseInt(req.params.id)); res.status(204).send(); }
+  catch (e) { res.status(500).json({ error: "Failed to delete setting" }); }
+});
+app.post("/api/issue-settings/init", async (req, res) => {
+  try { await storage.initDefaultIssueSettings(); res.json({ success: true }); }
+  catch (e) { res.status(500).json({ error: "Failed to init settings" }); }
+});
+// AI Non-Conformance Report generation
+app.post("/api/issues/:id/generate-report", async (req, res) => {
+  try {
+    const issue = await storage.getIssueById(parseInt(req.params.id));
+    if (!issue) return res.status(404).json({ error: "Issue not found" });
+    const { generateNonConformanceReport } = await import("./report-generator");
+    const reportContent = await generateNonConformanceReport(issue);
+    const updated = await storage.updateIssue(issue.id, { reportContent, reportGeneratedAt: new Date() });
+    res.json({ success: true, report: reportContent, issue: updated });
+  } catch (e: any) { res.status(500).json({ error: e.message || "Failed to generate report" }); }
+});
+// Public (unauthenticated) report view — for sharing with clients
+app.get("/api/public/issue-report/:issueId", async (req, res) => {
+  try {
+    const all = await storage.getAllIssues();
+    const issue = all.find(i => i.issueId === req.params.issueId);
+    if (!issue) return res.status(404).json({ error: "Issue not found" });
+    if (!issue.reportContent) return res.status(404).json({ error: "Report not yet generated" });
+    res.json({ issueId: issue.issueId, title: issue.title, siteName: issue.siteName,
+      dateLogged: issue.dateLogged, reportedBy: issue.reportedBy, status: issue.status,
+      reportContent: issue.reportContent, reportGeneratedAt: issue.reportGeneratedAt });
+  } catch (e) { res.status(500).json({ error: "Failed to fetch report" }); }
+});
+File 4 — AI Report Generator
+server/report-generator.ts — new file (requires OpenAI / Replit AI integration):
+
+import OpenAI from "openai";
+import type { Issue } from "@shared/schema";
+const openai = new OpenAI({
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+});
+export async function generateNonConformanceReport(issue: Issue): Promise<string> {
+  const dateLogged = issue.dateLogged ? new Date(issue.dateLogged).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+  const dueDate = issue.dueDate ? new Date(issue.dueDate).toLocaleDateString('en-GB') : 'TBD';
+  const response = await openai.chat.completions.create({
+    model: "gpt-5",
+    messages: [
+      { role: "system", content: "You are a professional security report writer. Generate formal, comprehensive Non-Conformance Reports suitable for client distribution." },
+      { role: "user", content: `Generate a professional Non-Conformance Report for:
+- Reference: ${issue.issueId}
+- Site: ${issue.siteName || 'Not specified'}
+- Title: ${issue.title}
+- Date: ${dateLogged}
+- Reported By: ${issue.reportedBy || 'Not specified'}
+- Assigned To: ${issue.assignedTo || 'Not specified'}
+- Category: ${issue.category || 'Not specified'}
+- Priority: ${issue.priority || 'Medium'}
+- Severity: ${issue.severity || 'Moderate'}
+- Department: ${issue.department || 'Management'}
+- Status: ${issue.status || 'Open'}
+- Due Date: ${dueDate}
+- Description: ${issue.description || 'No description provided'}
+- Root Cause: ${issue.rootCause || 'Under investigation'}
+- Remedial Action: ${issue.remedialAction || 'To be determined'}
+- Proposed Action: ${issue.proposedAction || 'To be determined'}
+- Comments: ${issue.comments || 'None'}
+Include sections: Introduction, Description, Remedial Action, Root Cause Analysis, Proposed Corrective Action, Verification, Executive Summary, Recommendations, Feedback & Acknowledgments, Conclusions, Corrective Action Close Out.` }
+    ],
+    max_completion_tokens: 4096,
+  });
+  return response.choices[0]?.message?.content || "Failed to generate report.";
+}
+File 5 — Main Component
+client/src/components/issue-tracker.tsx — the full 1,097-line component. This is too large to paste twice but you already have it above in full — it is the entire contents of that file from line 1 to 1097.
+
+File 6 — Public Report Page
+client/src/pages/issue-report.tsx — the shareable public report viewer (full file above, lines 1–139).
+
+File 7 — Router Registration
+In client/src/App.tsx, add:
+
+import IssueReportPage from "@/pages/issue-report";
+// inside your <Switch>:
+<Route path="/issue-report/:issueId" component={IssueReportPage} />

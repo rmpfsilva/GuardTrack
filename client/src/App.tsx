@@ -26,6 +26,7 @@ import SettingsPage from "@/pages/settings-page";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import InstallPage from "@/pages/install-page";
+import IssueReportPage from "@/pages/issue-report";
 
 function isStandalone(): boolean {
   if (isNativePlatform()) return true;
@@ -101,6 +102,7 @@ function Router() {
           <Route path="/register-trial" component={TrialRegistrationPage} />
           <Route path="/forgot-password" component={ForgotPasswordPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />
+          <Route path="/issue-report/:issueId" component={IssueReportPage} />
           <ProtectedRoute path="/settings" component={SettingsPage} />
           <Route path="/guard/app" component={GuardApp} />
           <ProtectedRoute path="/guard-dashboard" component={GuardApp} />

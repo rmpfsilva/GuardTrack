@@ -59,6 +59,7 @@ import { CompanyStripeSettings } from "@/components/stripe-connect-settings";
 import { XeroSettings } from "@/components/xero-connect-settings";
 import OperationsCommandCentre from "@/components/operations-command-centre";
 import { AppInstallSettings } from "@/components/app-install-settings";
+import { Incidents } from "@/components/incidents";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading, isAdmin, logoutMutation } = useAuth();
@@ -257,6 +258,8 @@ export default function AdminDashboard() {
     switch (activeTab) {
       case 'overview':
         return <OperationsCommandCentre onNavigate={handleTabChange} />;
+      case 'incidents':
+        return <Incidents />;
       case 'billing':
         return (
           <div className="space-y-6">
@@ -516,7 +519,7 @@ export default function AdminDashboard() {
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {hasTabAccess('overview') && renderSidebarItem('overview', 'Overview', LayoutDashboard)}
+                      {hasTabAccess('overview') && renderSidebarItem('overview', 'Dashboard', LayoutDashboard)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
@@ -548,6 +551,7 @@ export default function AdminDashboard() {
                       {hasTabAccess('approvals') && renderSidebarItem('approvals', 'Approvals', CheckSquare)}
                       {hasTabAccess('manual') && renderSidebarItem('manual', 'Manual', ClipboardEdit)}
                       {hasTabAccess('notices') && renderSidebarItem('notices', 'Notices', Megaphone)}
+                      {renderSidebarItem('incidents', 'Incidents', AlertTriangle)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>

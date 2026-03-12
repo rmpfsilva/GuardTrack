@@ -111,9 +111,15 @@ import {
   type CompanyMembership,
   type InsertCompanyMembership,
   type CompanyMembershipWithCompany,
+  issues,
+  issueSettings,
+  type Issue,
+  type InsertIssue,
+  type IssueSetting,
+  type InsertIssueSetting,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, lt, between, inArray, isNull, or } from "drizzle-orm";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { Pool } from "@neondatabase/serverless";
@@ -382,6 +388,21 @@ export interface IStorage {
   updateGuardAppTab(id: string, updates: UpdateGuardAppTab): Promise<GuardAppTab>;
   deleteGuardAppTab(id: string): Promise<void>;
   initializeDefaultTabs(): Promise<GuardAppTab[]>;
+
+  // Issue tracker operations
+  getAllIssues(companyId: string, includeArchived?: boolean): Promise<Issue[]>;
+  getArchivedIssues(companyId: string): Promise<Issue[]>;
+  getIssueById(id: number, companyId: string): Promise<Issue | undefined>;
+  createIssue(issue: InsertIssue): Promise<Issue>;
+  updateIssue(id: number, companyId: string, updates: Partial<InsertIssue>): Promise<Issue | undefined>;
+  deleteIssue(id: number, companyId: string): Promise<void>;
+  archiveIssue(id: number, companyId: string): Promise<Issue | undefined>;
+  unarchiveIssue(id: number, companyId: string): Promise<Issue | undefined>;
+  getIssueStats(companyId: string): Promise<Record<string, any>>;
+  getIssueSettings(companyId: string, type?: string): Promise<IssueSetting[]>;
+  createIssueSetting(setting: InsertIssueSetting): Promise<IssueSetting>;
+  deleteIssueSetting(id: number, companyId: string): Promise<void>;
+  initDefaultIssueSettings(companyId: string): Promise<void>;
 }
 
 // Session pool for PostgreSQL session storage
@@ -4113,6 +4134,152 @@ export class DatabaseStorage implements IStorage {
       .where(eq(staffInvoices.companyId, companyId));
     const nextNum = (result?.count || 0) + 1;
     return `SI-${String(nextNum).padStart(5, '0')}`;
+  }
+
+  // ── Issue Tracker ─────────────────────────────────────────────────────────
+
+  async getAllIssues(companyId: string, includeArchived = false): Promise<Issue[]> {
+    if (includeArchived) {
+      return db.select().from(issues).where(eq(issues.companyId, companyId)).orderBy(desc(issues.dateLogged));
+    }
+    return db.select().from(issues)
+      .where(and(eq(issues.companyId, companyId), or(eq(issues.isArchived, false), isNull(issues.isArchived))))
+      .orderBy(desc(issues.dateLogged));
+  }
+
+  async getArchivedIssues(companyId: string): Promise<Issue[]> {
+    return db.select().from(issues)
+      .where(and(eq(issues.companyId, companyId), eq(issues.isArchived, true)))
+      .orderBy(desc(issues.archivedAt));
+  }
+
+  async getIssueById(id: number, companyId: string): Promise<Issue | undefined> {
+    const result = await db.select().from(issues)
+      .where(and(eq(issues.id, id), eq(issues.companyId, companyId)));
+    return result[0];
+  }
+
+  async createIssue(issue: InsertIssue): Promise<Issue> {
+    let issueId = issue.issueId;
+    if (!issueId) {
+      const all = await db.select({ issueId: issues.issueId }).from(issues).where(eq(issues.companyId, issue.companyId));
+      let max = 0;
+      for (const i of all) {
+        const m = i.issueId?.match(/^I-(\d+)$/);
+        if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+      }
+      issueId = `I-${String(max + 1).padStart(3, '0')}`;
+    }
+    const result = await db.insert(issues).values({
+      ...issue,
+      issueId,
+      dateLogged: issue.dateLogged ? new Date(issue.dateLogged as any) : new Date(),
+      dueDate: issue.dueDate ? new Date(issue.dueDate as any) : null,
+      resolutionDate: issue.resolutionDate ? new Date(issue.resolutionDate as any) : null,
+    }).returning();
+    return result[0];
+  }
+
+  async updateIssue(id: number, companyId: string, updates: Partial<InsertIssue>): Promise<Issue | undefined> {
+    const p: any = { ...updates, updatedAt: new Date() };
+    if (updates.dateLogged) p.dateLogged = new Date(updates.dateLogged as any);
+    if (updates.dueDate) p.dueDate = new Date(updates.dueDate as any);
+    if (updates.resolutionDate) p.resolutionDate = new Date(updates.resolutionDate as any);
+    const result = await db.update(issues).set(p)
+      .where(and(eq(issues.id, id), eq(issues.companyId, companyId))).returning();
+    return result[0];
+  }
+
+  async deleteIssue(id: number, companyId: string): Promise<void> {
+    await db.delete(issues).where(and(eq(issues.id, id), eq(issues.companyId, companyId)));
+  }
+
+  async archiveIssue(id: number, companyId: string): Promise<Issue | undefined> {
+    const result = await db.update(issues)
+      .set({ isArchived: true, archivedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(issues.id, id), eq(issues.companyId, companyId))).returning();
+    return result[0];
+  }
+
+  async unarchiveIssue(id: number, companyId: string): Promise<Issue | undefined> {
+    const result = await db.update(issues)
+      .set({ isArchived: false, archivedAt: null, updatedAt: new Date() })
+      .where(and(eq(issues.id, id), eq(issues.companyId, companyId))).returning();
+    return result[0];
+  }
+
+  async getIssueStats(companyId: string): Promise<Record<string, any>> {
+    const all = await this.getAllIssues(companyId);
+    const now = new Date();
+    const stats: Record<string, any> = {
+      total: all.length,
+      open: all.filter(i => i.status === 'Open').length,
+      inProgress: all.filter(i => i.status === 'In progress').length,
+      resolved: all.filter(i => i.status === 'Resolved').length,
+      closed: all.filter(i => i.status === 'Closed').length,
+      overdue: all.filter(i => i.dueDate && new Date(i.dueDate) < now && i.status !== 'Closed' && i.status !== 'Resolved').length,
+      byPriority: {} as Record<string, number>,
+      byCategory: {} as Record<string, number>,
+      bySeverity: {} as Record<string, number>,
+    };
+    all.forEach(i => {
+      if (i.priority) stats.byPriority[i.priority] = (stats.byPriority[i.priority] || 0) + 1;
+      if (i.category) stats.byCategory[i.category] = (stats.byCategory[i.category] || 0) + 1;
+      if (i.severity) stats.bySeverity[i.severity] = (stats.bySeverity[i.severity] || 0) + 1;
+    });
+    return stats;
+  }
+
+  async getIssueSettings(companyId: string, type?: string): Promise<IssueSetting[]> {
+    if (type) {
+      return db.select().from(issueSettings)
+        .where(and(eq(issueSettings.companyId, companyId), eq(issueSettings.settingType, type)))
+        .orderBy(asc(issueSettings.sortOrder));
+    }
+    return db.select().from(issueSettings)
+      .where(eq(issueSettings.companyId, companyId))
+      .orderBy(asc(issueSettings.sortOrder));
+  }
+
+  async createIssueSetting(setting: InsertIssueSetting): Promise<IssueSetting> {
+    const result = await db.insert(issueSettings).values(setting).returning();
+    return result[0];
+  }
+
+  async deleteIssueSetting(id: number, companyId: string): Promise<void> {
+    await db.delete(issueSettings).where(and(eq(issueSettings.id, id), eq(issueSettings.companyId, companyId)));
+  }
+
+  async initDefaultIssueSettings(companyId: string): Promise<void> {
+    const existing = await this.getIssueSettings(companyId);
+    if (existing.length > 0) return;
+    const defaults = [
+      { settingType: 'department', value: 'Management',         sortOrder: 1 },
+      { settingType: 'department', value: 'Office Manager',     sortOrder: 2 },
+      { settingType: 'department', value: 'Health & Safety',    sortOrder: 3 },
+      { settingType: 'department', value: 'Operations',         sortOrder: 4 },
+      { settingType: 'category',   value: 'Customer Complaint', sortOrder: 1 },
+      { settingType: 'category',   value: 'Staff Complaint',    sortOrder: 2 },
+      { settingType: 'category',   value: 'Compliance',         sortOrder: 3 },
+      { settingType: 'category',   value: 'Security Breach',    sortOrder: 4 },
+      { settingType: 'category',   value: 'Near Miss',          sortOrder: 5 },
+      { settingType: 'category',   value: 'Theft',              sortOrder: 6 },
+      { settingType: 'category',   value: 'Trespass',           sortOrder: 7 },
+      { settingType: 'category',   value: 'Health & Safety',    sortOrder: 8 },
+      { settingType: 'status',     value: 'Open',               sortOrder: 1 },
+      { settingType: 'status',     value: 'In progress',        sortOrder: 2 },
+      { settingType: 'status',     value: 'Resolved',           sortOrder: 3 },
+      { settingType: 'status',     value: 'Closed',             sortOrder: 4 },
+      { settingType: 'status',     value: 'Reopened',           sortOrder: 5 },
+      { settingType: 'severity',   value: 'Low',                sortOrder: 1 },
+      { settingType: 'severity',   value: 'Moderate',           sortOrder: 2 },
+      { settingType: 'severity',   value: 'Severe',             sortOrder: 3 },
+      { settingType: 'severity',   value: 'Critical',           sortOrder: 4 },
+      { settingType: 'priority',   value: 'Low',                sortOrder: 1 },
+      { settingType: 'priority',   value: 'Medium',             sortOrder: 2 },
+      { settingType: 'priority',   value: 'High',               sortOrder: 3 },
+    ];
+    for (const s of defaults) await this.createIssueSetting({ ...s, companyId });
   }
 }
 

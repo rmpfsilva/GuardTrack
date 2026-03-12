@@ -14,6 +14,7 @@ import {
   boolean,
   numeric,
   integer,
+  serial,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1482,3 +1483,51 @@ export type InvoicableShift = {
   amount: string;
   jobTitle: string;
 };
+
+// ── Incidents / Issue Tracker ──────────────────────────────────────────────
+export const issues = pgTable("issues", {
+  id: serial("id").primaryKey(),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  issueId: text("issue_id").notNull(),
+  dateLogged: timestamp("date_logged").defaultNow(),
+  title: text("title").notNull(),
+  description: text("description"),
+  reportedBy: text("reported_by"),
+  assignedTo: text("assigned_to"),
+  priority: text("priority").default("Medium"),
+  category: text("category"),
+  severity: text("severity").default("Moderate"),
+  department: text("department").default("Management"),
+  status: text("status").default("Open"),
+  dueDate: timestamp("due_date"),
+  resolutionDate: timestamp("resolution_date"),
+  rootCause: text("root_cause"),
+  comments: text("comments"),
+  siteName: text("site_name"),
+  remedialAction: text("remedial_action"),
+  proposedAction: text("proposed_action"),
+  reportContent: text("report_content"),
+  reportGeneratedAt: timestamp("report_generated_at"),
+  isArchived: boolean("is_archived").default(false),
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertIssueSchema = createInsertSchema(issues).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertIssue = z.infer<typeof insertIssueSchema>;
+export type Issue = typeof issues.$inferSelect;
+
+export const issueSettings = pgTable("issue_settings", {
+  id: serial("id").primaryKey(),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  settingType: text("setting_type").notNull(),
+  value: text("value").notNull(),
+  isActive: boolean("is_active").default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertIssueSettingSchema = createInsertSchema(issueSettings).omit({ id: true, createdAt: true });
+export type InsertIssueSetting = z.infer<typeof insertIssueSettingSchema>;
+export type IssueSetting = typeof issueSettings.$inferSelect;

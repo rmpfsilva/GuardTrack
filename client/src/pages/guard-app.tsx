@@ -1187,7 +1187,14 @@ export default function GuardApp() {
       case 'schedule':
         return (
           <div>
-            <h2 className="text-xl font-bold mb-4">My Schedule</h2>
+            <div className="mb-4">
+              <h2 className="text-xl font-bold">My Schedule</h2>
+              {(user as any)?.isMultiCompany && (
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Across {(user as any)?.memberships?.length || 0} Companies
+                </p>
+              )}
+            </div>
             <MySchedule />
           </div>
         );

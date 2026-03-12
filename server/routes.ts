@@ -6068,6 +6068,110 @@ GuardTrack Team`;
     });
   });
 
+  // ── Issue Tracker ──────────────────────────────────────────────────────────
+  app.get("/api/issues", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      await storage.initDefaultIssueSettings(companyId);
+      res.json(await storage.getAllIssues(companyId));
+    } catch (e) { res.status(500).json({ error: "Failed to fetch issues" }); }
+  });
+
+  app.get("/api/issues/stats", isAuthenticated, isAdmin, async (req: any, res) => {
+    try { res.json(await storage.getIssueStats(req.user.companyId)); }
+    catch (e) { res.status(500).json({ error: "Failed to fetch stats" }); }
+  });
+
+  app.get("/api/issues/archived", isAuthenticated, isAdmin, async (req: any, res) => {
+    try { res.json(await storage.getArchivedIssues(req.user.companyId)); }
+    catch (e) { res.status(500).json({ error: "Failed to fetch archived issues" }); }
+  });
+
+  app.get("/api/issues/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const issue = await storage.getIssueById(parseInt(req.params.id), req.user.companyId);
+      issue ? res.json(issue) : res.status(404).json({ error: "Issue not found" });
+    } catch (e) { res.status(500).json({ error: "Failed to fetch issue" }); }
+  });
+
+  app.post("/api/issues", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const issue = await storage.createIssue({ ...req.body, companyId: req.user.companyId });
+      res.status(201).json(issue);
+    } catch (e) { res.status(500).json({ error: "Failed to create issue" }); }
+  });
+
+  app.patch("/api/issues/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const updated = await storage.updateIssue(parseInt(req.params.id), req.user.companyId, req.body);
+      updated ? res.json(updated) : res.status(404).json({ error: "Issue not found" });
+    } catch (e) { res.status(500).json({ error: "Failed to update issue" }); }
+  });
+
+  app.delete("/api/issues/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try { await storage.deleteIssue(parseInt(req.params.id), req.user.companyId); res.status(204).send(); }
+    catch (e) { res.status(500).json({ error: "Failed to delete issue" }); }
+  });
+
+  app.post("/api/issues/:id/archive", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const issue = await storage.archiveIssue(parseInt(req.params.id), req.user.companyId);
+      issue ? res.json(issue) : res.status(404).json({ error: "Issue not found" });
+    } catch (e) { res.status(500).json({ error: "Failed to archive issue" }); }
+  });
+
+  app.post("/api/issues/:id/unarchive", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const issue = await storage.unarchiveIssue(parseInt(req.params.id), req.user.companyId);
+      issue ? res.json(issue) : res.status(404).json({ error: "Issue not found" });
+    } catch (e) { res.status(500).json({ error: "Failed to unarchive issue" }); }
+  });
+
+  app.get("/api/issue-settings", isAuthenticated, isAdmin, async (req: any, res) => {
+    try { res.json(await storage.getIssueSettings(req.user.companyId, req.query.type as string | undefined)); }
+    catch (e) { res.status(500).json({ error: "Failed to fetch settings" }); }
+  });
+
+  app.post("/api/issue-settings", isAuthenticated, isAdmin, async (req: any, res) => {
+    try { res.status(201).json(await storage.createIssueSetting({ ...req.body, companyId: req.user.companyId })); }
+    catch (e) { res.status(500).json({ error: "Failed to create setting" }); }
+  });
+
+  app.delete("/api/issue-settings/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try { await storage.deleteIssueSetting(parseInt(req.params.id), req.user.companyId); res.status(204).send(); }
+    catch (e) { res.status(500).json({ error: "Failed to delete setting" }); }
+  });
+
+  app.post("/api/issues/:id/generate-report", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const issue = await storage.getIssueById(parseInt(req.params.id), req.user.companyId);
+      if (!issue) return res.status(404).json({ error: "Issue not found" });
+      const { generateNonConformanceReport } = await import("./report-generator");
+      const reportContent = await generateNonConformanceReport(issue);
+      const updated = await storage.updateIssue(issue.id, req.user.companyId, { reportContent, reportGeneratedAt: new Date() as any });
+      res.json({ success: true, report: reportContent, issue: updated });
+    } catch (e: any) { res.status(500).json({ error: e.message || "Failed to generate report" }); }
+  });
+
+  app.get("/api/public/issue-report/:issueId", async (req: any, res) => {
+    try {
+      const [issue] = await import("drizzle-orm").then(({ eq }) =>
+        import("./db").then(({ db }) =>
+          import("@shared/schema").then(({ issues }) =>
+            db.select().from(issues).where(eq(issues.issueId, req.params.issueId))
+          )
+        )
+      );
+      if (!issue) return res.status(404).json({ error: "Issue not found" });
+      if (!issue.reportContent) return res.status(404).json({ error: "Report not yet generated" });
+      res.json({
+        issueId: issue.issueId, title: issue.title, siteName: issue.siteName,
+        dateLogged: issue.dateLogged, reportedBy: issue.reportedBy, status: issue.status,
+        reportContent: issue.reportContent, reportGeneratedAt: issue.reportGeneratedAt,
+      });
+    } catch (e) { res.status(500).json({ error: "Failed to fetch report" }); }
+  });
+
   // Periodic trial expiration check (runs every hour)
   const expireTrialsInterval = setInterval(async () => {
     try {
