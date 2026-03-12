@@ -6156,6 +6156,46 @@ GuardTrack Team`;
     } catch (e: any) { res.status(500).json({ error: e.message || "Failed to generate report" }); }
   });
 
+  app.post("/api/issues/ai-fill", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { description } = req.body;
+      if (!description?.trim()) return res.status(400).json({ error: "Description required" });
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const settings = await storage.getIssueSettings(req.user.companyId);
+      const categories = settings.filter((s: any) => s.settingType === 'category').map((s: any) => s.value);
+      const departments = settings.filter((s: any) => s.settingType === 'department').map((s: any) => s.value);
+      const prompt = `You are an expert incident report assistant for a security company. Analyse the following incident description and extract structured information to fill an incident report form.
+
+Incident description: "${description}"
+
+Available categories: ${categories.join(', ') || 'Customer Complaint, Staff Complaint, Compliance, Security Breach, Near Miss, Theft, Trespass, Health & Safety'}
+Available departments: ${departments.join(', ') || 'Management, Office Manager, Health & Safety, Operations'}
+
+Return ONLY a valid JSON object with these fields (do not include any markdown or explanation):
+{
+  "title": "concise incident title (max 80 chars)",
+  "description": "expanded professional description of the incident",
+  "category": "one of the available categories that best fits",
+  "priority": "Low | Medium | High",
+  "severity": "Low | Moderate | Severe | Critical",
+  "department": "one of the available departments that should handle this",
+  "rootCause": "identified or likely root cause",
+  "remedialAction": "immediate actions that should be or were taken",
+  "proposedAction": "longer-term corrective actions to prevent recurrence"
+}`;
+      const message = await anthropic.messages.create({
+        model: "claude-opus-4-5",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const text = (message.content[0] as any).text?.trim() || "{}";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+      res.json({ success: true, fields: parsed });
+    } catch (e: any) { res.status(500).json({ error: e.message || "AI fill failed" }); }
+  });
+
   app.get("/api/public/issue-report/:issueId", async (req: any, res) => {
     try {
       const [issue] = await import("drizzle-orm").then(({ eq }) =>

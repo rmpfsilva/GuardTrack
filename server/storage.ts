@@ -4221,11 +4221,13 @@ export class DatabaseStorage implements IStorage {
       byPriority: {} as Record<string, number>,
       byCategory: {} as Record<string, number>,
       bySeverity: {} as Record<string, number>,
+      byAssignee: {} as Record<string, number>,
     };
-    all.forEach(i => {
+    all.filter(i => !i.isArchived).forEach(i => {
       if (i.priority) stats.byPriority[i.priority] = (stats.byPriority[i.priority] || 0) + 1;
       if (i.category) stats.byCategory[i.category] = (stats.byCategory[i.category] || 0) + 1;
       if (i.severity) stats.bySeverity[i.severity] = (stats.bySeverity[i.severity] || 0) + 1;
+      if (i.assignedTo) stats.byAssignee[i.assignedTo] = (stats.byAssignee[i.assignedTo] || 0) + 1;
     });
     return stats;
   }
