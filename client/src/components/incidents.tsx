@@ -92,12 +92,20 @@ function StatCard({ label, value, icon: Icon, colour }: { label: string; value: 
   );
 }
 
+type CompanyUser = { id: string; firstName?: string | null; lastName?: string | null; username: string; role: string; };
+
+function userDisplayName(u: CompanyUser): string {
+  const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+  return name || u.username;
+}
+
 function IssueForm({
-  form, onChange, settings,
+  form, onChange, settings, companyUsers,
 }: {
   form: FormData;
   onChange: (k: keyof FormData, v: string) => void;
   settings: any[];
+  companyUsers: CompanyUser[];
 }) {
   const opts = (type: string) => settings.filter(s => s.settingType === type).map(s => s.value);
 
@@ -114,11 +122,35 @@ function IssueForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Reported By</Label>
-          <Input value={form.reportedBy} onChange={e => onChange("reportedBy", e.target.value)} placeholder="Name" data-testid="input-issue-reported-by" />
+          <Select value={form.reportedBy} onValueChange={v => onChange("reportedBy", v)}>
+            <SelectTrigger data-testid="select-issue-reported-by">
+              <SelectValue placeholder="Select person…" />
+            </SelectTrigger>
+            <SelectContent>
+              {companyUsers.map(u => (
+                <SelectItem key={u.id} value={userDisplayName(u)}>
+                  <span>{userDisplayName(u)}</span>
+                  <span className="ml-1.5 text-xs text-muted-foreground capitalize">({u.role})</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1.5">
           <Label>Assigned To</Label>
-          <Input value={form.assignedTo} onChange={e => onChange("assignedTo", e.target.value)} placeholder="Name" data-testid="input-issue-assigned-to" />
+          <Select value={form.assignedTo} onValueChange={v => onChange("assignedTo", v)}>
+            <SelectTrigger data-testid="select-issue-assigned-to">
+              <SelectValue placeholder="Select person…" />
+            </SelectTrigger>
+            <SelectContent>
+              {companyUsers.map(u => (
+                <SelectItem key={u.id} value={userDisplayName(u)}>
+                  <span>{userDisplayName(u)}</span>
+                  <span className="ml-1.5 text-xs text-muted-foreground capitalize">({u.role})</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -294,6 +326,7 @@ export function Incidents() {
   const { data: archived = [] } = useQuery<Issue[]>({ queryKey: ["/api/issues/archived"] });
   const { data: stats } = useQuery<any>({ queryKey: ["/api/issues/stats"] });
   const { data: settings = [] } = useQuery<any[]>({ queryKey: ["/api/issue-settings"] });
+  const { data: companyUsers = [] } = useQuery<CompanyUser[]>({ queryKey: ["/api/admin/users"] });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["/api/issues"] });
@@ -514,7 +547,7 @@ export function Incidents() {
           <DialogHeader>
             <DialogTitle>Log New Incident</DialogTitle>
           </DialogHeader>
-          <IssueForm form={form} onChange={formChange} settings={settings} />
+          <IssueForm form={form} onChange={formChange} settings={settings} companyUsers={companyUsers} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button onClick={submitCreate} disabled={createMutation.isPending} data-testid="button-submit-incident">
@@ -531,7 +564,7 @@ export function Incidents() {
           <DialogHeader>
             <DialogTitle>Edit Incident {editIssue?.issueId}</DialogTitle>
           </DialogHeader>
-          <IssueForm form={form} onChange={formChange} settings={settings} />
+          <IssueForm form={form} onChange={formChange} settings={settings} companyUsers={companyUsers} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditIssue(null)}>Cancel</Button>
             <Button onClick={submitEdit} disabled={updateMutation.isPending} data-testid="button-save-incident-edit">
