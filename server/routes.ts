@@ -6128,7 +6128,10 @@ GuardTrack Team`;
   });
 
   app.get("/api/issue-settings", isAuthenticated, isAdmin, async (req: any, res) => {
-    try { res.json(await storage.getIssueSettings(req.user.companyId, req.query.type as string | undefined)); }
+    try {
+      await storage.initDefaultIssueSettings(req.user.companyId);
+      res.json(await storage.getIssueSettings(req.user.companyId, req.query.type as string | undefined));
+    }
     catch (e) { res.status(500).json({ error: "Failed to fetch settings" }); }
   });
 

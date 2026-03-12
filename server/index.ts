@@ -362,6 +362,20 @@ async function migrateExistingUserMemberships() {
 
     // T002: Backfill memberships for all existing users
     await migrateExistingUserMemberships();
+
+    // Seed default incident settings for all companies that don't have them yet
+    try {
+      const allCompanies = await storage.getAllCompanies();
+      let seeded = 0;
+      for (const company of allCompanies) {
+        const existing = await storage.getIssueSettings(company.id);
+        if (existing.length === 0) {
+          await storage.initDefaultIssueSettings(company.id);
+          seeded++;
+        }
+      }
+      if (seeded > 0) log(`[Init] Seeded incident settings for ${seeded} companies`);
+    } catch (e) { console.error('[Init] Failed to seed incident settings:', e); }
     
     const server = await registerRoutes(app);
 

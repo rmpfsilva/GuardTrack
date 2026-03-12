@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertTriangle, Plus, Search, Archive, ArchiveRestore, Trash2,
   Eye, Edit, FileText, Loader2, ExternalLink, RefreshCw, ChevronDown, ChevronUp,
-  CheckCircle2, Clock, XCircle, AlertCircle, Sparkles,
+  CheckCircle2, Clock, XCircle, AlertCircle, Sparkles, Settings2, X,
 } from "lucide-react";
 import type { Issue } from "@shared/schema";
 
@@ -93,6 +93,7 @@ function StatCard({ label, value, icon: Icon, colour }: { label: string; value: 
 }
 
 type CompanyUser = { id: string; firstName?: string | null; lastName?: string | null; username: string; role: string; };
+type CompanySite = { id: string; name: string; address: string; };
 
 function userDisplayName(u: CompanyUser): string {
   const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
@@ -100,12 +101,13 @@ function userDisplayName(u: CompanyUser): string {
 }
 
 function IssueForm({
-  form, onChange, settings, companyUsers,
+  form, onChange, settings, companyUsers, companySites,
 }: {
   form: FormData;
   onChange: (k: keyof FormData, v: string) => void;
   settings: any[];
   companyUsers: CompanyUser[];
+  companySites: CompanySite[];
 }) {
   const opts = (type: string) => settings.filter(s => s.settingType === type).map(s => s.value);
 
@@ -156,7 +158,16 @@ function IssueForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Site</Label>
-          <Input value={form.siteName} onChange={e => onChange("siteName", e.target.value)} placeholder="Site name" data-testid="input-issue-site" />
+          <Select value={form.siteName} onValueChange={v => onChange("siteName", v)}>
+            <SelectTrigger data-testid="select-issue-site">
+              <SelectValue placeholder="Select site…" />
+            </SelectTrigger>
+            <SelectContent>
+              {companySites.map(s => (
+                <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1.5">
           <Label>Due Date</Label>
@@ -327,6 +338,23 @@ export function Incidents() {
   const { data: stats } = useQuery<any>({ queryKey: ["/api/issues/stats"] });
   const { data: settings = [] } = useQuery<any[]>({ queryKey: ["/api/issue-settings"] });
   const { data: companyUsers = [] } = useQuery<CompanyUser[]>({ queryKey: ["/api/admin/users"] });
+  const { data: companySites = [] } = useQuery<CompanySite[]>({ queryKey: ["/api/sites"] });
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+  const [newDepartment, setNewDepartment] = useState("");
+
+  const addSettingMutation = useMutation({
+    mutationFn: (data: { settingType: string; value: string }) => apiRequest("POST", "/api/issue-settings", { ...data, sortOrder: 99 }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/issue-settings"] }); setNewCategory(""); setNewDepartment(""); },
+    onError: () => toast({ title: "Failed to add item", variant: "destructive" }),
+  });
+
+  const removeSettingMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/issue-settings/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/issue-settings"] }); },
+    onError: () => toast({ title: "Failed to remove item", variant: "destructive" }),
+  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["/api/issues"] });
@@ -430,10 +458,16 @@ export function Incidents() {
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">Log, track and manage operational incidents</p>
         </div>
-        <Button onClick={openCreate} data-testid="button-log-incident">
-          <Plus className="h-4 w-4 mr-2" />
-          Log Incident
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setSettingsOpen(true)} data-testid="button-incident-settings">
+            <Settings2 className="h-4 w-4 mr-2" />
+            Settings
+          </Button>
+          <Button onClick={openCreate} data-testid="button-log-incident">
+            <Plus className="h-4 w-4 mr-2" />
+            Log Incident
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -547,7 +581,7 @@ export function Incidents() {
           <DialogHeader>
             <DialogTitle>Log New Incident</DialogTitle>
           </DialogHeader>
-          <IssueForm form={form} onChange={formChange} settings={settings} companyUsers={companyUsers} />
+          <IssueForm form={form} onChange={formChange} settings={settings} companyUsers={companyUsers} companySites={companySites} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button onClick={submitCreate} disabled={createMutation.isPending} data-testid="button-submit-incident">
@@ -564,7 +598,7 @@ export function Incidents() {
           <DialogHeader>
             <DialogTitle>Edit Incident {editIssue?.issueId}</DialogTitle>
           </DialogHeader>
-          <IssueForm form={form} onChange={formChange} settings={settings} companyUsers={companyUsers} />
+          <IssueForm form={form} onChange={formChange} settings={settings} companyUsers={companyUsers} companySites={companySites} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditIssue(null)}>Cancel</Button>
             <Button onClick={submitEdit} disabled={updateMutation.isPending} data-testid="button-save-incident-edit">
@@ -743,6 +777,114 @@ export function Incidents() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Settings dialog — categories & departments */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5" />
+              Incident Settings
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6 py-2">
+            {/* Categories */}
+            <div className="space-y-3">
+              <div>
+                <p className="font-medium text-sm">Categories</p>
+                <p className="text-xs text-muted-foreground">Types of incidents your team handles</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {settings.filter(s => s.settingType === "category").map((s: any) => (
+                  <div key={s.id} className="flex items-center gap-1 border rounded-md px-2 py-1 text-sm bg-muted/30">
+                    <span>{s.value}</span>
+                    <button
+                      onClick={() => removeSettingMutation.mutate(s.id)}
+                      disabled={removeSettingMutation.isPending}
+                      className="ml-1 text-muted-foreground hover:text-destructive transition-colors"
+                      data-testid={`button-remove-category-${s.id}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {settings.filter(s => s.settingType === "category").length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">No categories yet</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newCategory}
+                  onChange={e => setNewCategory(e.target.value)}
+                  placeholder="Add a category…"
+                  onKeyDown={e => { if (e.key === "Enter" && newCategory.trim()) { addSettingMutation.mutate({ settingType: "category", value: newCategory.trim() }); } }}
+                  data-testid="input-new-category"
+                />
+                <Button
+                  size="default"
+                  variant="outline"
+                  disabled={!newCategory.trim() || addSettingMutation.isPending}
+                  onClick={() => newCategory.trim() && addSettingMutation.mutate({ settingType: "category", value: newCategory.trim() })}
+                  data-testid="button-add-category"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-t" />
+
+            {/* Departments */}
+            <div className="space-y-3">
+              <div>
+                <p className="font-medium text-sm">Departments</p>
+                <p className="text-xs text-muted-foreground">Teams responsible for handling incidents</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {settings.filter(s => s.settingType === "department").map((s: any) => (
+                  <div key={s.id} className="flex items-center gap-1 border rounded-md px-2 py-1 text-sm bg-muted/30">
+                    <span>{s.value}</span>
+                    <button
+                      onClick={() => removeSettingMutation.mutate(s.id)}
+                      disabled={removeSettingMutation.isPending}
+                      className="ml-1 text-muted-foreground hover:text-destructive transition-colors"
+                      data-testid={`button-remove-department-${s.id}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {settings.filter(s => s.settingType === "department").length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">No departments yet</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newDepartment}
+                  onChange={e => setNewDepartment(e.target.value)}
+                  placeholder="Add a department…"
+                  onKeyDown={e => { if (e.key === "Enter" && newDepartment.trim()) { addSettingMutation.mutate({ settingType: "department", value: newDepartment.trim() }); } }}
+                  data-testid="input-new-department"
+                />
+                <Button
+                  size="default"
+                  variant="outline"
+                  disabled={!newDepartment.trim() || addSettingMutation.isPending}
+                  onClick={() => newDepartment.trim() && addSettingMutation.mutate({ settingType: "department", value: newDepartment.trim() })}
+                  data-testid="button-add-department"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSettingsOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
