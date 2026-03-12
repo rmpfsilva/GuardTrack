@@ -3,6 +3,33 @@ import type { Issue } from "@shared/schema";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+export async function aiFormFill(description: string, categories: string[], departments: string[]): Promise<Record<string, string>> {
+  const catList = categories.length ? categories.join(", ") : "Customer Complaint, Staff Complaint, Compliance, Security Breach, Near Miss, Theft, Trespass, Health & Safety";
+  const deptList = departments.length ? departments.join(", ") : "Management, Office Manager, Health & Safety, Operations";
+
+  const response = await anthropic.messages.create({
+    model: "claude-opus-4-5",
+    max_tokens: 1024,
+    messages: [{
+      role: "user",
+      content: `You are an expert incident report assistant for a security company. Analyse the following incident description and extract structured information to fill an incident report form.
+
+Incident description: "${description}"
+
+Available categories: ${catList}
+Available departments: ${deptList}
+
+Return ONLY a valid JSON object (no markdown, no code blocks, no explanation) with these exact keys:
+{"title":"concise incident title max 80 chars","description":"expanded professional description","category":"one of the available categories","priority":"Low or Medium or High","severity":"Low or Moderate or Severe or Critical","department":"one of the available departments","rootCause":"identified or likely root cause","remedialAction":"immediate actions taken or recommended","proposedAction":"longer-term corrective actions"}`,
+    }],
+  });
+
+  const text = response.content.find(b => b.type === "text");
+  const raw = text?.type === "text" ? text.text.trim() : "{}";
+  const match = raw.match(/\{[\s\S]*\}/);
+  return match ? JSON.parse(match[0]) : {};
+}
+
 export async function generateNonConformanceReport(issue: Issue): Promise<string> {
   const dateLogged = issue.dateLogged ? new Date(issue.dateLogged).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
   const dueDate = issue.dueDate ? new Date(issue.dueDate).toLocaleDateString('en-GB') : 'TBD';
