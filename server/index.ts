@@ -8,8 +8,8 @@ import { users, userRoles, companyMemberships, companies } from "@shared/schema"
 import { or, eq, and, isNotNull } from "drizzle-orm";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: false, limit: '15mb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
