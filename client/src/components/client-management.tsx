@@ -36,7 +36,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Crown } from "lucide-react";
+import { Crown, Settings } from "lucide-react";
+import { CompanyManageDialog } from "@/components/company-manage-dialog";
 
 interface ClientWithStatus extends Company {
   trialStatus: 'trial' | 'full' | 'expired';
@@ -93,6 +94,8 @@ export default function ClientManagement() {
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [isBrandingDialogOpen, setIsBrandingDialogOpen] = useState(false);
+  const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+  const [managingClient, setManagingClient] = useState<ClientWithStatus | null>(null);
 
   const { data: clients = [], isLoading } = useQuery<ClientWithStatus[]>({
     queryKey: ["/api/super-admin/clients"],
@@ -619,6 +622,18 @@ export default function ClientManagement() {
                       <Palette className="h-4 w-4 mr-2" />
                       Brand Colour
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setManagingClient(client);
+                        setIsManageDialogOpen(true);
+                      }}
+                      data-testid={`button-manage-company-${client.id}`}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Manage
+                    </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
                         Block reason: {client.blockReason}
@@ -773,6 +788,18 @@ export default function ClientManagement() {
                       <Palette className="h-4 w-4 mr-2" />
                       Brand Colour
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setManagingClient(client);
+                        setIsManageDialogOpen(true);
+                      }}
+                      data-testid={`button-manage-company-trial-${client.id}`}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Manage
+                    </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
                         Block reason: {client.blockReason}
@@ -894,6 +921,18 @@ export default function ClientManagement() {
                       <Palette className="h-4 w-4 mr-2" />
                       Brand Colour
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setManagingClient(client);
+                        setIsManageDialogOpen(true);
+                      }}
+                      data-testid={`button-manage-company-full-${client.id}`}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Manage
+                    </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
                         Block reason: {client.blockReason}
@@ -999,6 +1038,18 @@ export default function ClientManagement() {
                     >
                       <Palette className="h-4 w-4 mr-2" />
                       Brand Colour
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setManagingClient(client);
+                        setIsManageDialogOpen(true);
+                      }}
+                      data-testid={`button-manage-company-expired-${client.id}`}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Manage
                     </Button>
                   </div>
                 </CardContent>
@@ -1798,6 +1849,18 @@ export default function ClientManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {managingClient && (
+        <CompanyManageDialog
+          companyId={managingClient.id}
+          companyName={managingClient.name}
+          open={isManageDialogOpen}
+          onClose={() => {
+            setIsManageDialogOpen(false);
+            setManagingClient(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -33,7 +33,7 @@ GuardTrack is a full-stack web application. The frontend uses React with TypeScr
 - **Company Partnerships & Job Sharing**: Functionality for companies to establish partnerships and share excess guard job requests with multi-position support, worker assignment, live fill progress, optional deadlines, conversation threads, and performance metrics.
 - **Trial Management System**: Super Admin can manage trial access for companies.
 - **Invoice System**: Super Admin can manage invoices for companies, and companies can view their invoices.
-- **Super Admin Interface**: Dedicated interface for client management, usage reports, customer support messaging, and invoice management.
+- **Super Admin Interface**: Dedicated interface for client management, usage reports, customer support messaging, and invoice management. Super Admin can click "Manage" on any client card to open a per-company management dialog with Sites tab (list/add/edit/delete sites with all role rates) and Users tab (list all users, invite new users via 3-case smart invite flow).
 - **App Usage Analytics**: Automatic login tracking and reporting for Super Admin.
 - **Customer Support Messaging**: Integrated system for company admins to send support queries to Super Admin.
 - **Configurable Guard App Navigation**: Super Admin can customize guard mobile app navigation tabs with feature gating and role-based visibility.

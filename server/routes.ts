@@ -5958,6 +5958,124 @@ GuardTrack Team`;
     }
   });
 
+  // ===== Super Admin — Company Sites & Users Management =====
+
+  app.get('/api/super-admin/companies/:companyId/sites', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId } = req.params;
+      const allSites = await storage.getAllSites();
+      const companySites = allSites.filter(s => s.companyId === companyId);
+      res.json(companySites);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch sites" });
+    }
+  });
+
+  app.post('/api/super-admin/companies/:companyId/sites', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId } = req.params;
+      const company = await storage.getCompany(companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const validatedData = insertSiteSchema.parse({ ...req.body, companyId });
+      const site = await storage.createSite(validatedData);
+      res.status(201).json(site);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to create site" });
+    }
+  });
+
+  app.patch('/api/super-admin/companies/:companyId/sites/:siteId', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { siteId } = req.params;
+      const site = await storage.updateSite(siteId, req.body);
+      res.json(site);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to update site" });
+    }
+  });
+
+  app.delete('/api/super-admin/companies/:companyId/sites/:siteId', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { siteId } = req.params;
+      await storage.deleteSite(siteId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to delete site" });
+    }
+  });
+
+  app.get('/api/super-admin/companies/:companyId/users', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId } = req.params;
+      const allUsers = await storage.getAllUsers();
+      const companyUsers = allUsers.filter(u => u.companyId === companyId);
+      res.json(companyUsers.map(u => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role,
+        isActivated: u.isActivated,
+        companyId: u.companyId,
+      })));
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch users" });
+    }
+  });
+
+  app.post('/api/super-admin/companies/:companyId/invite-user', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId } = req.params;
+      const { email, role, firstName, lastName } = req.body;
+      if (!email || !role) return res.status(400).json({ message: "Email and role are required" });
+
+      const company = await storage.getCompany(companyId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      // 3-case invite logic (same as admin invite)
+      const existingUsers = await storage.getUsersByEmail(email);
+      const existingUser = existingUsers[0];
+
+      if (existingUser) {
+        if (existingUser.isActivated) {
+          // Case B: already activated — add membership directly
+          await storage.upsertMembership({ userId: existingUser.id, companyId, role, status: 'active', invitedBy: req.user.id });
+          return res.json({ success: true, type: 'direct_membership', message: 'User added directly to company' });
+        } else {
+          // Case C: exists but not activated — create pending membership + invitation
+          await storage.upsertMembership({ userId: existingUser.id, companyId, role, status: 'pending', invitedBy: req.user.id });
+        }
+      }
+
+      // Case A or C: create invitation token
+      const crypto = await import('crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await storage.createInvitation({ email, companyId, role, token, expiresAt, invitedBy: req.user.id });
+
+      // Send invitation email
+      try {
+        const { sendInvitationEmail } = await import('./emailService');
+        await sendInvitationEmail({
+          toEmail: email,
+          fromName: 'GuardTrack',
+          inviteToken: token,
+          role,
+          companyName: company.name,
+          expiresAt: expiresAt,
+        });
+      } catch (emailErr) {
+        console.error('Failed to send invitation email:', emailErr);
+      }
+
+      res.status(201).json({ success: true, type: 'invitation_sent', message: 'Invitation sent' });
+    } catch (error: any) {
+      console.error("Error inviting user:", error);
+      res.status(400).json({ message: error.message || "Failed to invite user" });
+    }
+  });
+
   // Get platform settings (super admin)
   app.get('/api/super-admin/platform-settings', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
