@@ -1,4 +1,6 @@
 import { useState } from "react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,7 +23,7 @@ import {
   AlertTriangle, Plus, Search, Archive, ArchiveRestore, Trash2,
   Eye, Edit, Loader2, ExternalLink, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle2, Clock, XCircle, AlertCircle, Sparkles, Settings2, X,
-  LayoutDashboard, List, Printer, Wand2,
+  LayoutDashboard, List, Download, Wand2,
 } from "lucide-react";
 import type { Issue } from "@shared/schema";
 
@@ -83,7 +85,7 @@ function userDisplayName(u: CompanyUser): string {
   return name || u.username;
 }
 
-async function printIssuePDF(issue: Issue) {
+async function printIssuePDF(issue: Issue, onDone?: () => void) {
   let branding: any = {};
   try {
     const res = await fetch('/api/company-settings');
@@ -91,56 +93,54 @@ async function printIssuePDF(issue: Issue) {
   } catch {}
 
   const fmt = (d: any) => d ? new Date(d).toLocaleDateString("en-GB") : "N/A";
-  const filename = `NCR-${issue.issueId}`;
 
-  const w = window.open("", "_blank", "width=900,height=700");
-  if (!w) return;
+  const container = document.createElement('div');
+  container.style.cssText = [
+    'position:fixed', 'left:-9999px', 'top:0',
+    'width:794px', 'background:#fff', 'color:#111',
+    'font-family:Arial,sans-serif', 'font-size:14px', 'padding:40px',
+  ].join(';');
 
-  w.document.write(`<!DOCTYPE html><html><head><title>${filename}</title>
+  container.innerHTML = `
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; color: #111; padding: 40px; font-size: 14px; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1d4ed8; padding-bottom: 16px; margin-bottom: 24px; gap: 24px; }
-  .header-left { flex: 1; }
-  .header-right { text-align: right; min-width: 200px; }
-  .company-logo { max-height: 56px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 6px; }
-  .company-name { font-size: 18px; font-weight: 700; color: #1d4ed8; }
-  .company-details { font-size: 11px; color: #6b7280; margin-top: 2px; line-height: 1.5; }
-  .report-label { font-size: 20px; font-weight: 700; color: #1d4ed8; }
-  .report-sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
-  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
-  .badge { padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; border: 1px solid; }
-  .badge-red { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
-  .badge-amber { color: #d97706; background: #fffbeb; border-color: #fde68a; }
-  .badge-green { color: #16a34a; background: #f0fdf4; border-color: #bbf7d0; }
-  .badge-blue { color: #2563eb; background: #eff6ff; border-color: #bfdbfe; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-  .field label { font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 0.05em; display: block; margin-bottom: 3px; }
-  .field p { font-size: 14px; }
-  .section { margin-bottom: 20px; }
-  .section h3 { font-size: 12px; text-transform: uppercase; color: #888; letter-spacing: 0.06em; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 10px; }
-  .section p { font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
-  .ncr-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 16px; }
-  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #888; display: flex; justify-content: space-between; }
-  @media print {
-    body { padding: 20px; }
-    @page { margin: 15mm; size: A4; }
-  }
-</style></head><body>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #1d4ed8; padding-bottom:16px; margin-bottom:24px; gap:24px; }
+  .header-left { flex:1; }
+  .header-right { text-align:right; min-width:200px; }
+  .company-logo { max-height:56px; max-width:180px; object-fit:contain; display:block; margin-bottom:6px; }
+  .company-name { font-size:18px; font-weight:700; color:#1d4ed8; }
+  .company-details { font-size:11px; color:#6b7280; margin-top:2px; line-height:1.5; }
+  .report-label { font-size:20px; font-weight:700; color:#1d4ed8; }
+  .report-sub { font-size:12px; color:#6b7280; margin-top:4px; }
+  .badges { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0; justify-content:flex-end; }
+  .badge { padding:3px 10px; border-radius:4px; font-size:12px; font-weight:600; border:1px solid; }
+  .badge-red { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
+  .badge-amber { color:#d97706; background:#fffbeb; border-color:#fde68a; }
+  .badge-green { color:#16a34a; background:#f0fdf4; border-color:#bbf7d0; }
+  .badge-blue { color:#2563eb; background:#eff6ff; border-color:#bfdbfe; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+  .field label { font-size:11px; text-transform:uppercase; color:#888; letter-spacing:0.05em; display:block; margin-bottom:3px; }
+  .field p { font-size:14px; }
+  .section { margin-bottom:20px; }
+  .section h3 { font-size:12px; text-transform:uppercase; color:#888; letter-spacing:0.06em; border-bottom:1px solid #e5e7eb; padding-bottom:6px; margin-bottom:10px; }
+  .section p { font-size:14px; line-height:1.7; white-space:pre-wrap; }
+  .ncr-box { background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:16px; }
+  .footer { margin-top:32px; padding-top:12px; border-top:1px solid #e5e7eb; font-size:12px; color:#888; display:flex; justify-content:space-between; }
+</style>
 <div class="header">
   <div class="header-left">
     ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Logo" class="company-logo">` : ''}
     ${branding.companyName ? `<div class="company-name">${branding.companyName}</div>` : ''}
     <div class="company-details">
       ${branding.companyAddress ? branding.companyAddress.replace(/\n/g, ' &bull; ') + '<br>' : ''}
-      ${branding.companyEmail ? branding.companyEmail : ''}${branding.companyPhone ? ' &bull; ' + branding.companyPhone : ''}
+      ${branding.companyEmail || ''}${branding.companyPhone ? ' &bull; ' + branding.companyPhone : ''}
     </div>
   </div>
   <div class="header-right">
     <div class="report-label">NON-CONFORMANCE REPORT</div>
     <div class="report-sub">${issue.issueId}</div>
     <div class="report-sub">Generated: ${new Date().toLocaleDateString("en-GB")}</div>
-    <div class="badges" style="justify-content:flex-end">
+    <div class="badges">
       ${issue.status ? `<span class="badge badge-blue">${issue.status}</span>` : ""}
       ${issue.priority === "High" ? `<span class="badge badge-red">${issue.priority}</span>` : issue.priority === "Medium" ? `<span class="badge badge-amber">${issue.priority}</span>` : issue.priority ? `<span class="badge badge-green">${issue.priority}</span>` : ""}
       ${issue.severity === "Critical" || issue.severity === "Severe" ? `<span class="badge badge-red">${issue.severity}</span>` : issue.severity === "Moderate" ? `<span class="badge badge-amber">${issue.severity}</span>` : issue.severity ? `<span class="badge badge-green">${issue.severity}</span>` : ""}
@@ -166,10 +166,41 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
 <div class="footer">
   <span>${branding.companyName || 'GuardTrack'} &bull; Incident Management &bull; Confidential</span>
   <span>${new Date().toLocaleDateString("en-GB")}</span>
-</div>
-<script>window.onload = function() { window.focus(); window.print(); }<\/script>
-</body></html>`);
-  w.document.close();
+</div>`;
+
+  document.body.appendChild(container);
+
+  try {
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgW = pageW;
+    const imgH = (canvas.height * pageW) / canvas.width;
+
+    let remaining = imgH;
+    let srcY = 0;
+
+    while (remaining > 0) {
+      const sliceH = Math.min(remaining, pageH);
+      pdf.addImage(imgData, 'JPEG', 0, srcY === 0 ? 0 : -(imgH - sliceH), imgW, imgH);
+      remaining -= pageH;
+      srcY += pageH;
+      if (remaining > 0) pdf.addPage();
+    }
+
+    pdf.save(`NCR-${issue.issueId}-${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.pdf`);
+  } finally {
+    document.body.removeChild(container);
+    onDone?.();
+  }
 }
 
 function IssueForm({
@@ -384,6 +415,7 @@ export function Incidents() {
   const [deleteIssue, setDeleteIssue] = useState<Issue | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [reportExpanded, setReportExpanded] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const [aiDescription, setAiDescription] = useState("");
   const [newCategory, setNewCategory] = useState("");
@@ -901,8 +933,18 @@ export function Incidents() {
               </div>
 
               <DialogFooter className="flex-wrap gap-2">
-                <Button variant="outline" onClick={() => printIssuePDF(viewIssue)} data-testid="button-print-pdf">
-                  <Printer className="h-4 w-4 mr-2" />Export PDF
+                <Button
+                  variant="outline"
+                  disabled={pdfLoading}
+                  onClick={() => {
+                    setPdfLoading(true);
+                    printIssuePDF(viewIssue, () => setPdfLoading(false));
+                  }}
+                  data-testid="button-print-pdf"
+                >
+                  {pdfLoading
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generating PDF…</>
+                    : <><Download className="h-4 w-4 mr-2" />Export PDF</>}
                 </Button>
                 <div className="flex-1" />
                 <Button variant="outline" onClick={() => setViewIssue(null)}>Close</Button>
