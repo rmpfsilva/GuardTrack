@@ -154,6 +154,15 @@ async function requireActiveTrial(req: Request, res: Response, next: NextFunctio
   }
   
   try {
+    // Companies with no plan assigned get full access (beta / direct clients)
+    const company = await storage.getCompany(user.companyId);
+    if (!company) {
+      return res.status(403).json({ message: "Company not found" });
+    }
+    if (!company.planId) {
+      return next();
+    }
+
     const trialStatus = await storage.checkTrialStatus(user.companyId);
     
     if (!trialStatus.isActive) {
