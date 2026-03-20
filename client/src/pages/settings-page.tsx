@@ -204,6 +204,23 @@ export default function SettingsPage() {
     },
   });
 
+  const [notificationEmail, setNotificationEmail] = useState("");
+  useEffect(() => {
+    if (company?.email !== undefined) setNotificationEmail(company.email ?? "");
+  }, [company?.email]);
+
+  const updateCompanyEmailMutation = useMutation({
+    mutationFn: async (email: string) =>
+      await apiRequest("PATCH", "/api/companies/my-company/email", { email }),
+    onSuccess: () => {
+      toast({ title: "Saved", description: "Notification email updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies", user?.companyId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const onProfileSubmit = (data: ProfileForm) => {
     updateProfileMutation.mutate(data);
   };
@@ -329,10 +346,35 @@ export default function SettingsPage() {
                         </div>
                       </div>
                     )}
-                    {company.email && (
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Email</label>
-                        <p className="text-base" data-testid="text-company-email">{company.email}</p>
+                    {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Notification Email
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          Job share alerts and system emails are sent to this address
+                        </p>
+                        <div className="flex gap-2">
+                          <Input
+                            type="email"
+                            value={notificationEmail}
+                            onChange={(e) => setNotificationEmail(e.target.value)}
+                            placeholder="notifications@yourcompany.com"
+                            data-testid="input-company-notification-email"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={
+                              updateCompanyEmailMutation.isPending ||
+                              notificationEmail === (company.email ?? "")
+                            }
+                            onClick={() => updateCompanyEmailMutation.mutate(notificationEmail)}
+                            data-testid="button-save-company-email"
+                          >
+                            {updateCompanyEmailMutation.isPending ? "Saving…" : "Save"}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>

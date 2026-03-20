@@ -360,6 +360,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch('/api/companies/my-company/email', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) {
+        return res.status(400).json({ message: "User not assigned to a company" });
+      }
+      const { email } = req.body;
+      if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: "Invalid email address" });
+      }
+      const updated = await storage.updateCompany(user.companyId, { email });
+      res.json({ email: updated.email });
+    } catch (error: any) {
+      console.error("Error updating company email:", error);
+      res.status(400).json({ message: error.message || "Failed to update company email" });
+    }
+  });
+
   app.get('/api/companies/:id', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
