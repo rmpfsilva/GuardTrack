@@ -72,18 +72,9 @@ function requireFeature(featureName: FeatureName) {
         });
       }
       
-      // If no plan assigned, check trial status and allow basic features
+      // If no plan assigned, allow all features (beta / no restrictions)
       if (!company.planId) {
-        // Companies without a plan get basic features during trial
-        const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut', 'siteManagement', 'shiftScheduling', 'leaveRequests'];
-        if (basicFeatures.includes(featureName)) {
-          return next();
-        }
-        return res.status(403).json({ 
-          message: `Feature '${featureName}' requires a subscription plan.`,
-          featureRestricted: true,
-          feature: featureName
-        });
+        return next();
       }
       
       // Get the company's subscription plan
@@ -756,25 +747,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // No plan assigned - return basic features
+      // No plan assigned - return full access (beta / no restrictions)
       if (!company.planId) {
         return res.json({
           hasFullAccess: false,
           features: {
             userManagement: true,
             dashboardAccess: true,
-            reportsViewing: false,
+            reportsViewing: true,
             checkInOut: true,
-            shiftScheduling: false,
-            siteManagement: false,
-            breakTracking: false,
-            overtimeManagement: false,
-            leaveRequests: false,
-            noticeBoard: false,
-            pushNotifications: false,
+            shiftScheduling: true,
+            siteManagement: true,
+            breakTracking: true,
+            overtimeManagement: true,
+            leaveRequests: true,
+            noticeBoard: true,
+            pushNotifications: true,
           },
-          limits: { maxSites: 1, maxUsers: 5 },
-          planName: 'Basic (No Plan)',
+          limits: { maxSites: null, maxUsers: null },
+          planName: null,
           isBlocked: false,
         });
       }
