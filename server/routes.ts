@@ -9,7 +9,7 @@ import { eq, desc } from "drizzle-orm";
 import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema, insertInvoiceSchema, updateInvoiceSchema, updateCompanySettingsSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
-import { sendInvitationEmail, sendJobShareNotificationEmail } from './emailService';
+import { sendInvitationEmail, sendJobShareNotificationEmail, sendNewJobShareEmail } from './emailService';
 import { sendNoticeNotification } from './push-notifications';
 
 // Middleware to check if user is authenticated
@@ -4094,6 +4094,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const jobShare = await storage.createJobShare(jobShareData);
+
+      // Non-blocking email to receiving company — errors here must not fail the API response
+      (async () => {
+        try {
+          const toCompany = await storage.getCompany(req.body.toCompanyId);
+          if (!toCompany?.companyEmail) {
+            console.warn(`[New Job Share Email] No email for company ${req.body.toCompanyId}, skipping notification`);
+            return;
+          }
+          if (req.body.toCompanyId === user.companyId) {
+            console.warn(`[New Job Share Email] fromCompanyId === toCompanyId, skipping notification`);
+            return;
+          }
+          if (totalJobs === 0) {
+            console.warn(`[New Job Share Email] Zero jobs in share, skipping notification`);
+            return;
+          }
+          const fromCompany = await storage.getCompany(user.companyId);
+          const fromName = fromCompany?.name || 'A partner company';
+          // TODO: replace appUrl with the dedicated pending-shares deep link once that screen exists
+          const appUrl = process.env.APP_URL || process.env.VITE_APP_URL || 'https://guardtrack.app';
+          await sendNewJobShareEmail(toCompany.companyEmail, fromName, totalJobs, appUrl);
+        } catch (emailErr: any) {
+          console.error('[New Job Share Email] Failed to send notification:', emailErr.message);
+        }
+      })();
+
       res.status(201).json(jobShare);
     } catch (error: any) {
       console.error("Error creating job share:", error);

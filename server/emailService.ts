@@ -584,3 +584,86 @@ export async function sendAddedToAnotherCompanyEmail(toEmail: string, companyNam
     throw error;
   }
 }
+
+export async function sendNewJobShareEmail(
+  toEmail: string,
+  fromCompanyName: string,
+  jobCount: number,
+  appUrl: string,
+): Promise<void> {
+  const gmail = await getUncachableGmailClient();
+
+  let senderEmail = 'noreply@guardtrack.app';
+  try {
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    senderEmail = profile.data.emailAddress || senderEmail;
+  } catch {
+    console.warn('[New Job Share Email] Could not fetch sender profile, using default');
+  }
+
+  const jobWord = jobCount === 1 ? 'job' : 'jobs';
+  const subject = `${fromCompanyName} has shared jobs with you on GuardTrack`;
+
+  // TODO: update the deep link path once the dedicated pending-shares screen exists
+  const deepLink = `${appUrl}`;
+
+  const htmlBody = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+  <div style="background-color: #ffffff; border-radius: 8px; padding: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);">
+
+    <div style="margin-bottom: 24px;">
+      <h1 style="margin: 0 0 4px 0; font-size: 22px; color: #1e3a5f;">New Job Share Request</h1>
+      <p style="margin: 0; color: #666666; font-size: 14px;">GuardTrack · Job Sharing</p>
+    </div>
+
+    <p style="font-size: 16px; margin: 0 0 16px 0;">
+      <strong>${fromCompanyName}</strong> has shared <strong>${jobCount} ${jobWord}</strong> with your company on GuardTrack.
+    </p>
+
+    <p style="font-size: 15px; color: #555555; margin: 0 0 28px 0;">
+      Log in to GuardTrack to review the shared ${jobWord} and accept or decline the request.
+    </p>
+
+    <div style="text-align: center; margin-bottom: 32px;">
+      <a href="${deepLink}" style="display: inline-block; background-color: #1e3a5f; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-size: 16px; font-weight: 600; letter-spacing: 0.3px;">
+        View Shared Jobs
+      </a>
+    </div>
+
+    <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; font-size: 13px; color: #999999;">
+      <p style="margin: 0;">The GuardTrack Team</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const textBody = `Hi,\n\n${fromCompanyName} has shared ${jobCount} ${jobWord} with your company on GuardTrack.\n\nPlease log in to GuardTrack to review and accept the shared ${jobWord}:\n\n${deepLink}\n\nThe GuardTrack Team`;
+
+  const message = [
+    `From: GuardTrack <${senderEmail}>`,
+    `To: ${toEmail}`,
+    `Subject: ${subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    htmlBody,
+  ].join('\n');
+
+  const encodedMessage = Buffer.from(message)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encodedMessage },
+  });
+
+  console.log(`[New Job Share Email] Sent successfully to ${toEmail} — ${jobCount} ${jobWord} from ${fromCompanyName}`);
+}
