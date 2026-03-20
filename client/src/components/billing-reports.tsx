@@ -1,10 +1,14 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Download, Receipt, Clock, FileText, TrendingUp, TrendingDown, Minus, Printer } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ChevronLeft, ChevronRight, Download, Receipt, Clock, FileText, TrendingUp, TrendingDown, Minus, Printer, Upload, X, Building2, ChevronDown, ChevronUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Table,
   TableBody,
@@ -67,8 +71,58 @@ function MoneyBadge({ label, amount, icon: Icon, className }: { label: string; a
 }
 
 export default function BillingReports() {
+  const { toast } = useToast();
   const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [expandedSite, setExpandedSite] = useState<string | null>(null);
+  const [brandingOpen, setBrandingOpen] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string>('');
+  const [companyName, setCompanyName] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: settings } = useQuery<any>({
+    queryKey: ['/api/company-settings'],
+  });
+
+  useEffect(() => {
+    if (settings) {
+      setLogoPreview(settings.logoUrl || '');
+      setCompanyName(settings.companyName || '');
+    }
+  }, [settings]);
+
+  const saveBrandingMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("PUT", "/api/company-settings", {
+        ...(settings || {}),
+        companyName,
+        logoUrl: logoPreview,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Branding saved", description: "Your logo and company name will appear on all reports." });
+      queryClient.invalidateQueries({ queryKey: ['/api/company-settings'] });
+      setBrandingOpen(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to save", variant: "destructive" });
+    },
+  });
+
+  const handleLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Please select an image file", variant: "destructive" });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Image must be under 2MB", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setLogoPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
 
   const { data: report, isLoading } = useQuery<BillingReport>({
     queryKey: ['/api/admin/billing/weekly', currentWeek.toISOString()],
@@ -179,13 +233,6 @@ export default function BillingReports() {
 
   const exportToCSV = async () => {
     if (!report) return;
-    let settings: any = {};
-    try {
-      const res = await fetch('/api/company-settings');
-      if (res.ok) settings = await res.json();
-    } catch {}
-
-    const companyName = settings.companyName || '';
     const weekLabel = `${format(new Date(report.weekStart), 'dd/MM/yyyy')} - ${format(new Date(report.weekEnd), 'dd/MM/yyyy')}`;
     const grandProfit = (report.grandClientTotal || 0) - (report.grandStaffTotal || 0);
 
@@ -211,13 +258,6 @@ export default function BillingReports() {
 
   const handlePrintReport = async () => {
     if (!report) return;
-    let settings: any = {};
-    try {
-      const res = await fetch('/api/company-settings');
-      if (res.ok) settings = await res.json();
-    } catch {}
-
-    const companyName = settings.companyName || 'Company';
     const weekLabel = `${format(new Date(report.weekStart), 'dd MMM yyyy')} – ${format(new Date(report.weekEnd), 'dd MMM yyyy')}`;
     const grandProfit = (report.grandClientTotal || 0) - (report.grandStaffTotal || 0);
     const totalHours = report.sites.reduce((s, x) => s + x.totalHours, 0);
@@ -284,7 +324,7 @@ export default function BillingReports() {
       </style></head><body>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1e40af;padding-bottom:16px;margin-bottom:24px">
         <div>
-          ${settings.logoUrl ? `<img src="${settings.logoUrl}" alt="${companyName}" style="max-height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block">` : ''}
+          ${logoPreview ? `<img src="${logoPreview}" alt="${companyName}" style="max-height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block">` : ''}
           <div style="font-size:22px;font-weight:700;color:#1e40af">${companyName}</div>
           ${settings.companyAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:4px">${settings.companyAddress.replace(/\n/g,'<br>')}</div>` : ''}
           ${settings.companyEmail ? `<div style="font-size:12px;color:#6b7280">${settings.companyEmail}</div>` : ''}
@@ -361,6 +401,125 @@ export default function BillingReports() {
           </Button>
         </div>
       </div>
+
+      {/* Report Branding Card */}
+      <Card data-testid="card-report-branding">
+        <CardHeader className="pb-3">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full text-left"
+            onClick={() => setBrandingOpen(o => !o)}
+            data-testid="button-toggle-branding"
+          >
+            <div className="flex items-center gap-3">
+              {logoPreview ? (
+                <img src={logoPreview} alt="Logo" className="h-8 max-w-[80px] object-contain" />
+              ) : (
+                <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                </div>
+              )}
+              <div>
+                <CardTitle className="text-base">
+                  {companyName || 'Set your company branding'}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {logoPreview ? 'Logo set — appears on all printed reports and CSVs' : 'Add your logo and company name to reports'}
+                </CardDescription>
+              </div>
+            </div>
+            {brandingOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+        </CardHeader>
+
+        {brandingOpen && (
+          <CardContent className="pt-0 space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Logo upload */}
+              <div className="space-y-2">
+                <Label>Company Logo</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleLogoFile}
+                  data-testid="input-logo-file"
+                />
+                {logoPreview ? (
+                  <div className="flex items-center gap-3 p-3 border rounded-md bg-muted/30">
+                    <img
+                      src={logoPreview}
+                      alt="Logo preview"
+                      className="h-10 max-w-[120px] object-contain"
+                      data-testid="img-logo-preview"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground">
+                        {logoPreview.startsWith('data:') ? 'Uploaded file' : 'URL set'}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => { setLogoPreview(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                      data-testid="button-remove-logo"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="button-upload-logo"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Logo (PNG, JPG — max 2MB)
+                  </Button>
+                )}
+                {!logoPreview && (
+                  <Input
+                    placeholder="Or paste a logo URL…"
+                    value={logoPreview}
+                    onChange={e => setLogoPreview(e.target.value)}
+                    data-testid="input-logo-url"
+                  />
+                )}
+              </div>
+
+              {/* Company name */}
+              <div className="space-y-2">
+                <Label>Company Name</Label>
+                <Input
+                  placeholder="Your company name"
+                  value={companyName}
+                  onChange={e => setCompanyName(e.target.value)}
+                  data-testid="input-company-name-branding"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shown at the top of every printed report and CSV download
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setBrandingOpen(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                onClick={() => saveBrandingMutation.mutate()}
+                disabled={saveBrandingMutation.isPending}
+                data-testid="button-save-branding"
+              >
+                {saveBrandingMutation.isPending ? 'Saving…' : 'Save Branding'}
+              </Button>
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
       <Card>
         <CardContent className="flex items-center justify-between p-4">
