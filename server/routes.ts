@@ -123,8 +123,7 @@ async function checkCompanyFeatureAccess(companyId: string, featureName: Feature
     }
     
     if (!company.planId) {
-      const basicFeatures: FeatureName[] = ['userManagement', 'dashboardAccess', 'checkInOut', 'siteManagement', 'shiftScheduling', 'leaveRequests'];
-      return { hasAccess: basicFeatures.includes(featureName) };
+      return { hasAccess: true }; // No plan = full access (beta / no restrictions)
     }
     
     const plan = await storage.getSubscriptionPlan(company.planId);
