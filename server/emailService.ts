@@ -1,4 +1,4 @@
-import { getUncachableGmailClient } from './gmail';
+import { getUncachableResendClient, GUARDTRACK_FROM } from './resend';
 
 interface InvitationEmailData {
   toEmail: string;
@@ -16,24 +16,19 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
   try {
     console.log('[Invitation Email] Starting send process...');
     console.log(`[Invitation Email] To: ${data.toEmail}, From: ${data.fromEmail}`);
-    
-    const gmail = await getUncachableGmailClient();
-    console.log('[Invitation Email] Gmail client obtained successfully');
-    
-    const domain = process.env.REPLIT_DOMAINS 
+
+    const domain = process.env.REPLIT_DOMAINS
       ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
       : (process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000');
 
-    // Primary CTA: direct activation link (bypasses PWA install gate)
     const installUrl = `${domain}/activate?token=${data.inviteToken}`;
-
     console.log(`[Invitation Email] Install URL: ${installUrl}`);
-    
-    const expiryHtml = data.expiresAt 
-      ? `<p style="color: #888; font-size: 13px; margin-top: 8px;">This invitation expires on ${data.expiresAt.toLocaleDateString('en-GB', { 
-          day: 'numeric', 
-          month: 'long', 
-          year: 'numeric' 
+
+    const expiryHtml = data.expiresAt
+      ? `<p style="color: #888; font-size: 13px; margin-top: 8px;">This invitation expires on ${data.expiresAt.toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
         })}.</p>`
       : '';
 
@@ -124,42 +119,19 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<vo
     const subject = data.companyName
       ? `Install GuardTrack App \u2013 ${data.companyName}`
       : `Install GuardTrack App`;
-    
-    const senderEmail = data.fromEmail || 'noreply@guardtrack.live';
-    const message = [
-      `From: ${data.fromName} <${senderEmail}>`,
-      `To: ${data.toEmail}`,
-      `Subject: ${subject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      htmlBody
-    ].join('\n');
 
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: {
-        raw: encodedMessage,
-      },
+    const resend = await getUncachableResendClient();
+    await resend.emails.send({
+      from: GUARDTRACK_FROM,
+      to: [data.toEmail],
+      subject,
+      html: htmlBody,
     });
 
     console.log(`✅ [Invitation Email] Sent successfully to ${data.toEmail}`);
   } catch (error: any) {
     console.error('❌ [Invitation Email] Error sending email:', error.message);
-    if (error.response) {
-      console.error('[Invitation Email] Response status:', error.response.status);
-      console.error('[Invitation Email] Response data:', JSON.stringify(error.response.data, null, 2));
-    }
-    if (error.stack) {
-      console.error('[Invitation Email] Stack trace:', error.stack);
-    }
-    // Preserve original error message for better debugging
+    if (error.stack) console.error('[Invitation Email] Stack trace:', error.stack);
     throw error;
   }
 }
@@ -179,16 +151,6 @@ interface JobShareNotificationData {
 export async function sendJobShareNotificationEmail(data: JobShareNotificationData): Promise<void> {
   try {
     console.log(`[Job Share Email] Sending notification to: ${data.toEmail} - Status: ${data.status}`);
-
-    const gmail = await getUncachableGmailClient();
-
-    let senderEmail = 'noreply@guardtrack.com';
-    try {
-      const profile = await gmail.users.getProfile({ userId: 'me' });
-      senderEmail = profile.data.emailAddress || senderEmail;
-    } catch (profileError) {
-      console.warn('[Job Share Email] Could not fetch user profile, using default sender');
-    }
 
     const statusLabels: Record<string, string> = {
       accepted: 'Accepted',
@@ -251,29 +213,12 @@ export async function sendJobShareNotificationEmail(data: JobShareNotificationDa
 </body>
 </html>`;
 
-    const subject = `Job Share ${statusLabel} - ${data.siteName}`;
-
-    const message = [
-      `From: GuardTrack <${senderEmail}>`,
-      `To: ${data.toEmail}`,
-      `Subject: ${subject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      htmlBody
-    ].join('\n');
-
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: {
-        raw: encodedMessage,
-      },
+    const resend = await getUncachableResendClient();
+    await resend.emails.send({
+      from: GUARDTRACK_FROM,
+      to: [data.toEmail],
+      subject: `Job Share ${statusLabel} - ${data.siteName}`,
+      html: htmlBody,
     });
 
     console.log(`[Job Share Email] Sent successfully to ${data.toEmail}`);
@@ -286,16 +231,6 @@ export async function sendJobShareNotificationEmail(data: JobShareNotificationDa
 export async function sendPasswordResetEmail(toEmail: string, resetToken: string, requestHost: string): Promise<void> {
   try {
     console.log(`[Password Reset Email] Sending to: ${toEmail}`);
-
-    const gmail = await getUncachableGmailClient();
-
-    let senderEmail = 'noreply@guardtrack.com';
-    try {
-      const profile = await gmail.users.getProfile({ userId: 'me' });
-      senderEmail = profile.data.emailAddress || senderEmail;
-    } catch {
-      console.warn('[Password Reset Email] Could not fetch sender profile, using default');
-    }
 
     const resetUrl = `${requestHost}/reset-password?token=${resetToken}`;
 
@@ -332,57 +267,26 @@ export async function sendPasswordResetEmail(toEmail: string, resetToken: string
 </body>
 </html>`;
 
-    const message = [
-      `From: GuardTrack <${senderEmail}>`,
-      `To: ${toEmail}`,
-      `Subject: Reset your GuardTrack password`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      htmlBody
-    ].join('\n');
-
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodedMessage },
+    const resend = await getUncachableResendClient();
+    await resend.emails.send({
+      from: GUARDTRACK_FROM,
+      to: [toEmail],
+      subject: 'Reset your GuardTrack password',
+      html: htmlBody,
     });
 
     console.log(`✅ [Password Reset Email] Sent successfully to ${toEmail}`);
   } catch (error: any) {
     console.error('❌ [Password Reset Email] Error sending email:', error.message);
-    if (error.response) {
-      console.error('[Password Reset Email] Response:', JSON.stringify(error.response.data, null, 2));
-    }
     throw error;
   }
 }
 
 export async function sendTrialInvitationEmail(toEmail: string, subject: string, body: string): Promise<void> {
   try {
-    const bodyPreview = body.length > 100 ? body.substring(0, 100) + '...' : body;
     console.log(`[Email] Starting trial invitation email to: ${toEmail}`);
     console.log(`[Email] Subject: ${subject}`);
-    console.log(`[Email] Body preview: ${bodyPreview}`);
-    
-    const gmail = await getUncachableGmailClient();
-    console.log('[Email] Gmail client obtained successfully');
-    
-    // First, get the authenticated user's email to use as sender
-    let senderEmail = 'noreply@guardtrack.com';
-    try {
-      const profile = await gmail.users.getProfile({ userId: 'me' });
-      senderEmail = profile.data.emailAddress || senderEmail;
-      console.log(`[Email] Using authenticated sender email: ${senderEmail}`);
-    } catch (profileError) {
-      console.warn('[Email] Could not fetch user profile, using default sender');
-    }
-    
+
     const htmlBody = `
 <!DOCTYPE html>
 <html>
@@ -402,41 +306,18 @@ export async function sendTrialInvitationEmail(toEmail: string, subject: string,
 </body>
 </html>`;
 
-    const message = [
-      `From: GuardTrack <${senderEmail}>`,
-      `To: ${toEmail}`,
-      `Subject: ${subject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      htmlBody
-    ].join('\n');
-
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    console.log('[Email] Sending email via Gmail API...');
-    const result = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: {
-        raw: encodedMessage,
-      },
+    const resend = await getUncachableResendClient();
+    const result = await resend.emails.send({
+      from: GUARDTRACK_FROM,
+      to: [toEmail],
+      subject,
+      html: htmlBody,
     });
 
-    console.log(`✅ [Email] Trial invitation email sent successfully to ${toEmail}, Message ID: ${result.data.id}`);
+    console.log(`✅ [Email] Trial invitation email sent successfully to ${toEmail}, ID: ${result.data?.id}`);
   } catch (error: any) {
     console.error('❌ [Email] Error sending trial invitation email:', error.message);
-    if (error.response) {
-      console.error('[Email] Response status:', error.response.status);
-      console.error('[Email] Response data:', JSON.stringify(error.response.data, null, 2));
-    }
-    if (error.stack) {
-      console.error('[Email] Stack trace:', error.stack);
-    }
-    // Preserve original error for stack trace
+    if (error.stack) console.error('[Email] Stack trace:', error.stack);
     throw error;
   }
 }
@@ -444,17 +325,7 @@ export async function sendTrialInvitationEmail(toEmail: string, subject: string,
 export async function sendAddedToCompanyEmail(toEmail: string, companyName: string, inviterName: string): Promise<void> {
   try {
     console.log(`[Email] Sending direct membership notification to: ${toEmail}`);
-    
-    const gmail = await getUncachableGmailClient();
-    
-    let senderEmail = 'noreply@guardtrack.com';
-    try {
-      const profile = await gmail.users.getProfile({ userId: 'me' });
-      senderEmail = profile.data.emailAddress || senderEmail;
-    } catch (profileError) {
-      console.warn('[Email] Could not fetch user profile, using default sender');
-    }
-    
+
     const htmlBody = `
 <!DOCTYPE html>
 <html>
@@ -471,7 +342,7 @@ export async function sendAddedToCompanyEmail(toEmail: string, companyName: stri
   </div>
 
   <div style="text-align: center; margin: 32px 0;">
-    <a href="https://guardtrack.live" 
+    <a href="https://guardtrack.live"
        style="display: inline-block; background-color: #1e40af; color: white; text-decoration: none; padding: 14px 36px; border-radius: 6px; font-weight: 600; font-size: 16px;">
       Log In to GuardTrack
     </a>
@@ -483,27 +354,12 @@ export async function sendAddedToCompanyEmail(toEmail: string, companyName: stri
 </body>
 </html>`;
 
-    const message = [
-      `From: GuardTrack <${senderEmail}>`,
-      `To: ${toEmail}`,
-      `Subject: You've been added to ${companyName} on GuardTrack`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      htmlBody
-    ].join('\n');
-
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: {
-        raw: encodedMessage,
-      },
+    const resend = await getUncachableResendClient();
+    await resend.emails.send({
+      from: GUARDTRACK_FROM,
+      to: [toEmail],
+      subject: `You've been added to ${companyName} on GuardTrack`,
+      html: htmlBody,
     });
 
     console.log(`✅ [Email] Direct membership email sent successfully to ${toEmail}`);
@@ -516,17 +372,7 @@ export async function sendAddedToCompanyEmail(toEmail: string, companyName: stri
 export async function sendAddedToAnotherCompanyEmail(toEmail: string, companyName: string): Promise<void> {
   try {
     console.log(`[Email] Sending pending membership notification to: ${toEmail}`);
-    
-    const gmail = await getUncachableGmailClient();
-    
-    let senderEmail = 'noreply@guardtrack.com';
-    try {
-      const profile = await gmail.users.getProfile({ userId: 'me' });
-      senderEmail = profile.data.emailAddress || senderEmail;
-    } catch (profileError) {
-      console.warn('[Email] Could not fetch user profile, using default sender');
-    }
-    
+
     const htmlBody = `
 <!DOCTYPE html>
 <html>
@@ -543,7 +389,7 @@ export async function sendAddedToAnotherCompanyEmail(toEmail: string, companyNam
   </div>
 
   <div style="text-align: center; margin: 32px 0;">
-    <a href="https://guardtrack.live/activate" 
+    <a href="https://guardtrack.live/activate"
        style="display: inline-block; background-color: #1e40af; color: white; text-decoration: none; padding: 14px 36px; border-radius: 6px; font-weight: 600; font-size: 16px;">
       Activate Your Account
     </a>
@@ -555,27 +401,12 @@ export async function sendAddedToAnotherCompanyEmail(toEmail: string, companyNam
 </body>
 </html>`;
 
-    const message = [
-      `From: GuardTrack <${senderEmail}>`,
-      `To: ${toEmail}`,
-      `Subject: New invitation for ${companyName} on GuardTrack`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      htmlBody
-    ].join('\n');
-
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: {
-        raw: encodedMessage,
-      },
+    const resend = await getUncachableResendClient();
+    await resend.emails.send({
+      from: GUARDTRACK_FROM,
+      to: [toEmail],
+      subject: `New invitation for ${companyName} on GuardTrack`,
+      html: htmlBody,
     });
 
     console.log(`✅ [Email] Pending membership email sent successfully to ${toEmail}`);
@@ -591,21 +422,10 @@ export async function sendNewJobShareEmail(
   jobCount: number,
   appUrl: string,
 ): Promise<void> {
-  const gmail = await getUncachableGmailClient();
-
-  let senderEmail = 'noreply@guardtrack.app';
-  try {
-    const profile = await gmail.users.getProfile({ userId: 'me' });
-    senderEmail = profile.data.emailAddress || senderEmail;
-  } catch {
-    console.warn('[New Job Share Email] Could not fetch sender profile, using default');
-  }
-
   const jobWord = jobCount === 1 ? 'job' : 'jobs';
-  const subject = `${fromCompanyName} has shared jobs with you on GuardTrack`;
 
-  // TODO: update the deep link path once the dedicated pending-shares screen exists
-  const deepLink = `${appUrl}`;
+  // TODO: update deepLink path to the dedicated pending-shares screen once that route exists
+  const deepLink = appUrl;
 
   const htmlBody = `<!DOCTYPE html>
 <html>
@@ -642,27 +462,12 @@ export async function sendNewJobShareEmail(
 </body>
 </html>`;
 
-  const textBody = `Hi,\n\n${fromCompanyName} has shared ${jobCount} ${jobWord} with your company on GuardTrack.\n\nPlease log in to GuardTrack to review and accept the shared ${jobWord}:\n\n${deepLink}\n\nThe GuardTrack Team`;
-
-  const message = [
-    `From: GuardTrack <${senderEmail}>`,
-    `To: ${toEmail}`,
-    `Subject: ${subject}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=utf-8',
-    '',
-    htmlBody,
-  ].join('\n');
-
-  const encodedMessage = Buffer.from(message)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-
-  await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw: encodedMessage },
+  const resend = await getUncachableResendClient();
+  await resend.emails.send({
+    from: GUARDTRACK_FROM,
+    to: [toEmail],
+    subject: `${fromCompanyName} has shared jobs with you on GuardTrack`,
+    html: htmlBody,
   });
 
   console.log(`[New Job Share Email] Sent successfully to ${toEmail} — ${jobCount} ${jobWord} from ${fromCompanyName}`);
