@@ -74,7 +74,7 @@ export default function BillingReports() {
   const { toast } = useToast();
   const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [expandedSite, setExpandedSite] = useState<string | null>(null);
-  const [brandingOpen, setBrandingOpen] = useState(false);
+  const [brandingOpen, setBrandingOpen] = useState(true);
   const [logoPreview, setLogoPreview] = useState<string>('');
   const [companyName, setCompanyName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
