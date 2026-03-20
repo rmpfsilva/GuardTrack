@@ -93,11 +93,12 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
   } catch {}
 
   const fmt = (d: any) => d ? new Date(d).toLocaleDateString("en-GB") : "N/A";
+  const CONTAINER_W = 794;
 
   const container = document.createElement('div');
   container.style.cssText = [
     'position:fixed', 'left:-9999px', 'top:0',
-    'width:794px', 'background:#fff', 'color:#111',
+    `width:${CONTAINER_W}px`, 'background:#fff', 'color:#111',
     'font-family:Arial,sans-serif', 'font-size:14px', 'padding:40px',
   ].join(';');
 
@@ -129,7 +130,7 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
 </style>
 <div class="header">
   <div class="header-left">
-    ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Logo" class="company-logo">` : ''}
+    ${branding.logoUrl ? `<img id="pdf-logo" src="${branding.logoUrl}" alt="Logo" class="company-logo">` : ''}
     ${!branding.logoUrl && branding.companyName ? `<div class="company-name">${branding.companyName}</div>` : ''}
     <div class="company-details">
       ${branding.companyAddress ? branding.companyAddress.replace(/\n/g, ' &bull; ') + '<br>' : ''}
@@ -170,6 +171,42 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
 
   document.body.appendChild(container);
 
+  // --- Logo: measure its rendered position, then hide it from html2canvas ---
+  // html2canvas downsamples images to their CSS-rendered pixel size.
+  // Instead we capture the layout without the logo, then stamp the original
+  // image data directly onto the PDF at full native resolution.
+  let logoPlacement: { x: number; y: number; w: number; h: number; fmt: string } | null = null;
+
+  if (branding.logoUrl) {
+    const logoEl = container.querySelector('#pdf-logo') as HTMLImageElement | null;
+    if (logoEl) {
+      // Wait for the image to fully load so getBoundingClientRect is accurate
+      if (!logoEl.complete || logoEl.naturalWidth === 0) {
+        await new Promise<void>((resolve) => {
+          logoEl.onload = () => resolve();
+          logoEl.onerror = () => resolve();
+        });
+      }
+
+      const cRect = container.getBoundingClientRect();
+      const lRect = logoEl.getBoundingClientRect();
+
+      // Container px → PDF mm  (A4 width = 210mm, container = CONTAINER_W px)
+      const toMm = (px: number) => (px * 210) / CONTAINER_W;
+
+      logoPlacement = {
+        x: toMm(lRect.left - cRect.left),
+        y: toMm(lRect.top  - cRect.top),
+        w: toMm(lRect.width),
+        h: toMm(lRect.height),
+        fmt: branding.logoUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG',
+      };
+
+      // Hide from html2canvas but keep the space so layout is unchanged
+      logoEl.style.visibility = 'hidden';
+    }
+  }
+
   try {
     const canvas = await html2canvas(container, {
       scale: 2,
@@ -194,6 +231,19 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
       remaining -= pageH;
       srcY += pageH;
       if (remaining > 0) pdf.addPage();
+    }
+
+    // Stamp the logo at full native resolution directly onto the first PDF page
+    if (logoPlacement && branding.logoUrl) {
+      pdf.setPage(1);
+      pdf.addImage(
+        branding.logoUrl,
+        logoPlacement.fmt,
+        logoPlacement.x,
+        logoPlacement.y,
+        logoPlacement.w,
+        logoPlacement.h,
+      );
     }
 
     pdf.save(`NCR-${issue.issueId}-${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.pdf`);
