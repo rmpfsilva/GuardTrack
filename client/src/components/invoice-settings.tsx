@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { FileText, Upload } from "lucide-react";
+import { FileText, Upload, X, Image } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { CompanySettings } from "@shared/schema";
@@ -32,6 +32,7 @@ type InvoiceSettingsForm = z.infer<typeof invoiceSettingsSchema>;
 
 export default function InvoiceSettings() {
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: settings, isLoading } = useQuery<CompanySettings>({
     queryKey: ['/api/company-settings'],
@@ -99,6 +100,25 @@ export default function InvoiceSettings() {
     updateSettingsMutation.mutate(data);
   };
 
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Invalid file", description: "Please select an image file.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Logo must be under 2MB.", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      form.setValue('logoUrl', base64, { shouldDirty: true });
+    };
+    reader.readAsDataURL(file);
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -117,7 +137,7 @@ export default function InvoiceSettings() {
           Invoice Information
         </CardTitle>
         <CardDescription>
-          Configure company details that appear on generated invoices
+          Configure company details that appear on generated invoices and printed reports
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -241,28 +261,71 @@ export default function InvoiceSettings() {
               />
             </div>
 
-            {/* Logo URL */}
+            {/* Logo Upload */}
             <FormField
               control={form.control}
               name="logoUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Company Logo URL</FormLabel>
+                  <FormLabel>Company Logo</FormLabel>
+                  <FormDescription>
+                    Appears on all generated invoices and printed reports. Upload an image or paste a URL.
+                  </FormDescription>
                   <FormControl>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="https://example.com/logo.png"
-                        {...field}
-                        data-testid="input-logo-url"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        data-testid="button-upload-logo"
-                      >
-                        <Upload className="h-4 w-4" />
-                      </Button>
+                    <div className="space-y-3">
+                      {/* Logo preview */}
+                      {field.value && (
+                        <div className="flex items-center gap-3 p-3 border rounded-md bg-muted/30">
+                          <img
+                            src={field.value}
+                            alt="Company logo preview"
+                            className="h-12 max-w-[160px] object-contain"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            data-testid="img-logo-preview"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">Logo uploaded</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {field.value.startsWith('data:') ? 'Uploaded file' : field.value}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => { field.onChange(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                            data-testid="button-remove-logo"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Upload button + URL input */}
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="https://example.com/logo.png"
+                          {...field}
+                          data-testid="input-logo-url"
+                        />
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleLogoFileChange}
+                          data-testid="input-logo-file"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => fileInputRef.current?.click()}
+                          data-testid="button-upload-logo"
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload
+                        </Button>
+                      </div>
                     </div>
                   </FormControl>
                   <FormMessage />

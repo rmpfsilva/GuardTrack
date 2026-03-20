@@ -4,7 +4,7 @@ import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Download, Receipt, Clock, FileText, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Receipt, Clock, FileText, TrendingUp, TrendingDown, Minus, Printer } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -177,21 +177,166 @@ export default function BillingReports() {
     }
   };
 
-  const exportToCSV = () => {
+  const exportToCSV = async () => {
     if (!report) return;
-    let csv = 'Site,Address,Hours,Revenue (IN),Cost (OUT),Profit\n';
+    let settings: any = {};
+    try {
+      const res = await fetch('/api/company-settings');
+      if (res.ok) settings = await res.json();
+    } catch {}
+
+    const companyName = settings.companyName || '';
+    const weekLabel = `${format(new Date(report.weekStart), 'dd/MM/yyyy')} - ${format(new Date(report.weekEnd), 'dd/MM/yyyy')}`;
+    const grandProfit = (report.grandClientTotal || 0) - (report.grandStaffTotal || 0);
+
+    let csv = '';
+    if (companyName) csv += `"${companyName}"\n`;
+    csv += `"Weekly Billing Report: ${weekLabel}"\n`;
+    csv += `"Generated: ${format(new Date(), 'dd/MM/yyyy HH:mm')}"\n\n`;
+    csv += 'Site,Address,Hours,Revenue (IN),Cost (OUT),Profit\n';
     report.sites.forEach(site => {
       const profit = site.clientTotal - site.staffTotal;
       csv += `"${site.siteName}","${site.siteAddress}",${site.totalHours.toFixed(2)},£${site.clientTotal.toFixed(2)},£${site.staffTotal.toFixed(2)},£${profit.toFixed(2)}\n`;
     });
-    const grandProfit = (report.grandClientTotal || 0) - (report.grandStaffTotal || 0);
     csv += `\nTotal,,,£${(report.grandClientTotal || 0).toFixed(2)},£${(report.grandStaffTotal || 0).toFixed(2)},£${grandProfit.toFixed(2)}\n`;
+
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `billing_${format(currentWeek, 'yyyy-MM-dd')}.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handlePrintReport = async () => {
+    if (!report) return;
+    let settings: any = {};
+    try {
+      const res = await fetch('/api/company-settings');
+      if (res.ok) settings = await res.json();
+    } catch {}
+
+    const companyName = settings.companyName || 'Company';
+    const weekLabel = `${format(new Date(report.weekStart), 'dd MMM yyyy')} – ${format(new Date(report.weekEnd), 'dd MMM yyyy')}`;
+    const grandProfit = (report.grandClientTotal || 0) - (report.grandStaffTotal || 0);
+    const totalHours = report.sites.reduce((s, x) => s + x.totalHours, 0);
+
+    const siteRows = report.sites.map(site => {
+      const profit = site.clientTotal - site.staffTotal;
+      const profitColor = profit >= 0 ? '#16a34a' : '#dc2626';
+      const shiftRows = site.shifts.map(sh => `
+        <tr style="border-bottom:1px solid #f3f4f6">
+          <td style="padding:7px 10px">${sh.workerName}</td>
+          <td style="padding:7px 10px">${sh.jobTitle || sh.role}</td>
+          <td style="padding:7px 10px">${format(new Date(sh.checkInTime), 'EEE d MMM')}</td>
+          <td style="padding:7px 10px;text-align:right">${sh.hoursWorked.toFixed(2)}</td>
+          <td style="padding:7px 10px;text-align:right;color:#ea580c">£${sh.staffRate.toFixed(2)}/hr</td>
+          <td style="padding:7px 10px;text-align:right;color:#16a34a">£${sh.clientRate.toFixed(2)}/hr</td>
+          <td style="padding:7px 10px;text-align:right">£${sh.staffAmount.toFixed(2)}</td>
+          <td style="padding:7px 10px;text-align:right;font-weight:600">£${sh.clientAmount.toFixed(2)}</td>
+        </tr>`).join('');
+
+      return `
+        <div style="margin-bottom:32px;page-break-inside:avoid">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+            <div>
+              <div style="font-size:16px;font-weight:700;color:#1e40af">${site.siteName}</div>
+              <div style="font-size:12px;color:#6b7280">${site.siteAddress}</div>
+            </div>
+            <div style="display:flex;gap:20px;text-align:center">
+              <div><div style="font-size:11px;color:#6b7280">Revenue</div><div style="font-weight:700;color:#16a34a">£${site.clientTotal.toFixed(2)}</div></div>
+              <div><div style="font-size:11px;color:#6b7280">Staff Cost</div><div style="font-weight:700;color:#ea580c">£${site.staffTotal.toFixed(2)}</div></div>
+              <div><div style="font-size:11px;color:#6b7280">Profit</div><div style="font-weight:700;color:${profitColor}">£${profit.toFixed(2)}</div></div>
+              <div><div style="font-size:11px;color:#6b7280">Hours</div><div style="font-weight:700">${site.totalHours.toFixed(1)}h</div></div>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="background:#1e40af;color:white">
+                <th style="padding:8px 10px;text-align:left">Worker</th>
+                <th style="padding:8px 10px;text-align:left">Role</th>
+                <th style="padding:8px 10px;text-align:left">Date</th>
+                <th style="padding:8px 10px;text-align:right">Hours</th>
+                <th style="padding:8px 10px;text-align:right">Staff Rate</th>
+                <th style="padding:8px 10px;text-align:right">Client Rate</th>
+                <th style="padding:8px 10px;text-align:right">Staff Cost</th>
+                <th style="padding:8px 10px;text-align:right">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>${shiftRows}</tbody>
+            <tfoot>
+              <tr style="background:#f9fafb;font-weight:700;border-top:2px solid #e5e7eb">
+                <td colspan="3" style="padding:8px 10px">Site Total — ${site.totalHours.toFixed(1)} hrs</td>
+                <td colspan="3"></td>
+                <td style="padding:8px 10px;text-align:right;color:#ea580c">£${site.staffTotal.toFixed(2)}</td>
+                <td style="padding:8px 10px;text-align:right;color:#16a34a">£${site.clientTotal.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head><title>${companyName} – Weekly Report ${weekLabel}</title>
+      <style>
+        body{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;padding:24px;color:#111}
+        @media print{body{padding:12px}@page{margin:15mm}}
+      </style></head><body>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1e40af;padding-bottom:16px;margin-bottom:24px">
+        <div>
+          ${settings.logoUrl ? `<img src="${settings.logoUrl}" alt="${companyName}" style="max-height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block">` : ''}
+          <div style="font-size:22px;font-weight:700;color:#1e40af">${companyName}</div>
+          ${settings.companyAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:4px">${settings.companyAddress.replace(/\n/g,'<br>')}</div>` : ''}
+          ${settings.companyEmail ? `<div style="font-size:12px;color:#6b7280">${settings.companyEmail}</div>` : ''}
+          ${settings.companyPhone ? `<div style="font-size:12px;color:#6b7280">${settings.companyPhone}</div>` : ''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:20px;font-weight:700;color:#1e40af">WEEKLY BILLING REPORT</div>
+          <div style="font-size:13px;color:#374151;margin-top:4px">${weekLabel}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:4px">Generated: ${format(new Date(), 'dd/MM/yyyy HH:mm')}</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:32px;background:#1e40af;color:white;border-radius:8px;padding:16px 24px;margin-bottom:32px">
+        <div style="text-align:center">
+          <div style="font-size:11px;opacity:0.8;margin-bottom:4px">Total Revenue (IN)</div>
+          <div style="font-size:22px;font-weight:700">£${(report.grandClientTotal || 0).toFixed(2)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;opacity:0.8;margin-bottom:4px">Staff Cost (OUT)</div>
+          <div style="font-size:22px;font-weight:700">£${(report.grandStaffTotal || 0).toFixed(2)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;opacity:0.8;margin-bottom:4px">Net Profit</div>
+          <div style="font-size:22px;font-weight:700">£${grandProfit.toFixed(2)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;opacity:0.8;margin-bottom:4px">Total Hours</div>
+          <div style="font-size:22px;font-weight:700">${totalHours.toFixed(1)}h</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;opacity:0.8;margin-bottom:4px">Sites</div>
+          <div style="font-size:22px;font-weight:700">${report.sites.length}</div>
+        </div>
+      </div>
+
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px;color:#374151">Site Breakdown</div>
+      ${siteRows}
+
+      <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center">
+        ${companyName} — Confidential Weekly Billing Report — ${weekLabel}
+      </div>
+    </body></html>`;
+
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 300);
+    } else {
+      alert('Please allow pop-ups to print the report.');
+    }
   };
 
   const grandClient = report?.grandClientTotal ?? 0;
@@ -205,10 +350,16 @@ export default function BillingReports() {
           <h2 className="text-3xl font-bold">Billing & Invoicing</h2>
           <p className="text-muted-foreground">Weekly revenue, costs, and profit per site</p>
         </div>
-        <Button onClick={exportToCSV} disabled={!report || report.sites.length === 0} data-testid="button-export-csv">
-          <Download className="mr-2 h-4 w-4" />
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handlePrintReport} disabled={!report || report.sites.length === 0} data-testid="button-print-report">
+            <Printer className="mr-2 h-4 w-4" />
+            Print Report
+          </Button>
+          <Button onClick={exportToCSV} disabled={!report || report.sites.length === 0} data-testid="button-export-csv">
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <Card>
