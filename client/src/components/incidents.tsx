@@ -107,7 +107,7 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
   .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #1d4ed8; padding-bottom:16px; margin-bottom:24px; gap:24px; }
   .header-left { flex:1; }
   .header-right { text-align:right; min-width:200px; }
-  .company-logo { max-height:56px; max-width:180px; object-fit:contain; display:block; margin-bottom:6px; }
+  .company-logo { max-height:120px; max-width:300px; object-fit:contain; display:block; margin-bottom:8px; }
   .company-name { font-size:18px; font-weight:700; color:#1d4ed8; }
   .company-details { font-size:11px; color:#6b7280; margin-top:2px; line-height:1.5; }
   .report-label { font-size:20px; font-weight:700; color:#1d4ed8; }
@@ -130,7 +130,7 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
 <div class="header">
   <div class="header-left">
     ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Logo" class="company-logo">` : ''}
-    ${branding.companyName ? `<div class="company-name">${branding.companyName}</div>` : ''}
+    ${!branding.logoUrl && branding.companyName ? `<div class="company-name">${branding.companyName}</div>` : ''}
     <div class="company-details">
       ${branding.companyAddress ? branding.companyAddress.replace(/\n/g, ' &bull; ') + '<br>' : ''}
       ${branding.companyEmail || ''}${branding.companyPhone ? ' &bull; ' + branding.companyPhone : ''}
