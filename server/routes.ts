@@ -4099,7 +4099,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       (async () => {
         try {
           const toCompany = await storage.getCompany(req.body.toCompanyId);
-          if (!toCompany?.companyEmail) {
+          if (!toCompany?.email) {
             console.warn(`[New Job Share Email] No email for company ${req.body.toCompanyId}, skipping notification`);
             return;
           }
@@ -4115,7 +4115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const fromName = fromCompany?.name || 'A partner company';
           // TODO: replace appUrl with the dedicated pending-shares deep link once that screen exists
           const appUrl = process.env.APP_URL || process.env.VITE_APP_URL || 'https://guardtrack.app';
-          await sendNewJobShareEmail(toCompany.companyEmail, fromName, totalJobs, appUrl);
+          await sendNewJobShareEmail(toCompany.email, fromName, totalJobs, appUrl);
         } catch (emailErr: any) {
           console.error('[New Job Share Email] Failed to send notification:', emailErr.message);
         }
