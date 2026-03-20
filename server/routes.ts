@@ -3574,11 +3574,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Company settings routes (admin only for updates, all authenticated users can view)
   app.get('/api/company-settings', isAuthenticated, async (req: any, res) => {
     try {
-      let settings = await storage.getCompanySettings();
+      const user = req.user;
+      let settings = await storage.getCompanySettings(user?.companyId);
       
-      // If no settings exist, return sensible defaults (don't try to create with a fake company ID)
+      // If no settings exist for this company, create them
       if (!settings) {
-        const user = req.user;
         if (user?.companyId) {
           try {
             settings = await storage.createCompanySettings({
@@ -3611,13 +3611,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/company-settings', isAuthenticated, isAdmin, async (req, res) => {
+  app.put('/api/company-settings', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      let settings = await storage.getCompanySettings();
+      const user = req.user;
+      let settings = await storage.getCompanySettings(user?.companyId);
       
       if (!settings) {
-        // Create new settings if none exist
-        settings = await storage.createCompanySettings(req.body);
+        // Create new settings scoped to this company
+        settings = await storage.createCompanySettings({ ...req.body, companyId: user?.companyId });
       } else {
         // Update existing settings
         settings = await storage.updateCompanySettings(settings.id, req.body);

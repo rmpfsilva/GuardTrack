@@ -290,7 +290,7 @@ export interface IStorage {
   updateUserFcmToken(userId: string, token: string): Promise<void>;
 
   // Company settings operations
-  getCompanySettings(): Promise<CompanySettings | undefined>;
+  getCompanySettings(companyId?: string): Promise<CompanySettings | undefined>;
   createCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings>;
   updateCompanySettings(id: string, updates: UpdateCompanySettings): Promise<CompanySettings>;
 
@@ -2822,7 +2822,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Company settings operations
-  async getCompanySettings(): Promise<CompanySettings | undefined> {
+  async getCompanySettings(companyId?: string): Promise<CompanySettings | undefined> {
+    if (companyId) {
+      const [settings] = await db.select().from(companySettings).where(eq(companySettings.companyId, companyId));
+      return settings;
+    }
     const [settings] = await db.select().from(companySettings).limit(1);
     return settings;
   }
