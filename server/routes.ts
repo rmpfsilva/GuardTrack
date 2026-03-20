@@ -4113,9 +4113,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           const fromCompany = await storage.getCompany(user.companyId);
           const fromName = fromCompany?.name || 'A partner company';
-          // Derive the base URL from the live request so it works correctly in both dev and production
-          // TODO: update path to dedicated pending-shares screen once that route exists
-          const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+          // Derive the URL from the live request — works correctly in both dev and production
+          const appUrl = `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/login`;
           await sendNewJobShareEmail(toCompany.email, fromName, totalJobs, appUrl);
         } catch (emailErr: any) {
           console.error('[New Job Share Email] Failed to send notification:', emailErr.message);
