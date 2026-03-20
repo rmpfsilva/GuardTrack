@@ -87,8 +87,9 @@ export function usePlanFeatures() {
       return PRO_TABS;
     }
 
+    // No plan assigned (or still loading) = full access
     if (!companyPlan?.plan) {
-      return STARTER_TABS;
+      return PRO_TABS;
     }
 
     const planName = companyPlan.plan.name?.toLowerCase();
@@ -109,8 +110,9 @@ export function usePlanFeatures() {
       return true;
     }
 
+    // No plan assigned (or still loading) = full access
     if (!companyPlan?.plan?.features) {
-      return false;
+      return true;
     }
 
     return companyPlan.plan.features[feature] === true;
