@@ -6,7 +6,7 @@ import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
 import { users, breaks, checkIns, sites, companies, JOB_SHARE_ROLES } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
-import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema, insertInvoiceSchema, updateInvoiceSchema } from "@shared/schema";
+import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema, insertInvoiceSchema, updateInvoiceSchema, updateCompanySettingsSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
 import { sendInvitationEmail, sendJobShareNotificationEmail } from './emailService';
@@ -3615,13 +3615,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user;
       let settings = await storage.getCompanySettings(user?.companyId);
-      
+
+      // Parse through schema to strip id/createdAt/updatedAt (which arrive as strings from the client)
+      const parsed = updateCompanySettingsSchema.parse(req.body);
+
       if (!settings) {
-        // Create new settings scoped to this company
-        settings = await storage.createCompanySettings({ ...req.body, companyId: user?.companyId });
+        settings = await storage.createCompanySettings({ ...parsed, companyId: user?.companyId });
       } else {
-        // Update existing settings
-        settings = await storage.updateCompanySettings(settings.id, req.body);
+        settings = await storage.updateCompanySettings(settings.id, parsed);
       }
       
       res.json(settings);
