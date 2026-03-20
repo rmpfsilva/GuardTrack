@@ -178,7 +178,7 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
       logging: false,
     });
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
@@ -190,7 +190,7 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
 
     while (remaining > 0) {
       const sliceH = Math.min(remaining, pageH);
-      pdf.addImage(imgData, 'JPEG', 0, srcY === 0 ? 0 : -(imgH - sliceH), imgW, imgH);
+      pdf.addImage(imgData, 'PNG', 0, srcY === 0 ? 0 : -(imgH - sliceH), imgW, imgH);
       remaining -= pageH;
       srcY += pageH;
       if (remaining > 0) pdf.addPage();
