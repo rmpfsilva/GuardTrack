@@ -6279,19 +6279,27 @@ GuardTrack Team`;
 
   app.get("/api/public/issue-report/:issueId", async (req: any, res) => {
     try {
-      const [issue] = await import("drizzle-orm").then(({ eq }) =>
-        import("./db").then(({ db }) =>
-          import("@shared/schema").then(({ issues }) =>
-            db.select().from(issues).where(eq(issues.issueId, req.params.issueId))
-          )
-        )
-      );
+      const { eq } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      const { issues, companySettings } = await import("@shared/schema");
+
+      const [issue] = await db.select().from(issues).where(eq(issues.issueId, req.params.issueId));
       if (!issue) return res.status(404).json({ error: "Issue not found" });
       if (!issue.reportContent) return res.status(404).json({ error: "Report not yet generated" });
+
+      let branding: { companyName?: string; logoUrl?: string } = {};
+      if (issue.companyId) {
+        const [settings] = await db.select().from(companySettings).where(eq(companySettings.companyId, issue.companyId));
+        if (settings) {
+          branding = { companyName: settings.companyName || undefined, logoUrl: settings.logoUrl || undefined };
+        }
+      }
+
       res.json({
         issueId: issue.issueId, title: issue.title, siteName: issue.siteName,
         dateLogged: issue.dateLogged, reportedBy: issue.reportedBy, status: issue.status,
         reportContent: issue.reportContent, reportGeneratedAt: issue.reportGeneratedAt,
+        companyName: branding.companyName, logoUrl: branding.logoUrl,
       });
     } catch (e) { res.status(500).json({ error: "Failed to fetch report" }); }
   });

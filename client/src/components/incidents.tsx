@@ -83,7 +83,13 @@ function userDisplayName(u: CompanyUser): string {
   return name || u.username;
 }
 
-function printIssuePDF(issue: Issue) {
+async function printIssuePDF(issue: Issue) {
+  let branding: any = {};
+  try {
+    const res = await fetch('/api/company-settings');
+    if (res.ok) branding = await res.json();
+  } catch {}
+
   const w = window.open("", "_blank", "width=900,height=700");
   if (!w) return;
   const fmt = (d: any) => d ? new Date(d).toLocaleDateString("en-GB") : "N/A";
@@ -91,9 +97,14 @@ function printIssuePDF(issue: Issue) {
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; color: #111; padding: 40px; font-size: 14px; }
-  .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 16px; margin-bottom: 24px; }
-  .header h1 { font-size: 22px; color: #1d4ed8; margin-bottom: 4px; }
-  .header .sub { color: #555; font-size: 13px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1d4ed8; padding-bottom: 16px; margin-bottom: 24px; gap: 24px; }
+  .header-left { flex: 1; }
+  .header-right { text-align: right; }
+  .company-logo { max-height: 56px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 6px; }
+  .company-name { font-size: 18px; font-weight: 700; color: #1d4ed8; }
+  .company-details { font-size: 11px; color: #6b7280; margin-top: 2px; line-height: 1.5; }
+  .report-label { font-size: 20px; font-weight: 700; color: #1d4ed8; }
+  .report-sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
   .badges { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
   .badge { padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; border: 1px solid; }
   .badge-red { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
@@ -108,16 +119,27 @@ function printIssuePDF(issue: Issue) {
   .section h3 { font-size: 12px; text-transform: uppercase; color: #888; letter-spacing: 0.06em; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 10px; }
   .section p { font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
   .ncr-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 16px; }
-  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #888; }
+  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #888; display: flex; justify-content: space-between; }
   @media print { body { padding: 20px; } }
 </style></head><body>
 <div class="header">
-  <h1>Non-Conformance Report</h1>
-  <div class="sub">${issue.issueId} &bull; Generated ${new Date().toLocaleDateString("en-GB")}</div>
-  <div class="badges">
-    ${issue.status ? `<span class="badge badge-blue">${issue.status}</span>` : ""}
-    ${issue.priority === "High" ? `<span class="badge badge-red">${issue.priority}</span>` : issue.priority === "Medium" ? `<span class="badge badge-amber">${issue.priority}</span>` : issue.priority ? `<span class="badge badge-green">${issue.priority}</span>` : ""}
-    ${issue.severity === "Critical" || issue.severity === "Severe" ? `<span class="badge badge-red">${issue.severity}</span>` : issue.severity === "Moderate" ? `<span class="badge badge-amber">${issue.severity}</span>` : issue.severity ? `<span class="badge badge-green">${issue.severity}</span>` : ""}
+  <div class="header-left">
+    ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Logo" class="company-logo">` : ''}
+    ${branding.companyName ? `<div class="company-name">${branding.companyName}</div>` : ''}
+    <div class="company-details">
+      ${branding.companyAddress ? branding.companyAddress.replace(/\n/g, ' &bull; ') + '<br>' : ''}
+      ${branding.companyEmail ? branding.companyEmail : ''}${branding.companyPhone ? ' &bull; ' + branding.companyPhone : ''}
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="report-label">NON-CONFORMANCE REPORT</div>
+    <div class="report-sub">${issue.issueId}</div>
+    <div class="report-sub">Generated: ${new Date().toLocaleDateString("en-GB")}</div>
+    <div class="badges" style="justify-content:flex-end;margin-top:8px">
+      ${issue.status ? `<span class="badge badge-blue">${issue.status}</span>` : ""}
+      ${issue.priority === "High" ? `<span class="badge badge-red">${issue.priority}</span>` : issue.priority === "Medium" ? `<span class="badge badge-amber">${issue.priority}</span>` : issue.priority ? `<span class="badge badge-green">${issue.priority}</span>` : ""}
+      ${issue.severity === "Critical" || issue.severity === "Severe" ? `<span class="badge badge-red">${issue.severity}</span>` : issue.severity === "Moderate" ? `<span class="badge badge-amber">${issue.severity}</span>` : issue.severity ? `<span class="badge badge-green">${issue.severity}</span>` : ""}
+    </div>
   </div>
 </div>
 <div class="grid2">
@@ -136,7 +158,10 @@ ${issue.remedialAction ? `<div class="section"><h3>Remedial Action Taken</h3><p>
 ${issue.proposedAction ? `<div class="section"><h3>Proposed Corrective Action</h3><p>${issue.proposedAction}</p></div>` : ""}
 ${issue.reportContent ? `<div class="section"><h3>AI-Generated NCR</h3><div class="ncr-box"><p>${issue.reportContent}</p></div></div>` : ""}
 ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</p></div>` : ""}
-<div class="footer">GuardTrack Incident Management &bull; Confidential</div>
+<div class="footer">
+  <span>${branding.companyName || 'GuardTrack'} &bull; Incident Management &bull; Confidential</span>
+  <span>${new Date().toLocaleDateString("en-GB")}</span>
+</div>
 </body></html>`);
   w.document.close();
   setTimeout(() => w.print(), 400);
