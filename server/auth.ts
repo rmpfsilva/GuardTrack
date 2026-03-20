@@ -445,7 +445,14 @@ export function setupAuth(app: Express) {
         } catch (e) { console.error('Error tracking login:', e); }
         const company = user!.companyId ? await storage.getCompany(user!.companyId) : null;
         storage.createAuthActivityLog({ eventType: 'login', status: 'success', username: email, email: user!.email || undefined, userId: user!.id, companyId: user!.companyId || undefined, companyName: company?.name || undefined, ipAddress, userAgent }).catch(() => {});
-        return res.status(200).json(sanitizeUser(user as SelectUser));
+        // Return sanitized user enriched with memberships and isMultiCompany
+        const activeMemberships = await storage.getActiveMemberships(user!.id);
+        const enrichedUser = {
+          ...sanitizeUser(user as SelectUser),
+          memberships: activeMemberships,
+          isMultiCompany: activeMemberships.length > 1,
+        };
+        return res.status(200).json(enrichedUser);
       });
     } catch (error: any) {
       console.error('Login error:', error);

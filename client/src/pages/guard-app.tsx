@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import type { AuthUser } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useInstallPWA } from "@/hooks/use-install-pwa";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -1189,9 +1190,9 @@ export default function GuardApp() {
           <div>
             <div className="mb-4">
               <h2 className="text-xl font-bold">My Schedule</h2>
-              {(user as any)?.isMultiCompany && (
+              {(user as AuthUser)?.isMultiCompany && (
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Across {(user as any)?.memberships?.length || 0} Companies
+                  Across {(user as AuthUser)?.memberships?.length ?? 0} Companies
                 </p>
               )}
             </div>

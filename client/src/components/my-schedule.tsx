@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ScheduledShiftWithDetails } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import type { AuthUser } from "@/hooks/use-auth";
 import { getCompanyColor } from "@/lib/utils";
 
 const JOB_TITLE_COLORS: Record<string, { strip: string; bg: string; border: string; text: string }> = {
@@ -56,8 +57,9 @@ export default function MySchedule() {
     return <div className="p-4" data-testid="loading-my-schedule">Loading your schedule...</div>;
   }
 
-  const isMultiCompany = (user as any)?.isMultiCompany;
-  const memberships = (user as any)?.memberships || [];
+  const authUser = user as AuthUser | null;
+  const isMultiCompany = authUser?.isMultiCompany ?? false;
+  const memberships = authUser?.memberships ?? [];
 
   return (
     <div className="space-y-4">

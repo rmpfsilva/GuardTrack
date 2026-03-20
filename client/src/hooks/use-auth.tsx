@@ -5,18 +5,23 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
+import { insertUserSchema, User as SelectUser, InsertUser, CompanyMembershipWithCompany } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+export type AuthUser = SelectUser & {
+  memberships: CompanyMembershipWithCompany[];
+  isMultiCompany: boolean;
+};
+
 type AuthContextType = {
-  user: SelectUser | null;
+  user: AuthUser | null;
   isLoading: boolean;
   error: Error | null;
   isAdmin: boolean;
-  loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
+  loginMutation: UseMutationResult<AuthUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
+  registerMutation: UseMutationResult<AuthUser, Error, InsertUser>;
 };
 
 export type CompanyOption = {
@@ -46,13 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: user,
     error,
     isLoading,
-  } = useQuery<SelectUser | undefined, Error>({
+  } = useQuery<AuthUser | undefined, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
   const loginMutation = useMutation({
-    mutationFn: async (credentials: LoginData): Promise<SelectUser> => {
+    mutationFn: async (credentials: LoginData): Promise<AuthUser> => {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,9 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         err.multipleCompanies = data.multipleCompanies;
         throw err;
       }
-      return data as SelectUser;
+      return data as AuthUser;
     },
-    onSuccess: (user: SelectUser) => {
+    onSuccess: (user: AuthUser) => {
       queryClient.setQueryData(["/api/user"], user);
     },
     onError: (error: Error) => {
@@ -85,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
+    onSuccess: (user: AuthUser) => {
       queryClient.setQueryData(["/api/user"], user);
     },
     onError: (error: Error) => {
