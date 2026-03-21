@@ -125,17 +125,19 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
       // Placeholder <div> that occupies exactly the same space the logo would
       logoPlaceholderHtml = `<div id="logo-ph" style="width:${dw}px;height:${dh}px;display:block;margin-bottom:8px;"></div>`;
 
-      // Downsample logo to 2× display size for print-quality PDF embedding.
-      // This prevents huge native resolutions (8000×8000, etc.) from bloating the PDF.
-      const pdfLogoW = dw * 2;
-      const pdfLogoH = dh * 2;
+      // Resample logo to high print-quality resolution for PDF embedding.
+      // Cap at 1200px max — enough for ~10× display pixels, giving crisp zoom/print quality.
+      // The source may be 8000×8000, so we must cap to avoid 256MB bloat (64MP × 4 bytes).
+      const PDF_LOGO_MAX_PX = 1200;
+      const pdfLogoW = Math.min(preload.naturalWidth, Math.round(PDF_LOGO_MAX_PX));
+      const pdfLogoH = Math.round(pdfLogoW / (preload.naturalWidth / preload.naturalHeight));
       const offscreen = document.createElement('canvas');
       offscreen.width = pdfLogoW;
       offscreen.height = pdfLogoH;
       const ctx = offscreen.getContext('2d')!;
       ctx.drawImage(preload, 0, 0, pdfLogoW, pdfLogoH);
       const isTransparent = branding.logoUrl.startsWith('data:image/png');
-      const resizedDataUrl = offscreen.toDataURL(isTransparent ? 'image/png' : 'image/jpeg', 0.92);
+      const resizedDataUrl = offscreen.toDataURL(isTransparent ? 'image/png' : 'image/jpeg', 0.95);
 
       logoPDF = {
         x: 0, y: 0,

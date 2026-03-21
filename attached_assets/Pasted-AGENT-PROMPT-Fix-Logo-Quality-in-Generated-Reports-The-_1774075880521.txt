@@ -1,0 +1,52 @@
+AGENT PROMPT — Fix Logo Quality in Generated Reports
+The Problem:
+The TES Security Services logo is appearing low quality/pixelated in generated reports. The client has the original high-resolution PNG logo (black background version provided). The logo in reports must match the crisp quality of the original.
+Work through ALL of the following approaches and implement whichever combination produces the sharpest result:
+
+Approach 1 — Check how the image is being inserted
+
+Find where the report generation code inserts the logo
+Check if the image is being resized/compressed anywhere in the code before insertion
+Remove any compression, quality reduction, or aggressive resizing applied to the logo before it renders in the report
+
+
+Approach 2 — Check the stored/uploaded logo file itself
+
+Check what resolution the logo file is stored at in the database or file storage
+If it is being stored as a small thumbnail or compressed on upload, fix the upload pipeline to preserve the original resolution
+Re-upload the original high resolution file after fixing the upload pipeline
+
+
+Approach 3 — Fix rendering size in the report
+
+Find where the logo renders in the report template
+Make sure the display dimensions in the report (width/height attributes or CSS) are not set larger than the actual image pixel dimensions — this causes pixelation
+Set explicit pixel dimensions that match or are smaller than the source image
+Use object-fit: contain if CSS is involved so the image scales cleanly
+
+
+Approach 4 — If using PDF generation (Puppeteer, jsPDF, PDFKit etc.)
+
+Check the image DPI/resolution setting in the PDF generator
+Most PDF libraries default to 72dpi — increase to 150 or 300dpi for print quality
+If using Puppeteer, ensure deviceScaleFactor is set to 2 or higher when capturing
+If using jsPDF, use addImage with explicit width/height in mm rather than letting it auto-scale
+
+
+Approach 5 — White background version
+
+The current logo has a black background which may be causing contrast/rendering issues in a white report
+Create or request a transparent background version of the logo for use in reports
+If the only version available has a black background, add CSS mix-blend-mode: multiply to the image element so the black background disappears on white report backgrounds
+
+
+Approach 6 — Convert to SVG for the report
+
+If possible, convert the PNG logo to SVG format using a tool like imagetracer or a conversion API
+SVG logos are infinitely scalable and will always render perfectly at any size in reports
+Replace the PNG reference in the report template with the SVG version
+
+
+Success Criteria:
+The logo in the generated report must look as sharp and clean as the standalone PNG logo file when viewed on screen and when printed. The client must be able to zoom into the report and see clean edges on the logo shapes with no pixelation or blurring.
+Do not consider this task complete until the logo renders crisply at full report width.
