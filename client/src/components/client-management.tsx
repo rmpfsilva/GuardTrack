@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -16,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle, Shield, Check, X, GitMerge, Palette } from "lucide-react";
+import { Building2, Ban, Clock, Mail, CreditCard, Calendar, BarChart3, UserPlus, Trash2, CheckCircle, XCircle, AlertCircle, Shield, Check, X, GitMerge, Palette, Eye } from "lucide-react";
 import { BrandingSettings } from "@/components/branding-settings";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Company } from "@shared/schema";
@@ -352,6 +353,25 @@ export default function ClientManagement() {
     },
   });
 
+  const [, setLocation] = useLocation();
+
+  const impersonateMutation = useMutation({
+    mutationFn: async (companyId: string) => {
+      return await apiRequest("POST", `/api/super-admin/impersonate/${companyId}`);
+    },
+    onSuccess: (_data, companyId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      setLocation('/admin');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to switch to company view",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getInvitationStatusBadge = (invitation: TrialInvitation) => {
     const now = new Date();
     const expiresAt = new Date(invitation.expiresAt);
@@ -634,6 +654,16 @@ export default function ClientManagement() {
                       <Settings className="h-4 w-4 mr-2" />
                       Manage
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => impersonateMutation.mutate(client.id)}
+                      disabled={impersonateMutation.isPending}
+                      data-testid={`button-view-as-admin-${client.id}`}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View as Admin
+                    </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
                         Block reason: {client.blockReason}
@@ -800,6 +830,16 @@ export default function ClientManagement() {
                       <Settings className="h-4 w-4 mr-2" />
                       Manage
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => impersonateMutation.mutate(client.id)}
+                      disabled={impersonateMutation.isPending}
+                      data-testid={`button-view-as-admin-trial-${client.id}`}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View as Admin
+                    </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
                         Block reason: {client.blockReason}
@@ -933,6 +973,16 @@ export default function ClientManagement() {
                       <Settings className="h-4 w-4 mr-2" />
                       Manage
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => impersonateMutation.mutate(client.id)}
+                      disabled={impersonateMutation.isPending}
+                      data-testid={`button-view-as-admin-full-${client.id}`}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View as Admin
+                    </Button>
                     {client.isBlocked && client.blockReason && (
                       <div className="w-full mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
                         Block reason: {client.blockReason}
@@ -1050,6 +1100,16 @@ export default function ClientManagement() {
                     >
                       <Settings className="h-4 w-4 mr-2" />
                       Manage
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => impersonateMutation.mutate(client.id)}
+                      disabled={impersonateMutation.isPending}
+                      data-testid={`button-view-as-admin-expired-${client.id}`}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View as Admin
                     </Button>
                   </div>
                 </CardContent>

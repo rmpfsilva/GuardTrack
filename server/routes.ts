@@ -5176,6 +5176,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Super Admin Company Impersonation Routes
+  // Only super admins can activate this; it lets them view admin data as a specific company
+  app.post('/api/super-admin/impersonate/:companyId', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      const { companyId } = req.params;
+      const company = await storage.getCompany(companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      (req.session as any).impersonatedCompanyId = companyId;
+      (req.session as any).impersonatedCompanyName = company.name;
+      res.json({ success: true, companyId, companyName: company.name });
+    } catch (error) {
+      console.error("Error starting impersonation:", error);
+      res.status(500).json({ message: "Failed to start company view" });
+    }
+  });
+
+  app.delete('/api/super-admin/impersonate', isAuthenticated, isSuperAdmin, async (req: any, res) => {
+    try {
+      delete (req.session as any).impersonatedCompanyId;
+      delete (req.session as any).impersonatedCompanyName;
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error stopping impersonation:", error);
+      res.status(500).json({ message: "Failed to exit company view" });
+    }
+  });
+
   app.get('/api/super-admin/clients', isAuthenticated, isSuperAdmin, async (req: any, res) => {
     try {
       const allCompanies = await storage.getAllCompanies();

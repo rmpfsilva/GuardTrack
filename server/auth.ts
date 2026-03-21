@@ -74,6 +74,27 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Super Admin Company Impersonation Middleware
+  // When a super admin activates "View as Company Admin", their session stores the target companyId.
+  // This middleware injects it into req.user so all admin-scoped routes transparently serve
+  // that company's data — without changing the underlying session user record.
+  app.use((req: any, _res: any, next: any) => {
+    if (req.user && req.user.role === 'super_admin') {
+      const impersonatedCompanyId = (req.session as any)?.impersonatedCompanyId;
+      const impersonatedCompanyName = (req.session as any)?.impersonatedCompanyName;
+      if (impersonatedCompanyId) {
+        req.user = {
+          ...req.user,
+          companyId: impersonatedCompanyId,
+          isImpersonating: true,
+          impersonatedCompanyId,
+          impersonatedCompanyName,
+        };
+      }
+    }
+    next();
+  });
+
   // Custom authentication function for company-scoped login
   // Passport LocalStrategy doesn't support additional fields, so we handle auth manually in the login route
 
@@ -469,7 +490,8 @@ export function setupAuth(app: Express) {
 
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user); // Already sanitized in deserializeUser
+    // req.user already has isImpersonating/impersonatedCompanyId injected by middleware if applicable
+    res.json(req.user);
   });
 
   app.patch("/api/user/profile", async (req, res) => {

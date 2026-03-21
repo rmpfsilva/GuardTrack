@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { usePlanFeatures, AdminTab } from "@/hooks/use-plan-features";
@@ -9,7 +9,7 @@ import {
   Users, MapPin, Clock, Activity, Calendar, Settings, Mail, RefreshCw,
   LayoutDashboard, UserCog, CalendarOff, CheckSquare, ClipboardEdit, Megaphone,
   Handshake, Share2, Receipt, CreditCard, BarChart3, MessageSquare,
-  Building2, AlertTriangle, FileText, DollarSign, Shield, LogOut, Smartphone
+  Building2, AlertTriangle, FileText, DollarSign, Shield, LogOut, Smartphone, Eye
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -76,7 +76,22 @@ export default function AdminDashboard() {
     await queryClient.invalidateQueries();
     setTimeout(() => setIsRefreshing(false), 500);
   };
-  const [activeTab, setActiveTab] = useState<string>(user?.role === 'super_admin' ? 'clients' : 'overview');
+
+  const exitImpersonationMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", "/api/super-admin/impersonate");
+    },
+    onSuccess: () => {
+      // Full reload: clears all state and user refetches without impersonation
+      window.location.href = '/admin';
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to exit company view", variant: "destructive" });
+    },
+  });
+
+  const isImpersonating = !!(user as any)?.isImpersonating;
+  const [activeTab, setActiveTab] = useState<string>(user?.role === 'super_admin' && !isImpersonating ? 'clients' : 'overview');
   const [jobSharingLastSeen, setJobSharingLastSeen] = useState<Date>(() => {
     const stored = localStorage.getItem('jobSharingLastSeen');
     return stored ? new Date(stored) : new Date(0);
@@ -84,7 +99,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      if (user.role === 'super_admin' && activeTab === 'overview') {
+      if (user.role === 'super_admin' && !isImpersonating && activeTab === 'overview') {
         setActiveTab('clients');
       }
     }
@@ -130,7 +145,7 @@ export default function AdminDashboard() {
     }
   }, [user, authLoading, isAdmin, toast]);
 
-  const isCompanyAdmin = isAdmin && user?.role !== 'super_admin';
+  const isCompanyAdmin = isAdmin && (user?.role !== 'super_admin' || isImpersonating);
   
   const { data: recentActivity = [] } = useQuery<CheckInWithDetails[]>({
     queryKey: ["/api/admin/recent-activity"],
@@ -148,7 +163,7 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error('Failed to fetch company');
       return res.json();
     },
-    enabled: !!user?.companyId && isAdmin && user?.role !== 'super_admin',
+    enabled: !!user?.companyId && isAdmin && (user?.role !== 'super_admin' || isImpersonating),
   });
 
   const { data: pendingLeave = [] } = useQuery<LeaveRequestWithDetails[]>({
@@ -442,7 +457,7 @@ export default function AdminDashboard() {
           </SidebarHeader>
 
           <SidebarContent>
-            {user.role === 'super_admin' ? (
+            {user.role === 'super_admin' && !isImpersonating ? (
               <>
                 <SidebarGroup>
                   <SidebarGroupLabel>
@@ -692,6 +707,29 @@ export default function AdminDashboard() {
               </DropdownMenu>
             </div>
           </header>
+
+          {isImpersonating && (
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800">
+              <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+                <Eye className="h-4 w-4 shrink-0" />
+                <span>
+                  Viewing admin dashboard as{" "}
+                  <span className="font-semibold">{(user as any).impersonatedCompanyName || "a company"}</span>.
+                  Changes here affect that company's data.
+                </span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exitImpersonationMutation.mutate()}
+                disabled={exitImpersonationMutation.isPending}
+                data-testid="button-exit-company-view"
+                className="shrink-0 border-amber-400 text-amber-800 dark:text-amber-200 dark:border-amber-700"
+              >
+                Exit Company View
+              </Button>
+            </div>
+          )}
 
           <main className="flex-1 overflow-auto p-4 md:p-6">
             {renderContent()}
