@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Briefcase, Building2, Calendar, DollarSign, Users, Plus, Check, X, Clock, MapPin, Trash2, Pencil, PoundSterling, Minus } from "lucide-react";
+import { Briefcase, Building2, Calendar, DollarSign, Users, Plus, Check, X, Clock, MapPin, Trash2, Pencil, PoundSterling, Minus, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,16 @@ export default function JobSharing() {
   const [acceptNotes, setAcceptNotes] = useState("");
   const [acceptedCounts, setAcceptedCounts] = useState<Array<{ role: JobShareRole; maxCount: number; acceptCount: number; hourlyRate: string }>>([]);
   const [selectedTab, setSelectedTab] = useState<'offered' | 'received'>('offered');
+  const [expandedShares, setExpandedShares] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) => {
+    setExpandedShares(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const [offeredLastViewed, setOfferedLastViewed] = useState<number>(() => {
     const stored = localStorage.getItem(`jobshare_offered_viewed_${user?.id}`);
     return stored ? parseInt(stored, 10) : 0;
@@ -636,21 +646,29 @@ export default function JobSharing() {
               const sharePositions = getPositionsForShare(share);
               const accepted = share.acceptedPositions as JobSharePosition[] | null;
               const isPartial = accepted && accepted.length > 0 && getTotalPositions(accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))) < getTotalPositions(sharePositions);
+              const isExpanded = expandedShares.has(share.id);
+              const totalPos = getTotalPositions(sharePositions);
+              const period = `${format(new Date(share.startDate), "MMM d")} – ${format(new Date(share.endDate), "MMM d, yyyy")}`;
               return (
                 <Card key={share.id} data-testid={`job-share-${share.id}`}>
-                  <CardHeader>
+                  <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <Building2 className="h-5 w-5" />
-                          {share.toCompany?.name || "Unknown Company"}
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Building2 className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{share.toCompany?.name || "Unknown Company"}</span>
                         </CardTitle>
-                        <CardDescription className="flex items-center gap-2 mt-1">
-                          <MapPin className="h-4 w-4" />
-                          {share.site?.name || "Unknown Site"}
+                        <CardDescription className="flex items-center gap-2 mt-0.5">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{share.site?.name || "Unknown Site"}</span>
                         </CardDescription>
+                        <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1"><Users className="h-3 w-3" />{isPartial ? `${getTotalPositions(accepted!.map(p => ({...p, role: normalizeLegacyRole(p.role)})))}/${totalPos} positions` : `${totalPos} position${totalPos !== 1 ? 's' : ''}`}</span>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span>{period}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
                         {getStatusBadge(share.status)}
                         {isPartial && (
                           <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20" data-testid={`badge-partial-${share.id}`}>
@@ -667,93 +685,61 @@ export default function JobSharing() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                             {share.status === 'accepted' ? (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => {
-                                  if (confirm("Are you sure you want to cancel this job share? All future shifts will be removed and the accepting company will be notified.")) {
-                                    updateStatusMutation.mutate({ id: share.id, status: 'cancelled' });
-                                  }
-                                }}
-                                data-testid={`button-cancel-${share.id}`}
-                              >
+                              <Button size="icon" variant="ghost" onClick={() => { if (confirm("Are you sure you want to cancel this job share? All future shifts will be removed and the accepting company will be notified.")) { updateStatusMutation.mutate({ id: share.id, status: 'cancelled' }); } }} data-testid={`button-cancel-${share.id}`}>
                                 <X className="h-4 w-4 text-destructive" />
                               </Button>
                             ) : (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => {
-                                  if (confirm("Are you sure you want to delete this job share?")) {
-                                    deleteMutation.mutate(share.id);
-                                  }
-                                }}
-                                data-testid={`button-delete-${share.id}`}
-                              >
+                              <Button size="icon" variant="ghost" onClick={() => { if (confirm("Are you sure you want to delete this job share?")) { deleteMutation.mutate(share.id); } }} data-testid={`button-delete-${share.id}`}>
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
                             )}
                           </>
                         )}
+                        <Button size="icon" variant="ghost" onClick={() => toggleExpanded(share.id)} data-testid={`button-expand-${share.id}`} title={isExpanded ? "Collapse" : "Expand"}>
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <JobShareProgress
-                      positions={sharePositions}
-                      acceptedPositions={accepted}
-                      status={share.status}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">{isPartial ? "Accepted / Requested" : "Total Positions"}</p>
-                        <p className="font-semibold flex items-center gap-1">
-                          <Users className="h-4 w-4" />
-                          {isPartial ? `${getTotalPositions(accepted!.map(p => ({...p, role: normalizeLegacyRole(p.role)})))} / ${getTotalPositions(sharePositions)}` : getTotalPositions(sharePositions)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Period</p>
-                        <p className="text-sm font-semibold">
-                          {format(new Date(share.startDate), "MMM d")} - {format(new Date(share.endDate), "MMM d, yyyy")}
-                        </p>
-                      </div>
-                    </div>
-                    {isPartial && accepted ? (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Accepted Positions</p>
-                        <PositionsDisplay positions={accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))} />
-                        <p className="text-sm text-muted-foreground mb-2 mt-3">Originally Requested</p>
-                        <PositionsDisplay positions={sharePositions} />
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Positions & Rates</p>
-                        <PositionsDisplay positions={sharePositions} />
-                      </div>
-                    )}
-                    {share.requirements && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Requirements</p>
-                        <p className="text-sm">{share.requirements}</p>
-                      </div>
-                    )}
-                    {share.reviewNotes && (
-                      <div className="pt-2 border-t">
-                        <p className="text-sm text-muted-foreground mb-1">Response</p>
-                        <p className="text-sm">{share.reviewNotes}</p>
-                      </div>
-                    )}
-                    {share.status === 'accepted' && share.assignedWorkers && share.assignedWorkers.length > 0 && (
-                      <div className="pt-2 border-t">
-                        <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-                          <UserPlus className="h-4 w-4" />Assigned Workers ({share.assignedWorkers.length})
-                        </p>
-                        <AssignedWorkersDisplay workers={share.assignedWorkers} />
-                      </div>
-                    )}
-                    <JobShareMessages jobShareId={share.id} />
-                  </CardContent>
+                  {isExpanded && (
+                    <CardContent className="space-y-3 pt-0">
+                      <JobShareProgress positions={sharePositions} acceptedPositions={accepted} status={share.status} />
+                      {isPartial && accepted ? (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-2">Accepted Positions</p>
+                          <PositionsDisplay positions={accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))} />
+                          <p className="text-sm text-muted-foreground mb-2 mt-3">Originally Requested</p>
+                          <PositionsDisplay positions={sharePositions} />
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-2">Positions & Rates</p>
+                          <PositionsDisplay positions={sharePositions} />
+                        </div>
+                      )}
+                      {share.requirements && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Requirements</p>
+                          <p className="text-sm">{share.requirements}</p>
+                        </div>
+                      )}
+                      {share.reviewNotes && (
+                        <div className="pt-2 border-t">
+                          <p className="text-sm text-muted-foreground mb-1">Response</p>
+                          <p className="text-sm">{share.reviewNotes}</p>
+                        </div>
+                      )}
+                      {share.status === 'accepted' && share.assignedWorkers && share.assignedWorkers.length > 0 && (
+                        <div className="pt-2 border-t">
+                          <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                            <UserPlus className="h-4 w-4" />Assigned Workers ({share.assignedWorkers.length})
+                          </p>
+                          <AssignedWorkersDisplay workers={share.assignedWorkers} />
+                        </div>
+                      )}
+                      <JobShareMessages jobShareId={share.id} />
+                    </CardContent>
+                  )}
                 </Card>
               );
             })
@@ -775,21 +761,29 @@ export default function JobSharing() {
               const accepted = share.acceptedPositions as JobSharePosition[] | null;
               const isPartial = accepted && accepted.length > 0 && getTotalPositions(accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))) < getTotalPositions(sharePositions);
               const expired = isDeadlineExpired((share as any).responseDeadline);
+              const isExpanded = expandedShares.has(share.id);
+              const totalPos = getTotalPositions(sharePositions);
+              const period = `${format(new Date(share.startDate), "MMM d")} – ${format(new Date(share.endDate), "MMM d, yyyy")}`;
               return (
                 <Card key={share.id} className={expired && share.status === 'pending' ? 'border-red-500/30 opacity-80' : ''} data-testid={`received-share-${share.id}`}>
-                  <CardHeader>
+                  <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <Building2 className="h-5 w-5" />
-                          {share.fromCompany?.name || "Unknown Company"}
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Building2 className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{share.fromCompany?.name || "Unknown Company"}</span>
                         </CardTitle>
-                        <CardDescription className="flex items-center gap-2 mt-1">
-                          <MapPin className="h-4 w-4" />
-                          {share.site?.name || "Unknown Site"}
+                        <CardDescription className="flex items-center gap-2 mt-0.5">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{share.site?.name || "Unknown Site"}</span>
                         </CardDescription>
+                        <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1"><Users className="h-3 w-3" />{isPartial ? `${getTotalPositions(accepted!.map(p => ({...p, role: normalizeLegacyRole(p.role)})))}/${totalPos} positions` : `${totalPos} position${totalPos !== 1 ? 's' : ''}`}</span>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span>{period}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
                         {getStatusBadge(share.status)}
                         {isPartial && (
                           <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20" data-testid={`badge-partial-received-${share.id}`}>
@@ -797,131 +791,80 @@ export default function JobSharing() {
                           </Badge>
                         )}
                         <JobShareDeadline deadline={(share as any).responseDeadline} status={share.status} />
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <JobShareProgress
-                      positions={sharePositions}
-                      acceptedPositions={accepted}
-                      status={share.status}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">{isPartial ? "Accepted / Requested" : "Total Positions"}</p>
-                        <p className="font-semibold flex items-center gap-1">
-                          <Users className="h-4 w-4" />
-                          {isPartial ? `${getTotalPositions(accepted!.map(p => ({...p, role: normalizeLegacyRole(p.role)})))} / ${getTotalPositions(sharePositions)}` : getTotalPositions(sharePositions)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Period</p>
-                        <p className="text-sm font-semibold">
-                          {format(new Date(share.startDate), "MMM d")} - {format(new Date(share.endDate), "MMM d, yyyy")}
-                        </p>
-                      </div>
-                    </div>
-                    {isPartial && accepted ? (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Accepted Positions</p>
-                        <PositionsDisplay positions={accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))} />
-                        <p className="text-sm text-muted-foreground mb-2 mt-3">Originally Requested</p>
-                        <PositionsDisplay positions={sharePositions} />
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Positions & Rates</p>
-                        <PositionsDisplay positions={sharePositions} />
-                      </div>
-                    )}
-                    {share.requirements && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Requirements</p>
-                        <p className="text-sm">{share.requirements}</p>
-                      </div>
-                    )}
-
-                    {share.status === 'pending' && (
-                      <div className="flex gap-2 pt-2 border-t">
-                        {expired ? (
-                          <p className="text-sm text-red-600 dark:text-red-400 font-medium">Response window closed</p>
-                        ) : (
+                        {share.status === 'pending' && !expired && (
                           <>
-                            <Button
-                              size="sm"
-                              onClick={() => openAcceptDialog(share)}
-                              disabled={updateStatusMutation.isPending}
-                              data-testid={`button-accept-${share.id}`}
-                            >
-                              <Check className="h-4 w-4 mr-1" />Accept
+                            <Button size="sm" onClick={() => openAcceptDialog(share)} disabled={updateStatusMutation.isPending} data-testid={`button-accept-${share.id}`}>
+                              <Check className="h-3 w-3 mr-1" />Accept
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => updateStatusMutation.mutate({ id: share.id, status: 'rejected' })}
-                              disabled={updateStatusMutation.isPending}
-                              data-testid={`button-reject-${share.id}`}
-                            >
-                              <X className="h-4 w-4 mr-1" />Reject
+                            <Button size="sm" variant="destructive" onClick={() => updateStatusMutation.mutate({ id: share.id, status: 'rejected' })} disabled={updateStatusMutation.isPending} data-testid={`button-reject-${share.id}`}>
+                              <X className="h-3 w-3 mr-1" />Reject
                             </Button>
                           </>
                         )}
-                      </div>
-                    )}
-
-                    {share.status === 'accepted' && (
-                      <div className="pt-2 border-t">
-                        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <UserPlus className="h-4 w-4" />Assigned Workers
-                            {share.assignedWorkers && share.assignedWorkers.length > 0 && ` (${share.assignedWorkers.length})`}
-                          </p>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openEditWorkersDialog(share)}
-                              data-testid={`button-edit-workers-${share.id}`}
-                            >
-                              <Pencil className="h-3 w-3 mr-1" />Edit Workers
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => {
-                                if (confirm("Are you sure you want to withdraw from this job share? This will remove all assigned workers and cancel any future shifts.")) {
-                                  updateStatusMutation.mutate({ id: share.id, status: 'withdrawn', notes: 'Withdrawn by accepting company' });
-                                }
-                              }}
-                              disabled={updateStatusMutation.isPending}
-                              data-testid={`button-withdraw-${share.id}`}
-                            >
-                              <X className="h-3 w-3 mr-1" />Withdraw
-                            </Button>
-                          </div>
-                        </div>
-                        {share.assignedWorkers && share.assignedWorkers.length > 0 ? (
-                          <AssignedWorkersDisplay workers={share.assignedWorkers} />
-                        ) : (
-                          <p className="text-sm text-muted-foreground italic">No workers assigned yet</p>
+                        {share.status === 'pending' && expired && (
+                          <span className="text-xs text-red-600 dark:text-red-400 font-medium">Window closed</span>
                         )}
-                      </div>
-                    )}
-
-                    {(share.status === 'withdrawn' || share.status === 'rejected') && (
-                      <div className="flex gap-2 pt-2 border-t">
-                        <Button
-                          size="sm"
-                          onClick={() => openAcceptDialog(share)}
-                          disabled={updateStatusMutation.isPending}
-                          data-testid={`button-reaccept-${share.id}`}
-                        >
-                          <Check className="h-4 w-4 mr-1" />Re-accept
+                        <Button size="icon" variant="ghost" onClick={() => toggleExpanded(share.id)} data-testid={`button-expand-received-${share.id}`} title={isExpanded ? "Collapse" : "Expand"}>
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </Button>
                       </div>
-                    )}
-                    <JobShareMessages jobShareId={share.id} />
-                  </CardContent>
+                    </div>
+                  </CardHeader>
+                  {isExpanded && (
+                    <CardContent className="space-y-3 pt-0">
+                      <JobShareProgress positions={sharePositions} acceptedPositions={accepted} status={share.status} />
+                      {isPartial && accepted ? (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-2">Accepted Positions</p>
+                          <PositionsDisplay positions={accepted.map(p => ({...p, role: normalizeLegacyRole(p.role)}))} />
+                          <p className="text-sm text-muted-foreground mb-2 mt-3">Originally Requested</p>
+                          <PositionsDisplay positions={sharePositions} />
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-2">Positions & Rates</p>
+                          <PositionsDisplay positions={sharePositions} />
+                        </div>
+                      )}
+                      {share.requirements && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Requirements</p>
+                          <p className="text-sm">{share.requirements}</p>
+                        </div>
+                      )}
+                      {share.status === 'accepted' && (
+                        <div className="pt-2 border-t">
+                          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <UserPlus className="h-4 w-4" />Assigned Workers
+                              {share.assignedWorkers && share.assignedWorkers.length > 0 && ` (${share.assignedWorkers.length})`}
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Button size="sm" variant="outline" onClick={() => openEditWorkersDialog(share)} data-testid={`button-edit-workers-${share.id}`}>
+                                <Pencil className="h-3 w-3 mr-1" />Edit Workers
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => { if (confirm("Are you sure you want to withdraw from this job share? This will remove all assigned workers and cancel any future shifts.")) { updateStatusMutation.mutate({ id: share.id, status: 'withdrawn', notes: 'Withdrawn by accepting company' }); } }} disabled={updateStatusMutation.isPending} data-testid={`button-withdraw-${share.id}`}>
+                                <X className="h-3 w-3 mr-1" />Withdraw
+                              </Button>
+                            </div>
+                          </div>
+                          {share.assignedWorkers && share.assignedWorkers.length > 0 ? (
+                            <AssignedWorkersDisplay workers={share.assignedWorkers} />
+                          ) : (
+                            <p className="text-sm text-muted-foreground italic">No workers assigned yet</p>
+                          )}
+                        </div>
+                      )}
+                      {(share.status === 'withdrawn' || share.status === 'rejected') && (
+                        <div className="flex gap-2 pt-2 border-t">
+                          <Button size="sm" onClick={() => openAcceptDialog(share)} disabled={updateStatusMutation.isPending} data-testid={`button-reaccept-${share.id}`}>
+                            <Check className="h-4 w-4 mr-1" />Re-accept
+                          </Button>
+                        </div>
+                      )}
+                      <JobShareMessages jobShareId={share.id} />
+                    </CardContent>
+                  )}
                 </Card>
               );
             })
