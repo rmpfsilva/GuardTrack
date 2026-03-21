@@ -9,7 +9,8 @@ import {
   Users, MapPin, Clock, Activity, Calendar, Settings, Mail, RefreshCw,
   LayoutDashboard, UserCog, CalendarOff, CheckSquare, ClipboardEdit, Megaphone,
   Handshake, Share2, Receipt, CreditCard, BarChart3, MessageSquare,
-  Building2, AlertTriangle, FileText, DollarSign, Shield, LogOut, Smartphone, Eye
+  Building2, AlertTriangle, FileText, DollarSign, Shield, LogOut, Smartphone, Eye,
+  ClipboardList
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -60,6 +61,7 @@ import { XeroSettings } from "@/components/xero-connect-settings";
 import OperationsCommandCentre from "@/components/operations-command-centre";
 import { AppInstallSettings } from "@/components/app-install-settings";
 import { Incidents } from "@/components/incidents";
+import TaskManager from "@/components/task-manager";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading, isAdmin, logoutMutation } = useAuth();
@@ -275,6 +277,8 @@ export default function AdminDashboard() {
         return <OperationsCommandCentre onNavigate={handleTabChange} />;
       case 'incidents':
         return <Incidents />;
+      case 'tasks':
+        return <TaskManager />;
       case 'billing':
         return (
           <div className="space-y-6">
@@ -567,6 +571,7 @@ export default function AdminDashboard() {
                       {hasTabAccess('manual') && renderSidebarItem('manual', 'Manual', ClipboardEdit)}
                       {hasTabAccess('notices') && renderSidebarItem('notices', 'Notices', Megaphone)}
                       {renderSidebarItem('incidents', 'Incidents', AlertTriangle)}
+                      {renderSidebarItem('tasks', 'Tasks', ClipboardList)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>

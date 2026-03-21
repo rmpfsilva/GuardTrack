@@ -4,8 +4,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
-import { users, breaks, checkIns, sites, companies, JOB_SHARE_ROLES } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { users, breaks, checkIns, sites, companies, scheduledShifts, tasks, JOB_SHARE_ROLES } from "@shared/schema";
+import { eq, desc, and, gte, lte, or } from "drizzle-orm";
 import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema, insertInvoiceSchema, updateInvoiceSchema, updateCompanySettingsSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
@@ -2098,6 +2098,239 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching admin stats:", error);
       res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  // Licence Alerts — SIA guards/supervisors only, never stewards/admins
+  app.get('/api/admin/licence-alerts', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (user.role === 'super_admin' && !user.companyId) {
+        return res.json({ expired: [], expiring60: [], expiring90: [], valid: [], stats: { expired: 0, expiring60: 0, expiring90: 0, valid: 0, totalSiaEmployees: 0, totalEmployees: 0, activeSites: 0 } });
+      }
+      const companyId = user.companyId;
+      const allUsers = await storage.getAllUsers();
+      const allSites = await storage.getAllSites();
+
+      // Only SIA-liable roles — exclude steward, admin, super_admin
+      const siaRoles = ['guard', 'supervisor'];
+      const companyUsers = allUsers.filter(u => u.companyId === companyId && siaRoles.includes(u.role));
+      const totalEmployees = allUsers.filter(u => u.companyId === companyId).length;
+      const activeSites = allSites.filter(s => s.companyId === companyId && s.isActive).length;
+
+      const now = new Date();
+      const d60 = new Date(now); d60.setDate(d60.getDate() + 60);
+      const d90 = new Date(now); d90.setDate(d90.getDate() + 90);
+
+      const expired: any[] = [];
+      const expiring60: any[] = [];
+      const expiring90: any[] = [];
+      const valid: any[] = [];
+
+      for (const u of companyUsers) {
+        if (!u.siaExpiryDate) continue; // skip if no expiry set
+        const expiry = new Date(u.siaExpiryDate);
+        const diffMs = expiry.getTime() - now.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const record = {
+          id: u.id,
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username,
+          role: u.role,
+          siaNumber: u.siaNumber,
+          siaExpiryDate: u.siaExpiryDate,
+          daysRemaining: diffDays,
+        };
+        if (expiry < now) {
+          expired.push({ ...record, daysOverdue: Math.abs(diffDays) });
+        } else if (expiry <= d60) {
+          expiring60.push(record);
+        } else if (expiry <= d90) {
+          expiring90.push(record);
+        } else {
+          valid.push(record);
+        }
+      }
+
+      expired.sort((a, b) => a.daysRemaining - b.daysRemaining);
+      expiring60.sort((a, b) => a.daysRemaining - b.daysRemaining);
+      expiring90.sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+      res.json({
+        expired,
+        expiring60,
+        expiring90,
+        valid,
+        stats: {
+          expired: expired.length,
+          expiring60: expiring60.length,
+          expiring90: expiring90.length,
+          valid: valid.length,
+          totalSiaEmployees: expired.length + expiring60.length + expiring90.length + valid.length,
+          totalEmployees,
+          activeSites,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error fetching licence alerts:', error);
+      res.status(500).json({ message: 'Failed to fetch licence alerts' });
+    }
+  });
+
+  // Shifts at risk — next 14 days where guard has expired/expiring<60d SIA
+  app.get('/api/admin/shifts-at-risk', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (user.role === 'super_admin' && !user.companyId) return res.json([]);
+      const companyId = user.companyId;
+
+      const now = new Date();
+      const in14 = new Date(now); in14.setDate(in14.getDate() + 14);
+      const d60 = new Date(now); d60.setDate(d60.getDate() + 60);
+
+      // Get all sites for this company
+      const allSites = await storage.getAllSites();
+      const companySiteIds = new Set(allSites.filter(s => s.companyId === companyId).map(s => s.id));
+
+      // Query upcoming shifts
+      const upcomingShifts = await db
+        .select()
+        .from(scheduledShifts)
+        .where(and(gte(scheduledShifts.startTime, now), lte(scheduledShifts.startTime, in14), eq(scheduledShifts.isActive, true)));
+
+      // Filter to company's sites and attach user data
+      const allUsers = await storage.getAllUsers();
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
+      const siteMap = new Map(allSites.map(s => [s.id, s]));
+
+      const shiftsAtRisk: any[] = [];
+      for (const shift of upcomingShifts) {
+        if (!companySiteIds.has(shift.siteId)) continue;
+        const guard = userMap.get(shift.userId);
+        if (!guard) continue;
+        if (!['guard', 'supervisor'].includes(guard.role)) continue;
+        if (!guard.siaExpiryDate) continue;
+
+        const expiry = new Date(guard.siaExpiryDate);
+        const diffDays = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (expiry >= d60) continue; // licence is fine for 60+ days
+
+        const site = siteMap.get(shift.siteId);
+        shiftsAtRisk.push({
+          shiftId: shift.id,
+          shiftDate: shift.startTime,
+          site: site?.name || 'Unknown Site',
+          employeeId: guard.id,
+          employeeName: `${guard.firstName || ''} ${guard.lastName || ''}`.trim() || guard.username,
+          licenceExpiry: guard.siaExpiryDate,
+          daysUntilExpiry: diffDays,
+          riskLevel: expiry < now ? 'expired' : 'expiring_soon',
+        });
+      }
+
+      shiftsAtRisk.sort((a, b) => new Date(a.shiftDate).getTime() - new Date(b.shiftDate).getTime());
+      res.json(shiftsAtRisk);
+    } catch (error: any) {
+      console.error('Error fetching shifts at risk:', error);
+      res.status(500).json({ message: 'Failed to fetch shifts at risk' });
+    }
+  });
+
+  // ============================================================
+  // Task Manager Routes
+  // ============================================================
+  app.get('/api/tasks', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const companyId = user.companyId;
+      if (!companyId) return res.json([]);
+      const rows = await db.select().from(tasks).where(eq(tasks.companyId, companyId)).orderBy(desc(tasks.createdAt));
+      // Enrich with assignee name
+      const allUsers = await storage.getAllUsers();
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
+      const enriched = rows.map(t => ({
+        ...t,
+        assigneeName: t.assignedTo ? (() => { const u = userMap.get(t.assignedTo!); return u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username : 'Unknown'; })() : null,
+      }));
+      res.json(enriched);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch tasks' });
+    }
+  });
+
+  app.post('/api/tasks', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const companyId = user.companyId;
+      if (!companyId) return res.status(403).json({ message: 'No company' });
+      const { title, description, status, category, priority, assignedTo, dueDate, notes } = req.body;
+      if (!title) return res.status(400).json({ message: 'Title is required' });
+      const [task] = await db.insert(tasks).values({
+        companyId,
+        title,
+        description: description || null,
+        status: status || 'pending',
+        category: category || 'general',
+        priority: priority || 'medium',
+        assignedTo: assignedTo || null,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        notes: notes || null,
+        createdBy: user.id,
+      }).returning();
+      res.status(201).json(task);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to create task' });
+    }
+  });
+
+  app.patch('/api/tasks/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+      const [existing] = await db.select().from(tasks).where(and(eq(tasks.id, id), eq(tasks.companyId, user.companyId)));
+      if (!existing) return res.status(404).json({ message: 'Task not found' });
+      const updates: any = { updatedAt: new Date() };
+      if ('title' in req.body) updates.title = req.body.title;
+      if ('description' in req.body) updates.description = req.body.description;
+      if ('status' in req.body) updates.status = req.body.status;
+      if ('category' in req.body) updates.category = req.body.category;
+      if ('priority' in req.body) updates.priority = req.body.priority;
+      if ('assignedTo' in req.body) updates.assignedTo = req.body.assignedTo;
+      if ('dueDate' in req.body) updates.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
+      if ('notes' in req.body) updates.notes = req.body.notes;
+      if ('isArchived' in req.body) {
+        updates.isArchived = req.body.isArchived;
+        updates.archivedAt = req.body.isArchived ? new Date() : null;
+      }
+      const [updated] = await db.update(tasks).set(updates).where(eq(tasks.id, id)).returning();
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to update task' });
+    }
+  });
+
+  app.delete('/api/tasks/:id', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+      const [existing] = await db.select().from(tasks).where(and(eq(tasks.id, id), eq(tasks.companyId, user.companyId)));
+      if (!existing) return res.status(404).json({ message: 'Task not found' });
+      await db.delete(tasks).where(eq(tasks.id, id));
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to delete task' });
+    }
+  });
+
+  // Staff view — tasks assigned to me
+  app.get('/api/tasks/my-tasks', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const companyId = user.companyId;
+      if (!companyId) return res.json([]);
+      const rows = await db.select().from(tasks).where(and(eq(tasks.companyId, companyId), eq(tasks.assignedTo, user.id), eq(tasks.isArchived, false))).orderBy(desc(tasks.createdAt));
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || 'Failed to fetch my tasks' });
     }
   });
 

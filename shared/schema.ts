@@ -1533,3 +1533,26 @@ export const issueSettings = pgTable("issue_settings", {
 export const insertIssueSettingSchema = createInsertSchema(issueSettings).omit({ id: true, createdAt: true });
 export type InsertIssueSetting = z.infer<typeof insertIssueSettingSchema>;
 export type IssueSetting = typeof issueSettings.$inferSelect;
+
+// Tasks table - Task Manager feature
+export const tasks = pgTable("tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  status: varchar("status").notNull().default('pending'), // pending|in_progress|on_hold|completed|cancelled
+  category: varchar("category").notNull().default('general'), // general|hr|operations|finance|compliance|recruitment|other
+  priority: varchar("priority").notNull().default('medium'), // high|medium|low
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: 'set null' }),
+  dueDate: timestamp("due_date"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  isArchived: boolean("is_archived").notNull().default(false),
+  archivedAt: timestamp("archived_at"),
+});
+
+export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true, archivedAt: true });
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type Task = typeof tasks.$inferSelect;
