@@ -4,8 +4,8 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeSessionStore, storage } from "./storage";
 import { hashPassword } from "./auth";
 import { db, pool } from "./db";
-import { users, userRoles, companyMemberships, companies } from "@shared/schema";
-import { or, eq, and, isNotNull } from "drizzle-orm";
+import { users, userRoles, companyMemberships, companies, jobShares } from "@shared/schema";
+import { or, eq, and, isNotNull, lt, isNull } from "drizzle-orm";
 
 const app = express();
 app.use(express.json({ limit: '15mb' }));
@@ -65,6 +65,19 @@ async function runStartupMigrations() {
           WHERE table_name = 'companies' AND column_name = 'brand_color'
         ) THEN
           ALTER TABLE companies ADD COLUMN brand_color VARCHAR;
+        END IF;
+      END $$;
+    `);
+
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'job_shares' AND column_name = 'is_archived'
+        ) THEN
+          ALTER TABLE job_shares ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT FALSE;
+          ALTER TABLE job_shares ADD COLUMN archived_at TIMESTAMP;
         END IF;
       END $$;
     `);
@@ -305,6 +318,27 @@ async function ensureLogicloopAdmin() {
     }
   } catch (err) {
     console.error('[Init] Error ensuring logicloop admin:', err);
+  }
+}
+
+async function archiveExpiredJobShares() {
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 1 day ago
+    const result = await db
+      .update(jobShares)
+      .set({ isArchived: true, archivedAt: new Date() })
+      .where(
+        and(
+          eq(jobShares.isArchived, false),
+          lt(jobShares.endDate, cutoff)
+        )
+      )
+      .returning({ id: jobShares.id });
+    if (result.length > 0) {
+      log(`[Archive] Auto-archived ${result.length} expired job share(s)`);
+    }
+  } catch (err) {
+    console.error('[Archive] Error auto-archiving job shares:', err);
   }
 }
 

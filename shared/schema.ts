@@ -443,6 +443,8 @@ export const jobShares = pgTable("job_shares", {
   reviewNotes: text("review_notes"),
   responseDeadline: timestamp("response_deadline"),
   acceptedAt: timestamp("accepted_at"),
+  isArchived: boolean("is_archived").notNull().default(false),
+  archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
