@@ -251,8 +251,12 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
     // ── Step 5: Stamp logo at 100% native resolution directly into the PDF ──
     // jsPDF uses the original image data — no scaling, no canvas resampling.
     if (logoPDF && branding.logoUrl) {
-      pdf.setPage(1);
-      pdf.addImage(branding.logoUrl, logoPDF.fmt, logoPDF.x, logoPDF.y, logoPDF.w, logoPDF.h);
+      try {
+        pdf.setPage(1);
+        pdf.addImage(branding.logoUrl, logoPDF.fmt, logoPDF.x, logoPDF.y, logoPDF.w, logoPDF.h);
+      } catch {
+        // If logo is corrupted or unsupported, skip it — the rest of the PDF is still valid
+      }
     }
 
     pdf.save(`NCR-${issue.issueId}-${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.pdf`);
