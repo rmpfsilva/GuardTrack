@@ -6759,17 +6759,31 @@ GuardTrack Team`;
   app.patch("/api/admin/staff-profiles/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const companyId = req.user.companyId;
+      // Convert ISO date strings → Date objects so Drizzle timestamp columns work correctly
+      const DATE_FIELDS = ["dateOfBirth", "startDate", "endDate", "firstAidExpiry"];
+      const body: any = { ...req.body };
+      DATE_FIELDS.forEach(f => {
+        if (body[f] && typeof body[f] === "string") body[f] = new Date(body[f]);
+        if (body[f] === "" || body[f] === null) body[f] = null;
+      });
+      // Handle SIA updates on the user record
+      const siaUpdates: any = {};
+      if ("siaNumber" in body) { siaUpdates.siaNumber = body.siaNumber || null; delete body.siaNumber; }
+      if ("siaExpiryDate" in body) { siaUpdates.siaExpiryDate = body.siaExpiryDate ? new Date(body.siaExpiryDate) : null; delete body.siaExpiryDate; }
+      if (Object.keys(siaUpdates).length > 0) {
+        await db.update(users).set(siaUpdates).where(eq(users.id, req.params.userId));
+      }
       const [existing] = await db.select().from(staffProfiles).where(
         and(eq(staffProfiles.userId, req.params.userId), eq(staffProfiles.companyId, companyId))
       );
       if (!existing) {
         const [created] = await db.insert(staffProfiles)
-          .values({ ...req.body, userId: req.params.userId, companyId })
+          .values({ ...body, userId: req.params.userId, companyId })
           .returning();
         return res.json(created);
       }
       const [updated] = await db.update(staffProfiles)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...body, updatedAt: new Date() })
         .where(eq(staffProfiles.id, existing.id))
         .returning();
       res.json(updated);

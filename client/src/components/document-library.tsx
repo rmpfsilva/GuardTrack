@@ -353,10 +353,13 @@ export default function DocumentLibrary() {
             </div>
             <div className="space-y-1">
               <Label>Link to Employee <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Select value={uploadForm.employeeId} onValueChange={v => setUploadForm(f => ({ ...f, employeeId: v }))}>
+              <Select
+                value={uploadForm.employeeId || "none"}
+                onValueChange={v => setUploadForm(f => ({ ...f, employeeId: v === "none" ? "" : v }))}
+              >
                 <SelectTrigger data-testid="select-upload-employee"><SelectValue placeholder="Company-wide" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Company-wide</SelectItem>
+                  <SelectItem value="none">Company-wide</SelectItem>
                   {employees.map(e => (
                     <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
                   ))}

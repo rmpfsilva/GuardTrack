@@ -113,6 +113,7 @@ export default function StaffProfiles({ initialUserId }: StaffProfilesProps) {
 
   const startEditing = () => {
     const p = selectedProfile;
+    const e = selectedEmployee;
     setEditForm({
       dateOfBirth: p?.dateOfBirth ? format(new Date(p.dateOfBirth), "yyyy-MM-dd") : "",
       nationality: p?.nationality || "",
@@ -127,6 +128,8 @@ export default function StaffProfiles({ initialUserId }: StaffProfilesProps) {
       endDate: p?.endDate ? format(new Date(p.endDate), "yyyy-MM-dd") : "",
       employmentStatus: p?.employmentStatus || "active",
       employmentType: p?.employmentType || "full_time",
+      siaNumber: e?.siaNumber || "",
+      siaExpiryDate: e?.siaExpiryDate ? format(new Date(e.siaExpiryDate), "yyyy-MM-dd") : "",
       firstAidCert: p?.firstAidCert || "",
       firstAidExpiry: p?.firstAidExpiry ? format(new Date(p.firstAidExpiry), "yyyy-MM-dd") : "",
       adminNotes: p?.adminNotes || "",
@@ -136,11 +139,17 @@ export default function StaffProfiles({ initialUserId }: StaffProfilesProps) {
 
   const saveEdit = () => {
     const payload: any = { ...editForm };
-    if (payload.dateOfBirth) payload.dateOfBirth = new Date(payload.dateOfBirth).toISOString();
-    if (payload.startDate) payload.startDate = new Date(payload.startDate).toISOString();
-    if (payload.endDate) payload.endDate = new Date(payload.endDate).toISOString();
-    if (payload.firstAidExpiry) payload.firstAidExpiry = new Date(payload.firstAidExpiry).toISOString();
-    // Strip empty strings → null
+    // Date fields: send as ISO string (backend converts to Date), or null for empty
+    const dateFields = ["dateOfBirth", "startDate", "endDate", "firstAidExpiry", "siaExpiryDate"];
+    dateFields.forEach(k => {
+      if (payload[k]) {
+        const d = new Date(payload[k]);
+        payload[k] = isNaN(d.getTime()) ? null : d.toISOString();
+      } else {
+        payload[k] = null;
+      }
+    });
+    // Strip empty strings → null for other fields
     Object.keys(payload).forEach(k => { if (payload[k] === "") payload[k] = null; });
     payload.userId = selectedUserId;
     saveMutation.mutate(payload);
@@ -427,11 +436,11 @@ export default function StaffProfiles({ initialUserId }: StaffProfilesProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>SIA Number</Label>
-                <Input value={emp.siaNumber || ""} disabled className="opacity-60" title="Edit via Employees tab" />
+                <Input value={f("siaNumber")} onChange={e => sf("siaNumber", e.target.value)} data-testid="input-sia-number" />
               </div>
               <div className="space-y-1">
-                <Label>SIA Expiry</Label>
-                <Input value={emp.siaExpiryDate ? format(new Date(emp.siaExpiryDate), "yyyy-MM-dd") : ""} disabled className="opacity-60" title="Edit via Employees tab" />
+                <Label>SIA Expiry Date</Label>
+                <Input type="date" value={f("siaExpiryDate")} onChange={e => sf("siaExpiryDate", e.target.value)} data-testid="input-sia-expiry" />
               </div>
               <div className="space-y-1">
                 <Label>First Aid Certificate</Label>
@@ -451,7 +460,7 @@ export default function StaffProfiles({ initialUserId }: StaffProfilesProps) {
               <FieldRow label="First Aid Expiry" value={p?.firstAidExpiry ? format(new Date(p.firstAidExpiry), "dd MMM yyyy") : null} />
             </div>
           )}
-          <p className="text-xs text-muted-foreground mt-4">SIA details are managed via the Employees tab.</p>
+          <p className="text-xs text-muted-foreground mt-4">Changes to SIA Number and SIA Expiry will update the employee record system-wide.</p>
         </CardContent>
       </Card>
 

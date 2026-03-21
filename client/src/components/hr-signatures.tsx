@@ -400,15 +400,16 @@ export default function HrSignatures() {
               <div className="space-y-1">
                 <Label>Link to Library Document <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Select
-                  value={sendForm.documentId}
+                  value={sendForm.documentId || "none"}
                   onValueChange={v => {
-                    const doc = documents.find(d => d.id === v);
-                    setSendForm(f => ({ ...f, documentId: v, documentName: f.documentName || doc?.originalName || "" }));
+                    const realV = v === "none" ? "" : v;
+                    const doc = documents.find(d => d.id === realV);
+                    setSendForm(f => ({ ...f, documentId: realV, documentName: f.documentName || doc?.originalName || "" }));
                   }}
                 >
                   <SelectTrigger data-testid="select-sig-document"><SelectValue placeholder="Select document…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {documents.map(d => <SelectItem key={d.id} value={d.id}>{d.originalName}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -417,7 +418,7 @@ export default function HrSignatures() {
             <div className="space-y-1">
               <Label>Select Employees <span className="text-muted-foreground text-xs">(required)</span></Label>
               <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-                {employees.filter(e => e.role !== "admin").map(emp => (
+                {employees.map(emp => (
                   <label key={emp.id} className="flex items-center gap-3 p-2.5 cursor-pointer hover-elevate" data-testid={`checkbox-employee-${emp.id}`}>
                     <input
                       type="checkbox"
