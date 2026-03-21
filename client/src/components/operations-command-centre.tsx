@@ -34,13 +34,11 @@ interface LicenceAlertEmployee {
 
 interface LicenceAlerts {
   expired: LicenceAlertEmployee[];
-  expiring60: LicenceAlertEmployee[];
-  expiring90: LicenceAlertEmployee[];
-  valid: LicenceAlertEmployee[];
+  expiring: LicenceAlertEmployee[];  // 0–59 days remaining (amber)
+  valid: LicenceAlertEmployee[];     // 60+ days remaining (green)
   stats: {
     expired: number;
-    expiring60: number;
-    expiring90: number;
+    expiring: number;
     valid: number;
     totalSiaEmployees: number;
     totalEmployees: number;
@@ -157,11 +155,10 @@ export default function OperationsCommandCentre({ onNavigate }: OperationsComman
   const isCompanyAdmin = isAdmin && user?.role !== "super_admin";
 
   const [expiredExpanded, setExpiredExpanded] = useState(true);
-  const [expiring60Expanded, setExpiring60Expanded] = useState(true);
-  const [expiring90Expanded, setExpiring90Expanded] = useState(false);
+  const [expiringExpanded, setExpiringExpanded] = useState(true);
 
   const expiredRef = useRef<HTMLDivElement>(null);
-  const expiring60Ref = useRef<HTMLDivElement>(null);
+  const expiringRef = useRef<HTMLDivElement>(null);
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/admin/stats"],
@@ -255,8 +252,8 @@ export default function OperationsCommandCentre({ onNavigate }: OperationsComman
           <ShieldAlert className="h-5 w-5 text-muted-foreground" />
           SIA Licence Status
         </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Expired */}
+        <div className="grid grid-cols-3 gap-3">
+          {/* Expired — red */}
           <Card
             className="cursor-pointer hover-elevate border-red-500/30 bg-red-50/50 dark:bg-red-950/20"
             onClick={() => {
@@ -270,27 +267,27 @@ export default function OperationsCommandCentre({ onNavigate }: OperationsComman
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Expired</p>
                   <p className="text-3xl font-bold text-red-600 dark:text-red-400">{ls?.expired ?? "—"}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Immediate action</p>
+                  <p className="text-xs text-muted-foreground mt-1">Past expiry date</p>
                 </div>
                 <ShieldOff className="h-5 w-5 text-red-500 mt-1 shrink-0" />
               </div>
             </CardContent>
           </Card>
 
-          {/* Expiring ≤ 60 days */}
+          {/* Expiring &lt; 60 days — amber */}
           <Card
             className="cursor-pointer hover-elevate border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20"
             onClick={() => {
-              setExpiring60Expanded(true);
-              setTimeout(() => expiring60Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+              setExpiringExpanded(true);
+              setTimeout(() => expiringRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
             }}
-            data-testid="card-licences-expiring60"
+            data-testid="card-licences-expiring"
           >
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Within 60 Days</p>
-                  <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{ls?.expiring60 ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Below 60 Days</p>
+                  <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{ls?.expiring ?? "—"}</p>
                   <p className="text-xs text-muted-foreground mt-1">Renew soon</p>
                 </div>
                 <ShieldAlert className="h-5 w-5 text-amber-500 mt-1 shrink-0" />
@@ -298,37 +295,14 @@ export default function OperationsCommandCentre({ onNavigate }: OperationsComman
             </CardContent>
           </Card>
 
-          {/* Expiring 61–90 days */}
-          <Card
-            className="cursor-pointer hover-elevate border-yellow-500/30 bg-yellow-50/50 dark:bg-yellow-950/20"
-            onClick={() => {
-              setExpiring90Expanded(true);
-              setTimeout(() => {
-                document.getElementById("expiring90-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }, 100);
-            }}
-            data-testid="card-licences-expiring90"
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">61–90 Days</p>
-                  <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-500">{ls?.expiring90 ?? "—"}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Plan ahead</p>
-                </div>
-                <ShieldAlert className="h-5 w-5 text-yellow-500 mt-1 shrink-0" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* All valid */}
+          {/* Valid — 60+ days — green */}
           <Card className="hover-elevate border-green-500/30 bg-green-50/50 dark:bg-green-950/20" data-testid="card-licences-valid">
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">All Valid</p>
+                  <p className="text-xs text-muted-foreground mb-1">Valid</p>
                   <p className="text-3xl font-bold text-green-600 dark:text-green-400">{ls?.valid ?? "—"}</p>
-                  <p className="text-xs text-muted-foreground mt-1">90+ days remaining</p>
+                  <p className="text-xs text-muted-foreground mt-1">60+ days remaining</p>
                 </div>
                 <ShieldCheck className="h-5 w-5 text-green-500 mt-1 shrink-0" />
               </div>
@@ -366,69 +340,33 @@ export default function OperationsCommandCentre({ onNavigate }: OperationsComman
         )}
       </div>
 
-      {/* Section 3 — Expiring Soon (side by side) */}
-      <div ref={expiring60Ref} className="space-y-2">
-        <h2 className="text-base font-semibold flex items-center gap-2">
-          <ShieldAlert className="h-5 w-5 text-amber-500" />
-          Expiring Soon
-        </h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          {/* Within 60 days */}
-          <div>
-            <button
-              className="w-full flex items-center justify-between mb-2 group"
-              onClick={() => setExpiring60Expanded((p) => !p)}
-              data-testid="toggle-expiring60-section"
-            >
-              <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                Within 60 Days
-                {(ls?.expiring60 ?? 0) > 0 && (
-                  <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30 text-xs" variant="outline">{ls?.expiring60}</Badge>
-                )}
-              </h3>
-              {expiring60Expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </button>
-            {expiring60Expanded && (
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <LicenceTable
-                    employees={licenceAlerts?.expiring60 ?? []}
-                    type="expiring60"
-                    onUpdateLicence={handleUpdateLicence}
-                  />
-                </CardContent>
-              </Card>
+      {/* Section 3 — Expiring Below 60 Days */}
+      <div ref={expiringRef} className="space-y-2">
+        <button
+          className="w-full flex items-center justify-between group"
+          onClick={() => setExpiringExpanded((p) => !p)}
+          data-testid="toggle-expiring-section"
+        >
+          <h2 className="text-base font-semibold flex items-center gap-2 text-amber-600 dark:text-amber-400">
+            <ShieldAlert className="h-5 w-5" />
+            Expiring Below 60 Days
+            {(ls?.expiring ?? 0) > 0 && (
+              <Badge className="ml-1 bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30" variant="outline">{ls?.expiring}</Badge>
             )}
-          </div>
-
-          {/* 61–90 days */}
-          <div id="expiring90-section">
-            <button
-              className="w-full flex items-center justify-between mb-2 group"
-              onClick={() => setExpiring90Expanded((p) => !p)}
-              data-testid="toggle-expiring90-section"
-            >
-              <h3 className="text-sm font-semibold text-yellow-600 dark:text-yellow-500 flex items-center gap-2">
-                61–90 Days
-                {(ls?.expiring90 ?? 0) > 0 && (
-                  <Badge className="bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30 text-xs" variant="outline">{ls?.expiring90}</Badge>
-                )}
-              </h3>
-              {expiring90Expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </button>
-            {expiring90Expanded && (
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <LicenceTable
-                    employees={licenceAlerts?.expiring90 ?? []}
-                    type="expiring90"
-                    onUpdateLicence={handleUpdateLicence}
-                  />
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+          </h2>
+          {expiringExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {expiringExpanded && (
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <LicenceTable
+                employees={licenceAlerts?.expiring ?? []}
+                type="expiring60"
+                onUpdateLicence={handleUpdateLicence}
+              />
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Section 4 — Upcoming Shifts with Licence Issues */}
@@ -514,7 +452,7 @@ export default function OperationsCommandCentre({ onNavigate }: OperationsComman
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground mb-1">SIA Licensed</p>
               <p className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="metric-sia-licensed">
-                {ls ? ls.expiring60 + ls.expiring90 + ls.valid : "—"}
+                {ls ? ls.expiring + ls.valid : "—"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">Valid SIA licences</p>
             </CardContent>
