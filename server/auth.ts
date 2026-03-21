@@ -85,6 +85,8 @@ export function setupAuth(app: Express) {
       if (impersonatedCompanyId) {
         req.user = {
           ...req.user,
+          _originalRole: req.user.role,   // Preserve real role for isSuperAdmin checks
+          role: 'admin',                  // Downgrade role so ALL company-scoping checks apply
           companyId: impersonatedCompanyId,
           isImpersonating: true,
           impersonatedCompanyId,

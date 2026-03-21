@@ -31,8 +31,12 @@ function isAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 // Middleware to check if user is super admin (can manage companies)
+// When impersonating a company, req.user.role is temporarily 'admin' for data-scoping purposes.
+// _originalRole preserves the real 'super_admin' role so super-admin-only routes still work.
 function isSuperAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.user && (req.user as any).role === 'super_admin') {
+  const user = req.user as any;
+  const effectiveRole = user?._originalRole || user?.role;
+  if (user && effectiveRole === 'super_admin') {
     return next();
   }
   res.status(403).json({ message: "Forbidden - Super Admin access required" });
