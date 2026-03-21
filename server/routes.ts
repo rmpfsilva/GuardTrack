@@ -2120,12 +2120,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const now = new Date();
       const d60 = new Date(now); d60.setDate(d60.getDate() + 60);
-      const d90 = new Date(now); d90.setDate(d90.getDate() + 90);
 
       const expired: any[] = [];
-      const expiring60: any[] = [];
-      const expiring90: any[] = [];
-      const valid: any[] = [];
+      const expiring: any[] = [];   // 0–59 days remaining (amber)
+      const valid: any[] = [];      // 60+ days remaining (green)
 
       for (const u of companyUsers) {
         if (!u.siaExpiryDate) continue; // skip if no expiry set
@@ -2141,31 +2139,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           daysRemaining: diffDays,
         };
         if (expiry < now) {
+          // Actually expired — past the expiry date
           expired.push({ ...record, daysOverdue: Math.abs(diffDays) });
-        } else if (expiry <= d60) {
-          expiring60.push(record);
-        } else if (expiry <= d90) {
-          expiring90.push(record);
+        } else if (expiry < d60) {
+          // Not expired yet but below 60 days remaining — amber
+          expiring.push(record);
         } else {
+          // 60+ days remaining — valid/green
           valid.push(record);
         }
       }
 
       expired.sort((a, b) => a.daysRemaining - b.daysRemaining);
-      expiring60.sort((a, b) => a.daysRemaining - b.daysRemaining);
-      expiring90.sort((a, b) => a.daysRemaining - b.daysRemaining);
+      expiring.sort((a, b) => a.daysRemaining - b.daysRemaining);
 
       res.json({
         expired,
-        expiring60,
-        expiring90,
+        expiring,
         valid,
         stats: {
           expired: expired.length,
-          expiring60: expiring60.length,
-          expiring90: expiring90.length,
+          expiring: expiring.length,
           valid: valid.length,
-          totalSiaEmployees: expired.length + expiring60.length + expiring90.length + valid.length,
+          totalSiaEmployees: expired.length + expiring.length + valid.length,
           totalEmployees,
           activeSites,
         },
