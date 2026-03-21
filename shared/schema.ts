@@ -1556,3 +1556,89 @@ export const tasks = pgTable("tasks", {
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true, archivedAt: true });
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
+
+// Staff Profiles table — HR extended employee data
+export const staffProfiles = pgTable("staff_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  dateOfBirth: timestamp("date_of_birth"),
+  nationality: varchar("nationality"),
+  niNumber: varchar("ni_number"),
+  homeAddress: text("home_address"),
+  personalEmail: varchar("personal_email"),
+  personalPhone: varchar("personal_phone"),
+  emergencyContactName: varchar("emergency_contact_name"),
+  emergencyContactPhone: varchar("emergency_contact_phone"),
+  emergencyContactRelationship: varchar("emergency_contact_relationship"),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  employmentStatus: varchar("employment_status").default('active'), // active|inactive|on_leave
+  employmentType: varchar("employment_type").default('full_time'), // full_time|part_time|contractor|casual
+  firstAidCert: varchar("first_aid_cert"),
+  firstAidExpiry: timestamp("first_aid_expiry"),
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  staffProfileUserUnique: uniqueIndex('staff_profiles_user_company_unique').on(table.userId, table.companyId),
+}));
+
+export const insertStaffProfileSchema = createInsertSchema(staffProfiles).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertStaffProfile = z.infer<typeof insertStaffProfileSchema>;
+export type StaffProfile = typeof staffProfiles.$inferSelect;
+
+// Company Documents table — Document Library
+export const companyDocuments = pgTable("company_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  employeeId: varchar("employee_id").references(() => users.id, { onDelete: 'set null' }),
+  filename: varchar("filename").notNull(),
+  originalName: varchar("original_name").notNull(),
+  fileType: varchar("file_type"),
+  fileSize: integer("file_size"),
+  category: varchar("category").notNull().default('other'),
+  notes: text("notes"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id, { onDelete: 'set null' }),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  status: varchar("status").notNull().default('active'), // active|archived
+  archivedAt: timestamp("archived_at"),
+});
+
+export const insertCompanyDocumentSchema = createInsertSchema(companyDocuments).omit({ id: true, uploadedAt: true, archivedAt: true });
+export type InsertCompanyDocument = z.infer<typeof insertCompanyDocumentSchema>;
+export type CompanyDocument = typeof companyDocuments.$inferSelect;
+
+// Signature Requests table — Document Signing
+export const signatureRequests = pgTable("signature_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  documentId: varchar("document_id").references(() => companyDocuments.id, { onDelete: 'set null' }),
+  employeeId: varchar("employee_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sentBy: varchar("sent_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sentAt: timestamp("sent_at").defaultNow(),
+  deadline: timestamp("deadline"),
+  message: text("message"),
+  status: varchar("status").notNull().default('pending'), // pending|signed|overdue|declined
+  signedAt: timestamp("signed_at"),
+  signatureImagePath: varchar("signature_image_path"),
+  documentName: varchar("document_name"),
+});
+
+export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({ id: true, sentAt: true, signedAt: true });
+export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
+export type SignatureRequest = typeof signatureRequests.$inferSelect;
+
+// Incident Photos table — Task 6
+export const incidentPhotos = pgTable("incident_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  incidentId: integer("incident_id").notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  filename: varchar("filename").notNull(),
+  originalName: varchar("original_name"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id, { onDelete: 'set null' }),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
+export const insertIncidentPhotoSchema = createInsertSchema(incidentPhotos).omit({ id: true, uploadedAt: true });
+export type InsertIncidentPhoto = z.infer<typeof insertIncidentPhotoSchema>;
+export type IncidentPhoto = typeof incidentPhotos.$inferSelect;

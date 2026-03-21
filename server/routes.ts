@@ -4,8 +4,11 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
-import { users, breaks, checkIns, sites, companies, scheduledShifts, tasks, JOB_SHARE_ROLES } from "@shared/schema";
-import { eq, desc, and, gte, lte, or } from "drizzle-orm";
+import { users, breaks, checkIns, sites, companies, scheduledShifts, tasks, staffProfiles, companyDocuments, signatureRequests, incidentPhotos, JOB_SHARE_ROLES } from "@shared/schema";
+import { eq, desc, and, gte, lte, or, sql as drizzleSql } from "drizzle-orm";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { insertCompanySchema, updateCompanySchema, insertSiteSchema, updateSiteSchema, insertCheckInSchema, insertBreakSchema, insertScheduledShiftSchema, insertUserSchema, insertInvitationSchema, insertLeaveRequestSchema, updateLeaveRequestSchema, insertNoticeSchema, updateNoticeSchema, insertNoticeApplicationSchema, updateNoticeApplicationSchema, insertPushSubscriptionSchema, insertInvoiceSchema, updateInvoiceSchema, updateCompanySettingsSchema } from "@shared/schema";
 import { startOfWeek } from "date-fns";
 import { syncCheckInToSheets, updateCheckOutInSheets } from "./googleSheets";
@@ -6677,6 +6680,300 @@ GuardTrack Team`;
   });
 
   // Periodic trial expiration check (runs every hour)
+  // ─── File Upload Setup ────────────────────────────────────────────────────
+  const uploadsBase = path.join(process.cwd(), "uploads");
+  ["documents", "signatures", "incident-photos"].forEach(d => {
+    fs.mkdirSync(path.join(uploadsBase, d), { recursive: true });
+  });
+
+  const docStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(uploadsBase, "documents")),
+    filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`),
+  });
+  const photoStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(uploadsBase, "incident-photos")),
+    filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`),
+  });
+  const sigStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(uploadsBase, "signatures")),
+    filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`),
+  });
+
+  const uploadDoc = multer({ storage: docStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+  const uploadPhoto = multer({ storage: photoStorage, limits: { fileSize: 20 * 1024 * 1024 } });
+  const uploadSig = multer({ storage: sigStorage });
+
+  // Serve uploaded files
+  app.use("/uploads", (req, res, next) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    next();
+  }, (req: Request, res, next) => {
+    const staticPath = path.join(uploadsBase, req.path.replace(/^\/uploads/, ""));
+    res.sendFile(staticPath, err => { if (err) next(); });
+  });
+
+  // Fallback static middleware for /uploads
+  app.use("/uploads", (req: Request, res) => {
+    const fp = path.join(uploadsBase, decodeURIComponent(req.path));
+    res.sendFile(fp, err => { if (err) res.status(404).json({ message: "File not found" }); });
+  });
+
+  // ─── Staff Profiles ────────────────────────────────────────────────────────
+  app.get("/api/admin/staff-profiles", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const rows = await db.select().from(staffProfiles).where(eq(staffProfiles.companyId, companyId));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/staff-profiles/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const [row] = await db.select().from(staffProfiles).where(
+        and(eq(staffProfiles.userId, req.params.userId), eq(staffProfiles.companyId, companyId))
+      );
+      res.json(row || null);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/staff-profiles", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const data = { ...req.body, companyId };
+      const [existing] = await db.select().from(staffProfiles).where(
+        and(eq(staffProfiles.userId, data.userId), eq(staffProfiles.companyId, companyId))
+      );
+      if (existing) {
+        const [updated] = await db.update(staffProfiles)
+          .set({ ...data, updatedAt: new Date() })
+          .where(eq(staffProfiles.id, existing.id))
+          .returning();
+        return res.json(updated);
+      }
+      const [created] = await db.insert(staffProfiles).values(data).returning();
+      res.json(created);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/staff-profiles/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const [existing] = await db.select().from(staffProfiles).where(
+        and(eq(staffProfiles.userId, req.params.userId), eq(staffProfiles.companyId, companyId))
+      );
+      if (!existing) {
+        const [created] = await db.insert(staffProfiles)
+          .values({ ...req.body, userId: req.params.userId, companyId })
+          .returning();
+        return res.json(created);
+      }
+      const [updated] = await db.update(staffProfiles)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(staffProfiles.id, existing.id))
+        .returning();
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Document Library ──────────────────────────────────────────────────────
+  app.get("/api/admin/documents", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const showArchived = req.query.showArchived === "true";
+      const rows = await db.select().from(companyDocuments)
+        .where(and(
+          eq(companyDocuments.companyId, companyId),
+          eq(companyDocuments.status, showArchived ? "archived" : "active")
+        ))
+        .orderBy(desc(companyDocuments.uploadedAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/documents/upload", isAuthenticated, isAdmin, uploadDoc.single("file"), async (req: any, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const companyId = req.user.companyId;
+      const [doc] = await db.insert(companyDocuments).values({
+        companyId,
+        employeeId: req.body.employeeId || null,
+        filename: req.file.filename,
+        originalName: req.body.name || req.file.originalname,
+        fileType: req.file.mimetype,
+        fileSize: req.file.size,
+        category: req.body.category || "other",
+        notes: req.body.notes || null,
+        uploadedBy: req.user.id,
+        status: "active",
+      }).returning();
+      res.json(doc);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/documents/:id/archive", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const [doc] = await db.update(companyDocuments)
+        .set({ status: "archived", archivedAt: new Date() })
+        .where(and(eq(companyDocuments.id, req.params.id), eq(companyDocuments.companyId, companyId)))
+        .returning();
+      res.json(doc);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/documents/:id/unarchive", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const [doc] = await db.update(companyDocuments)
+        .set({ status: "active", archivedAt: null })
+        .where(and(eq(companyDocuments.id, req.params.id), eq(companyDocuments.companyId, companyId)))
+        .returning();
+      res.json(doc);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/documents/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const [doc] = await db.delete(companyDocuments)
+        .where(and(eq(companyDocuments.id, req.params.id), eq(companyDocuments.companyId, companyId)))
+        .returning();
+      if (doc?.filename) {
+        const fp = path.join(uploadsBase, "documents", doc.filename);
+        fs.unlink(fp, () => {});
+      }
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/documents/:id/download", isAuthenticated, async (req: any, res) => {
+    try {
+      const [doc] = await db.select().from(companyDocuments).where(eq(companyDocuments.id, req.params.id));
+      if (!doc) return res.status(404).json({ message: "Not found" });
+      const fp = path.join(uploadsBase, "documents", doc.filename);
+      res.download(fp, doc.originalName);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Signature Requests ────────────────────────────────────────────────────
+  app.get("/api/admin/signature-requests", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const rows = await db.select().from(signatureRequests)
+        .where(eq(signatureRequests.companyId, companyId))
+        .orderBy(desc(signatureRequests.sentAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/signature-requests", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const { employeeIds, documentId, documentName, deadline, message } = req.body;
+      const ids: string[] = Array.isArray(employeeIds) ? employeeIds : [employeeIds];
+      const created = [];
+      for (const employeeId of ids) {
+        const [row] = await db.insert(signatureRequests).values({
+          companyId,
+          documentId: documentId || null,
+          employeeId,
+          sentBy: req.user.id,
+          deadline: deadline ? new Date(deadline) : null,
+          message: message || null,
+          documentName: documentName || null,
+          status: "pending",
+        }).returning();
+        created.push(row);
+      }
+      res.json(created);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Employee: get my pending signature requests
+  app.get("/api/my-signature-requests", isAuthenticated, async (req: any, res) => {
+    try {
+      const rows = await db.select().from(signatureRequests)
+        .where(and(eq(signatureRequests.employeeId, req.user.id), eq(signatureRequests.status, "pending")))
+        .orderBy(desc(signatureRequests.sentAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Employee: submit signature
+  app.post("/api/signature-requests/:id/sign", isAuthenticated, uploadSig.single("signature"), async (req: any, res) => {
+    try {
+      const [row] = await db.select().from(signatureRequests).where(eq(signatureRequests.id, req.params.id));
+      if (!row || row.employeeId !== req.user.id) return res.status(403).json({ message: "Forbidden" });
+      let imagePath = row.signatureImagePath;
+      if (req.file) {
+        imagePath = req.file.filename;
+      } else if (req.body.signatureData) {
+        // base64 PNG from canvas
+        const base64 = req.body.signatureData.replace(/^data:image\/png;base64,/, "");
+        const fname = `${Date.now()}-${req.params.id}.png`;
+        fs.writeFileSync(path.join(uploadsBase, "signatures", fname), base64, "base64");
+        imagePath = fname;
+      }
+      const [updated] = await db.update(signatureRequests)
+        .set({ status: "signed", signedAt: new Date(), signatureImagePath: imagePath })
+        .where(eq(signatureRequests.id, req.params.id))
+        .returning();
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Admin: update status (reminder etc)
+  app.patch("/api/admin/signature-requests/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const [updated] = await db.update(signatureRequests)
+        .set(req.body)
+        .where(eq(signatureRequests.id, req.params.id))
+        .returning();
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Incident Photos ───────────────────────────────────────────────────────
+  app.get("/api/incidents/:id/photos", isAuthenticated, async (req: any, res) => {
+    try {
+      const rows = await db.select().from(incidentPhotos)
+        .where(eq(incidentPhotos.incidentId, parseInt(req.params.id)))
+        .orderBy(incidentPhotos.uploadedAt);
+      res.json(rows.map(r => ({ ...r, filePath: `/uploads/incident-photos/${r.filename}` })));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/incidents/:id/photos", isAuthenticated, uploadPhoto.array("photos", 10), async (req: any, res) => {
+    try {
+      const incidentId = parseInt(req.params.id);
+      const files = (req.files as Express.Multer.File[]) || [];
+      const inserted = [];
+      for (const file of files) {
+        const [row] = await db.insert(incidentPhotos).values({
+          incidentId,
+          filename: file.filename,
+          originalName: file.originalname,
+          uploadedBy: req.user.id,
+        }).returning();
+        inserted.push(row);
+      }
+      res.json(inserted);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/incidents/:incidentId/photos/:photoId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const [photo] = await db.delete(incidentPhotos)
+        .where(eq(incidentPhotos.id, req.params.photoId))
+        .returning();
+      if (photo?.filename) {
+        fs.unlink(path.join(uploadsBase, "incident-photos", photo.filename), () => {});
+      }
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   const expireTrialsInterval = setInterval(async () => {
     try {
       const expiredCount = await storage.expireTrials();

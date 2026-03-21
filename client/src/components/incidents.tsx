@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -23,7 +23,7 @@ import {
   AlertTriangle, Plus, Search, Archive, ArchiveRestore, Trash2,
   Eye, Edit, Loader2, ExternalLink, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle2, Clock, XCircle, AlertCircle, Sparkles, Settings2, X,
-  LayoutDashboard, List, Download, Wand2,
+  LayoutDashboard, List, Download, Wand2, Camera, ImagePlus,
 } from "lucide-react";
 import type { Issue } from "@shared/schema";
 
@@ -495,6 +495,8 @@ export function Incidents() {
   const [aiDescription, setAiDescription] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [newDepartment, setNewDepartment] = useState("");
+  const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const { data: issues = [], isLoading } = useQuery<Issue[]>({ queryKey: ["/api/issues"] });
   const { data: archived = [] } = useQuery<Issue[]>({ queryKey: ["/api/issues/archived"] });
@@ -502,6 +504,11 @@ export function Incidents() {
   const { data: settings = [] } = useQuery<any[]>({ queryKey: ["/api/issue-settings"] });
   const { data: companyUsers = [] } = useQuery<CompanyUser[]>({ queryKey: ["/api/admin/users"] });
   const { data: companySites = [] } = useQuery<CompanySite[]>({ queryKey: ["/api/sites"] });
+  const { data: incidentPhotos = [] } = useQuery<any[]>({
+    queryKey: ["/api/incidents", viewIssue?.id, "photos"],
+    queryFn: () => viewIssue ? fetch(`/api/incidents/${viewIssue.id}/photos`, { credentials: "include" }).then(r => r.json()) : [],
+    enabled: !!viewIssue,
+  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["/api/issues"] });
@@ -530,15 +537,43 @@ export function Incidents() {
     onError: () => toast({ title: "AI fill failed", variant: "destructive" }),
   });
 
+  const uploadPhotosMutation = useMutation({
+    mutationFn: async ({ incidentId, files }: { incidentId: number; files: File[] }) => {
+      if (files.length === 0) return;
+      const fd = new FormData();
+      files.forEach(f => fd.append("photos", f));
+      await fetch(`/api/incidents/${incidentId}/photos`, { method: "POST", body: fd, credentials: "include" });
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/issues", data),
-    onSuccess: () => { toast({ title: "Incident logged" }); setCreateOpen(false); setForm(EMPTY_FORM); setAiDescription(""); invalidate(); },
+    onSuccess: async (newIssue: any) => {
+      if (pendingPhotos.length > 0 && newIssue?.id) {
+        await uploadPhotosMutation.mutateAsync({ incidentId: newIssue.id, files: pendingPhotos });
+      }
+      toast({ title: "Incident logged" });
+      setCreateOpen(false);
+      setForm(EMPTY_FORM);
+      setPendingPhotos([]);
+      setAiDescription("");
+      invalidate();
+    },
     onError: () => toast({ title: "Failed to create incident", variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/issues/${id}`, data),
-    onSuccess: () => { toast({ title: "Incident updated" }); setEditIssue(null); setForm(EMPTY_FORM); invalidate(); },
+    onSuccess: async (_: any, { id }: { id: number }) => {
+      if (pendingPhotos.length > 0) {
+        await uploadPhotosMutation.mutateAsync({ incidentId: id, files: pendingPhotos });
+      }
+      toast({ title: "Incident updated" });
+      setEditIssue(null);
+      setForm(EMPTY_FORM);
+      setPendingPhotos([]);
+      invalidate();
+    },
     onError: () => toast({ title: "Failed to update incident", variant: "destructive" }),
   });
 
@@ -891,8 +926,47 @@ export function Incidents() {
           <div className="border-t" />
 
           <IssueForm form={form} onChange={formChange} settings={settings} companyUsers={companyUsers} companySites={companySites} />
+
+          {/* Photo Attachments */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2"><Camera className="h-4 w-4" />Photo Attachments <span className="text-muted-foreground font-normal text-xs">(max 10)</span></Label>
+              <div className="flex gap-2">
+                <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden"
+                  onChange={e => {
+                    const files = Array.from(e.target.files || []);
+                    setPendingPhotos(prev => [...prev, ...files].slice(0, 10));
+                    e.target.value = "";
+                  }}
+                  data-testid="input-incident-photos"
+                />
+                <Button variant="outline" size="sm" onClick={() => { if (photoInputRef.current) { photoInputRef.current.removeAttribute("capture"); photoInputRef.current.click(); } }} data-testid="button-upload-gallery">
+                  <ImagePlus className="h-4 w-4 mr-1" />Gallery
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => { if (photoInputRef.current) { photoInputRef.current.setAttribute("capture", "environment"); photoInputRef.current.click(); } }} data-testid="button-take-photo">
+                  <Camera className="h-4 w-4 mr-1" />Take Photo
+                </Button>
+              </div>
+            </div>
+            {pendingPhotos.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {pendingPhotos.map((f, i) => (
+                  <div key={i} className="relative group w-20 h-20 rounded-md overflow-hidden border">
+                    <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                    <button
+                      className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => setPendingPhotos(prev => prev.filter((_, j) => j !== i))}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setCreateOpen(false); setAiDescription(""); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setCreateOpen(false); setAiDescription(""); setPendingPhotos([]); }}>Cancel</Button>
             <Button onClick={submitCreate} disabled={createMutation.isPending} data-testid="button-submit-incident">
               {createMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Log Incident
@@ -908,8 +982,34 @@ export function Incidents() {
             <DialogTitle>Edit Incident {editIssue?.issueId}</DialogTitle>
           </DialogHeader>
           <IssueForm form={form} onChange={formChange} settings={settings} companyUsers={companyUsers} companySites={companySites} />
+
+          {/* Photo Attachments (Edit) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2"><Camera className="h-4 w-4" />Add Photos <span className="text-muted-foreground font-normal text-xs">(max 10)</span></Label>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => photoInputRef.current?.click()} data-testid="button-edit-upload-gallery">
+                  <ImagePlus className="h-4 w-4 mr-1" />Add Photos
+                </Button>
+              </div>
+            </div>
+            {pendingPhotos.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {pendingPhotos.map((f, i) => (
+                  <div key={i} className="relative group w-20 h-20 rounded-md overflow-hidden border">
+                    <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                    <button
+                      className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => setPendingPhotos(prev => prev.filter((_, j) => j !== i))}
+                    ><X className="h-3 w-3" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditIssue(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditIssue(null); setPendingPhotos([]); }}>Cancel</Button>
             <Button onClick={submitEdit} disabled={updateMutation.isPending} data-testid="button-save-incident-edit">
               {updateMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Save Changes
@@ -963,6 +1063,20 @@ export function Incidents() {
                 )}
                 {viewIssue.comments && (
                   <div><p className="text-xs text-muted-foreground mb-1">Comments</p><p className="text-sm leading-relaxed">{viewIssue.comments}</p></div>
+                )}
+
+                {/* Photo Gallery */}
+                {incidentPhotos.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Camera className="h-3.5 w-3.5" />Photos ({incidentPhotos.length})</p>
+                    <div className="flex flex-wrap gap-2">
+                      {incidentPhotos.map((photo: any) => (
+                        <a key={photo.id} href={photo.filePath} target="_blank" rel="noopener noreferrer" className="block w-24 h-24 rounded-md overflow-hidden border hover-elevate">
+                          <img src={photo.filePath} alt={photo.originalName || "Incident photo"} className="w-full h-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {/* NCR Section */}

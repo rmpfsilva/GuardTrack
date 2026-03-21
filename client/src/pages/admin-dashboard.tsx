@@ -10,7 +10,7 @@ import {
   LayoutDashboard, UserCog, CalendarOff, CheckSquare, ClipboardEdit, Megaphone,
   Handshake, Share2, Receipt, CreditCard, BarChart3, MessageSquare,
   Building2, AlertTriangle, FileText, DollarSign, Shield, LogOut, Smartphone, Eye,
-  ClipboardList
+  ClipboardList, FolderOpen, PenLine, UserCheck
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -29,6 +29,9 @@ import {
 import type { Site, CheckInWithDetails, User, Company, LeaveRequestWithDetails, SupportMessage, ErrorLog, CompanyPartnershipWithDetails, JobShareWithDetails } from "@shared/schema";
 import SiteManagement from "@/components/site-management";
 import GuardDirectory from "@/components/guard-directory";
+import StaffProfiles from "@/components/staff-profiles";
+import DocumentLibrary from "@/components/document-library";
+import HrSignatures from "@/components/hr-signatures";
 import ScheduleManagement from "@/components/schedule-management";
 import UserManagement from "@/components/user-management";
 import BillingReports from "@/components/billing-reports";
@@ -94,6 +97,7 @@ export default function AdminDashboard() {
 
   const isImpersonating = !!(user as any)?.isImpersonating;
   const [activeTab, setActiveTab] = useState<string>(user?.role === 'super_admin' && !isImpersonating ? 'clients' : 'overview');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [jobSharingLastSeen, setJobSharingLastSeen] = useState<Date>(() => {
     const stored = localStorage.getItem('jobSharingLastSeen');
     return stored ? new Date(stored) : new Date(0);
@@ -294,7 +298,13 @@ export default function AdminDashboard() {
       case 'schedule':
         return <ScheduleManagement />;
       case 'guards':
-        return <GuardDirectory />;
+        return <GuardDirectory onViewProfile={(id) => { setSelectedUserId(id); setActiveTab('staff-profiles'); }} />;
+      case 'staff-profiles':
+        return <StaffProfiles initialUserId={selectedUserId} />;
+      case 'hr-documents':
+        return <DocumentLibrary />;
+      case 'hr-signatures':
+        return <HrSignatures />;
       case 'users':
         return <UserManagement />;
       case 'invitations':
@@ -554,6 +564,20 @@ export default function AdminDashboard() {
                       {hasTabAccess('users') && renderSidebarItem('users', 'Users', UserCog)}
                       {hasTabAccess('leave') && renderSidebarItem('leave', 'Leave', CalendarOff)}
                       {hasTabAccess('invitations') && renderSidebarItem('invitations', 'Invites', Mail)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                  <SidebarGroupLabel>
+                    <UserCheck className="h-4 w-4 mr-2" />
+                    Human Resources
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {renderSidebarItem('staff-profiles', 'Staff Profiles', UserCheck)}
+                      {renderSidebarItem('hr-documents', 'Documents', FolderOpen)}
+                      {renderSidebarItem('hr-signatures', 'Signatures', PenLine)}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
