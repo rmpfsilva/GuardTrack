@@ -94,7 +94,48 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
 
   const fmt = (d: any) => d ? new Date(d).toLocaleDateString("en-GB") : "N/A";
   const CONTAINER_W = 794;
+  const LOGO_MAX_W = 300;
+  const LOGO_MAX_H = 120;
+  const toMm = (px: number) => (px * 210) / CONTAINER_W;
 
+  // ── Step 1: Pre-load logo BEFORE touching the DOM ──────────────────────────
+  // We compute the display dimensions manually so we can inject a fixed-size
+  // <div> placeholder — a plain div always has exact dimensions, unlike an <img>
+  // whose size depends on async load state. The real image is stamped directly
+  // into the PDF later at 100% native resolution, bypassing html2canvas entirely.
+  let logoPDF: { x: number; y: number; w: number; h: number; fmt: string } | null = null;
+  let logoPlaceholderHtml = '';
+
+  if (branding.logoUrl) {
+    const preload = new Image();
+    await new Promise<void>((resolve) => {
+      preload.onload = () => resolve();
+      preload.onerror = () => resolve();
+      preload.src = branding.logoUrl;
+    });
+
+    if (preload.naturalWidth > 0 && preload.naturalHeight > 0) {
+      // Apply CSS max-width / max-height constraints while keeping aspect ratio
+      const ratio = preload.naturalWidth / preload.naturalHeight;
+      let dw = preload.naturalWidth;
+      let dh = preload.naturalHeight;
+      if (dw > LOGO_MAX_W) { dw = LOGO_MAX_W; dh = LOGO_MAX_W / ratio; }
+      if (dh > LOGO_MAX_H) { dh = LOGO_MAX_H; dw = LOGO_MAX_H * ratio; }
+      dw = Math.round(dw); dh = Math.round(dh);
+
+      // Placeholder <div> that occupies exactly the same space the logo would
+      logoPlaceholderHtml = `<div id="logo-ph" style="width:${dw}px;height:${dh}px;display:block;margin-bottom:8px;"></div>`;
+
+      // PDF position will be filled after the container is in the DOM
+      logoPDF = {
+        x: 0, y: 0,  // computed below
+        w: toMm(dw), h: toMm(dh),
+        fmt: branding.logoUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG',
+      };
+    }
+  }
+
+  // ── Step 2: Build the container with placeholder (no <img> for the logo) ──
   const container = document.createElement('div');
   container.style.cssText = [
     'position:fixed', 'left:-9999px', 'top:0',
@@ -108,7 +149,6 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
   .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #1d4ed8; padding-bottom:16px; margin-bottom:24px; gap:24px; }
   .header-left { flex:1; }
   .header-right { text-align:right; min-width:200px; }
-  .company-logo { max-height:120px; max-width:300px; object-fit:contain; display:block; margin-bottom:8px; }
   .company-name { font-size:18px; font-weight:700; color:#1d4ed8; }
   .company-details { font-size:11px; color:#6b7280; margin-top:2px; line-height:1.5; }
   .report-label { font-size:20px; font-weight:700; color:#1d4ed8; }
@@ -130,8 +170,7 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
 </style>
 <div class="header">
   <div class="header-left">
-    ${branding.logoUrl ? `<img id="pdf-logo" src="${branding.logoUrl}" alt="Logo" class="company-logo">` : ''}
-    ${!branding.logoUrl && branding.companyName ? `<div class="company-name">${branding.companyName}</div>` : ''}
+    ${logoPlaceholderHtml || (!branding.logoUrl && branding.companyName ? `<div class="company-name">${branding.companyName}</div>` : '')}
     <div class="company-details">
       ${branding.companyAddress ? branding.companyAddress.replace(/\n/g, ' &bull; ') + '<br>' : ''}
       ${branding.companyEmail || ''}${branding.companyPhone ? ' &bull; ' + branding.companyPhone : ''}
@@ -171,43 +210,19 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
 
   document.body.appendChild(container);
 
-  // --- Logo: measure its rendered position, then hide it from html2canvas ---
-  // html2canvas downsamples images to their CSS-rendered pixel size.
-  // Instead we capture the layout without the logo, then stamp the original
-  // image data directly onto the PDF at full native resolution.
-  let logoPlacement: { x: number; y: number; w: number; h: number; fmt: string } | null = null;
-
-  if (branding.logoUrl) {
-    const logoEl = container.querySelector('#pdf-logo') as HTMLImageElement | null;
-    if (logoEl) {
-      // Wait for the image to fully load so getBoundingClientRect is accurate
-      if (!logoEl.complete || logoEl.naturalWidth === 0) {
-        await new Promise<void>((resolve) => {
-          logoEl.onload = () => resolve();
-          logoEl.onerror = () => resolve();
-        });
-      }
-
+  // ── Step 3: Measure the placeholder position NOW (it's a plain div — always reliable) ──
+  if (logoPDF) {
+    const ph = container.querySelector('#logo-ph') as HTMLElement | null;
+    if (ph) {
       const cRect = container.getBoundingClientRect();
-      const lRect = logoEl.getBoundingClientRect();
-
-      // Container px → PDF mm  (A4 width = 210mm, container = CONTAINER_W px)
-      const toMm = (px: number) => (px * 210) / CONTAINER_W;
-
-      logoPlacement = {
-        x: toMm(lRect.left - cRect.left),
-        y: toMm(lRect.top  - cRect.top),
-        w: toMm(lRect.width),
-        h: toMm(lRect.height),
-        fmt: branding.logoUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG',
-      };
-
-      // Hide from html2canvas but keep the space so layout is unchanged
-      logoEl.style.visibility = 'hidden';
+      const pRect = ph.getBoundingClientRect();
+      logoPDF.x = toMm(pRect.left - cRect.left);
+      logoPDF.y = toMm(pRect.top  - cRect.top);
     }
   }
 
   try {
+    // ── Step 4: Capture the page (placeholder space is blank — logo goes in next) ──
     const canvas = await html2canvas(container, {
       scale: 2,
       useCORS: true,
@@ -233,17 +248,11 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
       if (remaining > 0) pdf.addPage();
     }
 
-    // Stamp the logo at full native resolution directly onto the first PDF page
-    if (logoPlacement && branding.logoUrl) {
+    // ── Step 5: Stamp logo at 100% native resolution directly into the PDF ──
+    // jsPDF uses the original image data — no scaling, no canvas resampling.
+    if (logoPDF && branding.logoUrl) {
       pdf.setPage(1);
-      pdf.addImage(
-        branding.logoUrl,
-        logoPlacement.fmt,
-        logoPlacement.x,
-        logoPlacement.y,
-        logoPlacement.w,
-        logoPlacement.h,
-      );
+      pdf.addImage(branding.logoUrl, logoPDF.fmt, logoPDF.x, logoPDF.y, logoPDF.w, logoPDF.h);
     }
 
     pdf.save(`NCR-${issue.issueId}-${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.pdf`);
