@@ -99,11 +99,10 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
   const toMm = (px: number) => (px * 210) / CONTAINER_W;
 
   // ── Step 1: Pre-load logo BEFORE touching the DOM ──────────────────────────
-  // We compute the display dimensions manually so we can inject a fixed-size
-  // <div> placeholder — a plain div always has exact dimensions, unlike an <img>
-  // whose size depends on async load state. The real image is stamped directly
-  // into the PDF later at 100% native resolution, bypassing html2canvas entirely.
-  let logoPDF: { x: number; y: number; w: number; h: number; fmt: string } | null = null;
+  // We compute display dimensions and downsample the logo to a print-ready
+  // resolution (2× display size max) before embedding. This prevents logos
+  // with huge native resolutions (e.g. 8000×8000) from inflating the PDF.
+  let logoPDF: { x: number; y: number; w: number; h: number; fmt: string; dataUrl: string } | null = null;
   let logoPlaceholderHtml = '';
 
   if (branding.logoUrl) {
@@ -126,11 +125,23 @@ async function printIssuePDF(issue: Issue, onDone?: () => void) {
       // Placeholder <div> that occupies exactly the same space the logo would
       logoPlaceholderHtml = `<div id="logo-ph" style="width:${dw}px;height:${dh}px;display:block;margin-bottom:8px;"></div>`;
 
-      // PDF position will be filled after the container is in the DOM
+      // Downsample logo to 2× display size for print-quality PDF embedding.
+      // This prevents huge native resolutions (8000×8000, etc.) from bloating the PDF.
+      const pdfLogoW = dw * 2;
+      const pdfLogoH = dh * 2;
+      const offscreen = document.createElement('canvas');
+      offscreen.width = pdfLogoW;
+      offscreen.height = pdfLogoH;
+      const ctx = offscreen.getContext('2d')!;
+      ctx.drawImage(preload, 0, 0, pdfLogoW, pdfLogoH);
+      const isTransparent = branding.logoUrl.startsWith('data:image/png');
+      const resizedDataUrl = offscreen.toDataURL(isTransparent ? 'image/png' : 'image/jpeg', 0.92);
+
       logoPDF = {
-        x: 0, y: 0,  // computed below
+        x: 0, y: 0,
         w: toMm(dw), h: toMm(dh),
-        fmt: branding.logoUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG',
+        fmt: isTransparent ? 'PNG' : 'JPEG',
+        dataUrl: resizedDataUrl,
       };
     }
   }
@@ -224,38 +235,37 @@ ${issue.comments ? `<div class="section"><h3>Comments</h3><p>${issue.comments}</
   try {
     // ── Step 4: Capture the page (placeholder space is blank — logo goes in next) ──
     const canvas = await html2canvas(container, {
-      scale: 2,
+      scale: 1.5,
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
     });
 
-    const imgData = canvas.toDataURL('image/png');
+    // Use JPEG for the content canvas — white background, much smaller than PNG
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const imgW = pageW;
     const imgH = (canvas.height * pageW) / canvas.width;
 
-    let remaining = imgH;
-    let srcY = 0;
-
-    while (remaining > 0) {
-      const sliceH = Math.min(remaining, pageH);
-      pdf.addImage(imgData, 'PNG', 0, srcY === 0 ? 0 : -(imgH - sliceH), imgW, imgH);
-      remaining -= pageH;
-      srcY += pageH;
-      if (remaining > 0) pdf.addPage();
+    // Multi-page: embed image data ONCE using an alias — jsPDF reuses it for each page
+    const totalPages = Math.ceil(imgH / pageH);
+    for (let i = 0; i < totalPages; i++) {
+      if (i > 0) pdf.addPage();
+      // Shift image up by i * pageH to reveal the correct slice on each page
+      pdf.addImage(imgData, 'JPEG', 0, -i * pageH, imgW, imgH, 'PAGE_CONTENT');
     }
 
     // ── Step 5: Stamp logo at 100% native resolution directly into the PDF ──
     // jsPDF uses the original image data — no scaling, no canvas resampling.
-    if (logoPDF && branding.logoUrl) {
+    if (logoPDF) {
       try {
         pdf.setPage(1);
-        pdf.addImage(branding.logoUrl, logoPDF.fmt, logoPDF.x, logoPDF.y, logoPDF.w, logoPDF.h);
+        // Use the pre-downsampled dataUrl — never the raw original (can be 8000×8000+)
+        pdf.addImage(logoPDF.dataUrl, logoPDF.fmt, logoPDF.x, logoPDF.y, logoPDF.w, logoPDF.h);
       } catch {
-        // If logo is corrupted or unsupported, skip it — the rest of the PDF is still valid
+        // If logo fails, skip it — the rest of the PDF is still valid
       }
     }
 
