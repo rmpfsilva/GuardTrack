@@ -83,7 +83,7 @@ export default function AdminDashboard() {
     },
     onSuccess: () => {
       // Full reload: clears all state and user refetches without impersonation
-      window.location.href = '/admin';
+      window.location.href = '/';
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to exit company view", variant: "destructive" });

@@ -359,9 +359,8 @@ export default function ClientManagement() {
     mutationFn: async (companyId: string) => {
       return await apiRequest("POST", `/api/super-admin/impersonate/${companyId}`);
     },
-    onSuccess: (_data, companyId) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      setLocation('/admin');
+    onSuccess: () => {
+      window.location.href = '/';
     },
     onError: (error: any) => {
       toast({
