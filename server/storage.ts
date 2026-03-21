@@ -309,6 +309,8 @@ export interface IStorage {
   getAllJobShares(): Promise<JobShareWithDetails[]>;
   getJobSharesOfferedByCompany(companyId: string): Promise<JobShareWithDetails[]>;
   getJobSharesReceivedByCompany(companyId: string): Promise<JobShareWithDetails[]>;
+  getArchivedJobSharesOfferedByCompany(companyId: string): Promise<JobShareWithDetails[]>;
+  getArchivedJobSharesReceivedByCompany(companyId: string): Promise<JobShareWithDetails[]>;
   getJobShare(id: string): Promise<JobShareWithDetails | undefined>;
   createJobShare(jobShare: InsertJobShare): Promise<JobShare>;
   updateJobShare(id: string, updates: UpdateJobShare): Promise<JobShare>;
@@ -3082,7 +3084,7 @@ export class DatabaseStorage implements IStorage {
     const shares = await db
       .select()
       .from(jobShares)
-      .where(eq(jobShares.fromCompanyId, companyId))
+      .where(and(eq(jobShares.fromCompanyId, companyId), eq(jobShares.isArchived, false)))
       .orderBy(desc(jobShares.createdAt));
 
     const detailedShares = [];
@@ -3110,7 +3112,7 @@ export class DatabaseStorage implements IStorage {
     const shares = await db
       .select()
       .from(jobShares)
-      .where(eq(jobShares.toCompanyId, companyId))
+      .where(and(eq(jobShares.toCompanyId, companyId), eq(jobShares.isArchived, false)))
       .orderBy(desc(jobShares.createdAt));
 
     const detailedShares = [];
@@ -3131,6 +3133,44 @@ export class DatabaseStorage implements IStorage {
       } as JobShareWithDetails);
     }
 
+    return detailedShares;
+  }
+
+  async getArchivedJobSharesOfferedByCompany(companyId: string): Promise<JobShareWithDetails[]> {
+    const shares = await db
+      .select()
+      .from(jobShares)
+      .where(and(eq(jobShares.fromCompanyId, companyId), eq(jobShares.isArchived, true)))
+      .orderBy(desc(jobShares.endDate));
+
+    const detailedShares = [];
+    for (const share of shares) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, share.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, share.toCompanyId));
+      const [site] = await db.select().from(sites).where(eq(sites.id, share.siteId));
+      const [creator] = await db.select().from(users).where(eq(users.id, share.createdBy));
+      const reviewer = share.reviewedBy ? (await db.select().from(users).where(eq(users.id, share.reviewedBy)))[0] : undefined;
+      detailedShares.push({ ...share, fromCompany, toCompany, site, creator, reviewer } as JobShareWithDetails);
+    }
+    return detailedShares;
+  }
+
+  async getArchivedJobSharesReceivedByCompany(companyId: string): Promise<JobShareWithDetails[]> {
+    const shares = await db
+      .select()
+      .from(jobShares)
+      .where(and(eq(jobShares.toCompanyId, companyId), eq(jobShares.isArchived, true)))
+      .orderBy(desc(jobShares.endDate));
+
+    const detailedShares = [];
+    for (const share of shares) {
+      const [fromCompany] = await db.select().from(companies).where(eq(companies.id, share.fromCompanyId));
+      const [toCompany] = await db.select().from(companies).where(eq(companies.id, share.toCompanyId));
+      const [site] = await db.select().from(sites).where(eq(sites.id, share.siteId));
+      const [creator] = await db.select().from(users).where(eq(users.id, share.createdBy));
+      const reviewer = share.reviewedBy ? (await db.select().from(users).where(eq(users.id, share.reviewedBy)))[0] : undefined;
+      detailedShares.push({ ...share, fromCompany, toCompany, site, creator, reviewer } as JobShareWithDetails);
+    }
     return detailedShares;
   }
 

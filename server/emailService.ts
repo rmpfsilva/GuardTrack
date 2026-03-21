@@ -416,6 +416,93 @@ export async function sendAddedToAnotherCompanyEmail(toEmail: string, companyNam
   }
 }
 
+export async function sendPartnershipRequestEmail(
+  toEmail: string,
+  fromCompanyName: string,
+  appUrl: string,
+): Promise<void> {
+  const htmlBody = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+  <div style="background-color: #ffffff; border-radius: 8px; padding: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);">
+    <div style="margin-bottom: 24px;">
+      <h1 style="margin: 0 0 4px 0; font-size: 22px; color: #1e3a5f;">New Partnership Request</h1>
+      <p style="margin: 0; color: #666666; font-size: 14px;">GuardTrack · Company Partnerships</p>
+    </div>
+    <p style="font-size: 16px; margin: 0 0 16px 0;">
+      <strong>${fromCompanyName}</strong> has sent your company a partnership request on GuardTrack.
+    </p>
+    <p style="font-size: 15px; color: #555555; margin: 0 0 28px 0;">
+      Log in to review the request and accept or decline the partnership.
+    </p>
+    <div style="text-align: center; margin-bottom: 32px;">
+      <a href="${appUrl}" style="display: inline-block; background-color: #1e3a5f; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-size: 16px; font-weight: 600;">
+        View Partnership Request
+      </a>
+    </div>
+    <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; font-size: 13px; color: #999999;">
+      <p style="margin: 0;">The GuardTrack Team</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const resend = await getUncachableResendClient();
+  await resend.emails.send({
+    from: GUARDTRACK_FROM,
+    to: [toEmail],
+    subject: `${fromCompanyName} has sent you a partnership request on GuardTrack`,
+    html: htmlBody,
+  });
+  console.log(`[Partnership Email] Request sent to ${toEmail} from ${fromCompanyName}`);
+}
+
+export async function sendPartnershipAcceptedEmail(
+  toEmail: string,
+  acceptingCompanyName: string,
+  appUrl: string,
+): Promise<void> {
+  const htmlBody = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+  <div style="background-color: #ffffff; border-radius: 8px; padding: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);">
+    <div style="margin-bottom: 24px;">
+      <h1 style="margin: 0 0 4px 0; font-size: 22px; color: #16a34a;">Partnership Accepted</h1>
+      <p style="margin: 0; color: #666666; font-size: 14px;">GuardTrack · Company Partnerships</p>
+    </div>
+    <p style="font-size: 16px; margin: 0 0 16px 0;">
+      <strong>${acceptingCompanyName}</strong> has accepted your partnership request. You can now share job requests with each other on GuardTrack.
+    </p>
+    <div style="text-align: center; margin-bottom: 32px;">
+      <a href="${appUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-size: 16px; font-weight: 600;">
+        View Partners
+      </a>
+    </div>
+    <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; font-size: 13px; color: #999999;">
+      <p style="margin: 0;">The GuardTrack Team</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const resend = await getUncachableResendClient();
+  await resend.emails.send({
+    from: GUARDTRACK_FROM,
+    to: [toEmail],
+    subject: `${acceptingCompanyName} accepted your partnership request on GuardTrack`,
+    html: htmlBody,
+  });
+  console.log(`[Partnership Email] Accepted notification sent to ${toEmail} by ${acceptingCompanyName}`);
+}
+
 export async function sendNewJobShareEmail(
   toEmail: string,
   fromCompanyName: string,

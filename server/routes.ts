@@ -3892,6 +3892,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[DEBUG] POST /api/partnerships - Creating partnership with data:', JSON.stringify(partnershipData));
       const partnership = await storage.createPartnership(partnershipData);
       console.log('[DEBUG] POST /api/partnerships - Created partnership:', JSON.stringify(partnership));
+
+      // Non-blocking email to receiving company
+      (async () => {
+        try {
+          const toCompany = await storage.getCompany(req.body.toCompanyId);
+          if (!toCompany?.email) return;
+          const fromCompany = await storage.getCompany(user.companyId);
+          const fromName = fromCompany?.name || 'A partner company';
+          const appUrl = `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/login`;
+          const { sendPartnershipRequestEmail } = await import('./emailService');
+          await sendPartnershipRequestEmail(toCompany.email, fromName, appUrl);
+        } catch (emailErr: any) {
+          console.error('[Partnership Email] Failed to send request notification:', emailErr.message);
+        }
+      })();
+
       res.status(201).json(partnership);
     } catch (error: any) {
       console.error("Error creating partnership:", error);
@@ -3924,6 +3940,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const updated = await storage.updatePartnership(id, updates);
+
+      // Send email to requesting company when accepted
+      if (req.body.status === 'accepted') {
+        (async () => {
+          try {
+            const fromCompany = await storage.getCompany(partnership.fromCompanyId);
+            if (!fromCompany?.email) return;
+            const toCompany = await storage.getCompany(partnership.toCompanyId);
+            const acceptingName = toCompany?.name || 'Your partner company';
+            const appUrl = `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/login`;
+            const { sendPartnershipAcceptedEmail } = await import('./emailService');
+            await sendPartnershipAcceptedEmail(fromCompany.email, acceptingName, appUrl);
+          } catch (emailErr: any) {
+            console.error('[Partnership Email] Failed to send accepted notification:', emailErr.message);
+          }
+        })();
+      }
+
       res.json(updated);
     } catch (error: any) {
       console.error("Error updating partnership:", error);
@@ -4005,6 +4039,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error fetching received job shares:", error);
       res.status(500).json({ message: error.message || "Failed to fetch received job shares" });
+    }
+  });
+
+  app.get('/api/job-shares/archived/offered', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const shares = await storage.getArchivedJobSharesOfferedByCompany(user.companyId);
+      res.json(shares);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch archived offered job shares" });
+    }
+  });
+
+  app.get('/api/job-shares/archived/received', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const shares = await storage.getArchivedJobSharesReceivedByCompany(user.companyId);
+      res.json(shares);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch archived received job shares" });
     }
   });
 

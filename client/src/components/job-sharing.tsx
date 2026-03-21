@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Briefcase, Building2, Calendar, DollarSign, Users, Plus, Check, X, Clock, MapPin, Trash2, Pencil, PoundSterling, Minus, ChevronDown, ChevronUp } from "lucide-react";
+import { Briefcase, Building2, Calendar, DollarSign, Users, Plus, Check, X, Clock, MapPin, Trash2, Pencil, PoundSterling, Minus, ChevronDown, ChevronUp, Archive, ArrowRight, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +42,7 @@ export default function JobSharing() {
   const [editWorkers, setEditWorkers] = useState<Array<{ name: string; role: JobShareRole; phone: string; email: string; siaLicense: string }>>([]);
   const [acceptNotes, setAcceptNotes] = useState("");
   const [acceptedCounts, setAcceptedCounts] = useState<Array<{ role: JobShareRole; maxCount: number; acceptCount: number; hourlyRate: string }>>([]);
-  const [selectedTab, setSelectedTab] = useState<'offered' | 'received'>('offered');
+  const [selectedTab, setSelectedTab] = useState<'offered' | 'received' | 'archived'>('offered');
   const [expandedShares, setExpandedShares] = useState<Set<string>>(new Set());
 
   const toggleExpanded = (id: string) => {
@@ -91,6 +91,18 @@ export default function JobSharing() {
   const { data: receivedShares = [] } = useQuery<JobShareWithDetails[]>({
     queryKey: ['/api/job-shares/received'],
   });
+
+  const { data: archivedOffered = [] } = useQuery<JobShareWithDetails[]>({
+    queryKey: ['/api/job-shares/archived/offered'],
+    enabled: selectedTab === 'archived',
+  });
+
+  const { data: archivedReceived = [] } = useQuery<JobShareWithDetails[]>({
+    queryKey: ['/api/job-shares/archived/received'],
+    enabled: selectedTab === 'archived',
+  });
+
+  const archivedShares = [...archivedOffered.map(s => ({ ...s, _direction: 'offered' as const })), ...archivedReceived.map(s => ({ ...s, _direction: 'received' as const }))].sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime());
 
   interface CompanyEmployee {
     id: string;
@@ -631,6 +643,10 @@ export default function JobSharing() {
             </Badge>
           )}
         </Button>
+        <Button variant={selectedTab === 'archived' ? 'default' : 'ghost'} onClick={() => setSelectedTab('archived')} data-testid="tab-archived-shares" className="relative">
+          <Archive className="h-4 w-4 mr-1.5" />
+          Archived
+        </Button>
       </div>
 
       {selectedTab === 'offered' && (
@@ -863,6 +879,96 @@ export default function JobSharing() {
                         </div>
                       )}
                       <JobShareMessages jobShareId={share.id} />
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {selectedTab === 'archived' && (
+        <div className="grid gap-4">
+          {archivedShares.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <Archive className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p>No archived job shares yet.</p>
+                <p className="text-sm mt-1">Expired shares are automatically archived here.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            archivedShares.map(share => {
+              const sharePositions = getPositionsForShare(share);
+              const accepted = share.acceptedPositions as JobSharePosition[] | null;
+              const totalPos = getTotalPositions(sharePositions);
+              const isExpanded = expandedShares.has(share.id);
+              const period = `${format(new Date(share.startDate), "MMM d")} – ${format(new Date(share.endDate), "MMM d, yyyy")}`;
+              const isOffered = share._direction === 'offered';
+              return (
+                <Card key={`${share._direction}-${share.id}`} className="opacity-75" data-testid={`archived-share-${share.id}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Building2 className="h-4 w-4 shrink-0" />
+                          <span className="truncate">
+                            {isOffered ? share.toCompany?.name : share.fromCompany?.name || "Unknown Company"}
+                          </span>
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            {isOffered ? (
+                              <><ArrowRight className="h-3 w-3 mr-1" />Offered</>
+                            ) : (
+                              <><ArrowLeft className="h-3 w-3 mr-1" />Received</>
+                            )}
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription className="flex items-center gap-2 mt-0.5">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{share.site?.name || "Unknown Site"}</span>
+                        </CardDescription>
+                        <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1"><Users className="h-3 w-3" />{totalPos} position{totalPos !== 1 ? 's' : ''}</span>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span>{period}</span>
+                          {share.archivedAt && (
+                            <>
+                              <span className="text-muted-foreground/40">·</span>
+                              <span className="flex items-center gap-1"><Archive className="h-3 w-3" />Archived {format(new Date((share as any).archivedAt), "MMM d, yyyy")}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {getStatusBadge(share.status)}
+                        <Button size="icon" variant="ghost" onClick={() => toggleExpanded(share.id)} data-testid={`button-expand-archived-${share.id}`} title={isExpanded ? "Collapse" : "Expand"}>
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {isExpanded && (
+                    <CardContent className="space-y-3 pt-0">
+                      <JobShareProgress positions={sharePositions} acceptedPositions={accepted} status={share.status} />
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">Positions</p>
+                        <PositionsDisplay positions={sharePositions} />
+                      </div>
+                      {share.requirements && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Requirements</p>
+                          <p className="text-sm">{share.requirements}</p>
+                        </div>
+                      )}
+                      {share.assignedWorkers && share.assignedWorkers.length > 0 && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                            <UserPlus className="h-4 w-4" />Assigned Workers ({share.assignedWorkers.length})
+                          </p>
+                          <AssignedWorkersDisplay workers={share.assignedWorkers} />
+                        </div>
+                      )}
                     </CardContent>
                   )}
                 </Card>

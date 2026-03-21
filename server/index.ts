@@ -447,6 +447,14 @@ async function migrateExistingUserMemberships() {
     setTimeout(() => {
       backfillJobShareShifts().catch(err => console.error("Backfill error:", err));
     }, 3000);
+
+    // Auto-archive expired job shares on startup and every 2 hours
+    setTimeout(() => {
+      archiveExpiredJobShares().catch(err => console.error("Archive error:", err));
+      setInterval(() => {
+        archiveExpiredJobShares().catch(err => console.error("Archive error:", err));
+      }, 2 * 60 * 60 * 1000);
+    }, 5000);
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
