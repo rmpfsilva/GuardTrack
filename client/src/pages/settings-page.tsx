@@ -64,6 +64,7 @@ type ResetUserPasswordForm = z.infer<typeof resetUserPasswordSchema>;
 export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isImpersonating = !!(user as any)?.isImpersonating;
   const [, navigate] = useLocation();
 
   const profileForm = useForm<ProfileForm>({
@@ -392,8 +393,20 @@ export default function SettingsPage() {
               />
             )}
 
+            {/* Impersonation notice */}
+            {isImpersonating && (
+              <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20">
+                <CardContent className="py-4">
+                  <p className="text-sm text-amber-700 dark:text-amber-300 font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    You are viewing this company as an admin. Personal profile settings are hidden while in this view.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Profile Update Section */}
-            <Card>
+            {!isImpersonating && <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <IdCard className="h-5 w-5" />
@@ -474,10 +487,10 @@ export default function SettingsPage() {
                   </form>
                 </Form>
               </CardContent>
-            </Card>
+            </Card>}
 
             {/* Change Password Section */}
-            <Card>
+            {!isImpersonating && <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Lock className="h-5 w-5" />
@@ -558,7 +571,7 @@ export default function SettingsPage() {
                   </form>
                 </Form>
               </CardContent>
-            </Card>
+            </Card>}
 
             {/* Reset User Password Section - Super Admin Only */}
             {user?.role === 'super_admin' && (
@@ -652,8 +665,8 @@ export default function SettingsPage() {
               </Card>
             )}
 
-            {/* Professional Credentials - Hidden for Super Admin */}
-            {user?.role !== 'super_admin' && (
+            {/* Professional Credentials - Hidden for Super Admin and during impersonation */}
+            {user?.role !== 'super_admin' && !isImpersonating && (
               <Card className="mt-6">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
