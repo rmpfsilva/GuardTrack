@@ -4,7 +4,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db, pool } from "./db";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
-import { users, breaks, checkIns, sites, companies, scheduledShifts, tasks, staffProfiles, companyDocuments, signatureRequests, incidentPhotos, JOB_SHARE_ROLES } from "@shared/schema";
+import { users, breaks, checkIns, sites, companies, scheduledShifts, tasks, staffProfiles, companyDocuments, signatureRequests, employeeSharedDocuments, incidentPhotos, JOB_SHARE_ROLES } from "@shared/schema";
 import { eq, desc, and, gte, lte, or, sql as drizzleSql } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
@@ -6884,7 +6884,7 @@ GuardTrack Team`;
   app.post("/api/admin/signature-requests", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const companyId = req.user.companyId;
-      const { employeeIds, documentId, documentName, deadline, message } = req.body;
+      const { employeeIds, documentId, documentName, deadline, message, type, siteId } = req.body;
       const ids: string[] = Array.isArray(employeeIds) ? employeeIds : [employeeIds];
       const created = [];
       for (const employeeId of ids) {
@@ -6897,6 +6897,8 @@ GuardTrack Team`;
           message: message || null,
           documentName: documentName || null,
           status: "pending",
+          type: type || "signature",
+          siteId: siteId || null,
         }).returning();
         created.push(row);
       }
@@ -6943,6 +6945,194 @@ GuardTrack Team`;
       const [updated] = await db.update(signatureRequests)
         .set(req.body)
         .where(eq(signatureRequests.id, req.params.id))
+        .returning();
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Admin: download signature image
+  app.get("/api/admin/signature-requests/:id/download", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const [row] = await db.select().from(signatureRequests).where(eq(signatureRequests.id, req.params.id));
+      if (!row || row.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
+      if (!row.signatureImagePath) return res.status(404).json({ message: "No signature image" });
+      const filePath = path.join(uploadsBase, "signatures", row.signatureImagePath);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found" });
+      const empName = row.employeeId ? `signed-${row.employeeId.slice(0, 6)}` : "signature";
+      res.download(filePath, `${empName}-${row.documentName || "document"}.png`);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Guard Documents ─────────────────────────────────────────────────────────
+  // Guard: get pending signature requests (with document and sender info)
+  app.get("/api/guard/documents/pending", isAuthenticated, async (req: any, res) => {
+    try {
+      const rows = await db.select({
+        id: signatureRequests.id,
+        documentId: signatureRequests.documentId,
+        documentName: signatureRequests.documentName,
+        sentBy: signatureRequests.sentBy,
+        sentAt: signatureRequests.sentAt,
+        deadline: signatureRequests.deadline,
+        message: signatureRequests.message,
+        status: signatureRequests.status,
+        type: signatureRequests.type,
+        siteId: signatureRequests.siteId,
+        viewedAt: signatureRequests.viewedAt,
+        senderFirstName: users.firstName,
+        senderLastName: users.lastName,
+        siteName: sites.name,
+        companyId: signatureRequests.companyId,
+        docFilename: companyDocuments.filename,
+        docFileType: companyDocuments.fileType,
+      })
+        .from(signatureRequests)
+        .leftJoin(users, eq(users.id, signatureRequests.sentBy))
+        .leftJoin(sites, eq(sites.id, signatureRequests.siteId))
+        .leftJoin(companyDocuments, eq(companyDocuments.id, signatureRequests.documentId))
+        .where(and(
+          eq(signatureRequests.employeeId, req.user.id),
+          eq(signatureRequests.status, "pending")
+        ))
+        .orderBy(desc(signatureRequests.sentAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Guard: get permanently shared documents
+  app.get("/api/guard/documents/shared", isAuthenticated, async (req: any, res) => {
+    try {
+      const rows = await db.select({
+        id: employeeSharedDocuments.id,
+        documentId: companyDocuments.id,
+        filename: companyDocuments.filename,
+        originalName: companyDocuments.originalName,
+        category: companyDocuments.category,
+        fileType: companyDocuments.fileType,
+        sharedAt: employeeSharedDocuments.sharedAt,
+        sharedByFirstName: users.firstName,
+        sharedByLastName: users.lastName,
+      })
+        .from(employeeSharedDocuments)
+        .innerJoin(companyDocuments, eq(companyDocuments.id, employeeSharedDocuments.documentId))
+        .leftJoin(users, eq(users.id, employeeSharedDocuments.sharedBy))
+        .where(and(
+          eq(employeeSharedDocuments.employeeId, req.user.id),
+          eq(employeeSharedDocuments.isActive, true)
+        ))
+        .orderBy(desc(employeeSharedDocuments.sharedAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Guard: get unread/pending document count for badge
+  app.get("/api/guard/documents/count", isAuthenticated, async (req: any, res) => {
+    try {
+      const pending = await db.select({ id: signatureRequests.id })
+        .from(signatureRequests)
+        .where(and(
+          eq(signatureRequests.employeeId, req.user.id),
+          eq(signatureRequests.status, "pending")
+        ));
+      res.json({ count: pending.length });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Guard: mark signature request as viewed
+  app.patch("/api/guard/signature-requests/:id/viewed", isAuthenticated, async (req: any, res) => {
+    try {
+      const [row] = await db.select().from(signatureRequests).where(eq(signatureRequests.id, req.params.id));
+      if (!row || row.employeeId !== req.user.id) return res.status(403).json({ message: "Forbidden" });
+      if (!row.viewedAt) {
+        await db.update(signatureRequests).set({ viewedAt: new Date() }).where(eq(signatureRequests.id, req.params.id));
+      }
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Guard: download shared document
+  app.get("/api/guard/documents/shared/:shareId/download", isAuthenticated, async (req: any, res) => {
+    try {
+      const [share] = await db.select({
+        filename: companyDocuments.filename,
+        originalName: companyDocuments.originalName,
+        employeeId: employeeSharedDocuments.employeeId,
+        isActive: employeeSharedDocuments.isActive,
+      })
+        .from(employeeSharedDocuments)
+        .innerJoin(companyDocuments, eq(companyDocuments.id, employeeSharedDocuments.documentId))
+        .where(eq(employeeSharedDocuments.id, req.params.shareId));
+      if (!share || share.employeeId !== req.user.id || !share.isActive) return res.status(403).json({ message: "Forbidden" });
+      const filePath = path.join(uploadsBase, "documents", share.filename);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found" });
+      res.download(filePath, share.originalName || share.filename);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Admin: Shared Documents ─────────────────────────────────────────────────
+  // List all shared documents for the company (optionally filter by employeeId)
+  app.get("/api/admin/shared-documents", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const { employeeId } = req.query;
+      const conditions: any[] = [eq(employeeSharedDocuments.companyId, companyId)];
+      if (employeeId) conditions.push(eq(employeeSharedDocuments.employeeId, employeeId as string));
+      const rows = await db.select({
+        id: employeeSharedDocuments.id,
+        employeeId: employeeSharedDocuments.employeeId,
+        documentId: employeeSharedDocuments.documentId,
+        sharedAt: employeeSharedDocuments.sharedAt,
+        isActive: employeeSharedDocuments.isActive,
+        removedAt: employeeSharedDocuments.removedAt,
+        filename: companyDocuments.filename,
+        originalName: companyDocuments.originalName,
+        category: companyDocuments.category,
+        fileType: companyDocuments.fileType,
+        empFirstName: users.firstName,
+        empLastName: users.lastName,
+      })
+        .from(employeeSharedDocuments)
+        .innerJoin(companyDocuments, eq(companyDocuments.id, employeeSharedDocuments.documentId))
+        .leftJoin(users, eq(users.id, employeeSharedDocuments.employeeId))
+        .where(and(...conditions))
+        .orderBy(desc(employeeSharedDocuments.sharedAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Share a document permanently with an employee
+  app.post("/api/admin/shared-documents", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const { employeeId, documentId } = req.body;
+      if (!employeeId || !documentId) return res.status(400).json({ message: "employeeId and documentId required" });
+      // Check if already shared and active
+      const [existing] = await db.select().from(employeeSharedDocuments)
+        .where(and(
+          eq(employeeSharedDocuments.employeeId, employeeId),
+          eq(employeeSharedDocuments.documentId, documentId),
+          eq(employeeSharedDocuments.isActive, true)
+        ));
+      if (existing) return res.status(400).json({ message: "Already shared with this employee" });
+      const [row] = await db.insert(employeeSharedDocuments).values({
+        companyId,
+        employeeId,
+        documentId,
+        sharedBy: req.user.id,
+        isActive: true,
+      }).returning();
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Remove a shared document (soft-delete)
+  app.patch("/api/admin/shared-documents/:id/remove", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const [row] = await db.select().from(employeeSharedDocuments).where(eq(employeeSharedDocuments.id, req.params.id));
+      if (!row || row.companyId !== req.user.companyId) return res.status(404).json({ message: "Not found" });
+      const [updated] = await db.update(employeeSharedDocuments)
+        .set({ isActive: false, removedAt: new Date(), removedBy: req.user.id })
+        .where(eq(employeeSharedDocuments.id, req.params.id))
         .returning();
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }

@@ -1623,11 +1623,31 @@ export const signatureRequests = pgTable("signature_requests", {
   signedAt: timestamp("signed_at"),
   signatureImagePath: varchar("signature_image_path"),
   documentName: varchar("document_name"),
+  type: varchar("type").notNull().default('signature'), // signature|site_document
+  siteId: varchar("site_id").references(() => sites.id, { onDelete: 'set null' }),
+  viewedAt: timestamp("viewed_at"),
 });
 
-export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({ id: true, sentAt: true, signedAt: true });
+export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({ id: true, sentAt: true, signedAt: true, viewedAt: true });
 export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
 export type SignatureRequest = typeof signatureRequests.$inferSelect;
+
+// Employee Shared Documents — permanent document sharing with employees
+export const employeeSharedDocuments = pgTable("employee_shared_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  employeeId: varchar("employee_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  documentId: varchar("document_id").notNull().references(() => companyDocuments.id, { onDelete: 'cascade' }),
+  sharedBy: varchar("shared_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sharedAt: timestamp("shared_at").defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+  removedAt: timestamp("removed_at"),
+  removedBy: varchar("removed_by").references(() => users.id, { onDelete: 'set null' }),
+});
+
+export const insertEmployeeSharedDocumentSchema = createInsertSchema(employeeSharedDocuments).omit({ id: true, sharedAt: true, removedAt: true });
+export type InsertEmployeeSharedDocument = z.infer<typeof insertEmployeeSharedDocumentSchema>;
+export type EmployeeSharedDocument = typeof employeeSharedDocuments.$inferSelect;
 
 // Incident Photos table — Task 6
 export const incidentPhotos = pgTable("incident_photos", {

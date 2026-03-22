@@ -10,7 +10,8 @@ import { format } from "date-fns";
 import { 
   Clock, MapPin, LogIn, LogOut, Calendar, Bell, User, 
   Home, Coffee, FileText, ChevronRight, Loader2, AlertCircle,
-  CheckCircle2, XCircle, Download, X, Share, Smartphone, ExternalLink, Youtube, Mail, Copy, RefreshCw, DollarSign
+  CheckCircle2, XCircle, Download, X, Share, Smartphone, ExternalLink, Youtube, Mail, Copy, RefreshCw, DollarSign,
+  FolderOpen
 } from "lucide-react";
 import { useLocation } from "wouter";
 import guardTrackLogo from "@assets/GuardTrack Logo - Dynamic Blue Shades_1760219905891.png";
@@ -40,6 +41,7 @@ import MySchedule from "@/components/my-schedule";
 import LeaveRequestForm from "@/components/leave-request-form";
 import GuardNoticeBoard from "@/components/guard-notice-board";
 import GuardInvoices from "@/components/guard-invoices";
+import GuardDocuments from "@/components/guard-documents";
 import { GuardStripeSettings } from "@/components/stripe-connect-settings";
 import { useBackground } from "@/components/background-provider";
 import { useFeatureAccess, type FeatureName } from "@/hooks/use-feature-access";
@@ -59,6 +61,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   MapPin,
   Briefcase,
   DollarSign,
+  FolderOpen,
   Settings: SettingsIcon,
 };
 
@@ -231,6 +234,14 @@ export default function GuardApp() {
     queryKey: ["/api/guard-app-tabs"],
     enabled: !!user,
   });
+
+  // Document badge count
+  const { data: docCountData } = useQuery<{ count: number }>({
+    queryKey: ["/api/guard/documents/count"],
+    enabled: !!user,
+    refetchInterval: 60000,
+  });
+  const docCount = docCountData?.count ?? 0;
 
   // Get visible tabs sorted by order with role and feature filtering
   const visibleTabs = guardTabs
@@ -917,6 +928,7 @@ export default function GuardApp() {
     { key: 'schedule', label: 'Schedule', icon: 'Calendar' },
     { key: 'leave', label: 'Annual Leave', icon: 'FileText' },
     { key: 'notices', label: 'Notice Board', icon: 'Bell' },
+    { key: 'documents', label: 'Documents', icon: 'FolderOpen' },
     { key: 'invoices', label: 'Invoices', icon: 'DollarSign' },
     { key: 'settings', label: 'Settings', icon: 'Settings' },
   ];
@@ -924,6 +936,7 @@ export default function GuardApp() {
   const navItems = visibleTabs.length > 0
     ? [
         ...visibleTabs.map(tab => ({ key: tab.tabKey, label: tab.label, icon: tab.icon })),
+        ...(!visibleTabs.some(t => t.tabKey === 'documents') ? [{ key: 'documents', label: 'Documents', icon: 'FolderOpen' }] : []),
         ...(!visibleTabs.some(t => t.tabKey === 'invoices') ? [{ key: 'invoices', label: 'Invoices', icon: 'DollarSign' }] : []),
         ...(!visibleTabs.some(t => t.tabKey === 'settings') ? [{ key: 'settings', label: 'Settings', icon: 'Settings' }] : []),
       ]
@@ -1236,6 +1249,13 @@ export default function GuardApp() {
             <GuardNoticeBoard />
           </div>
         );
+      case 'documents':
+        return (
+          <div>
+            <h2 className="text-xl font-bold mb-4">Documents</h2>
+            <GuardDocuments />
+          </div>
+        );
       case 'invoices':
         return (
           <div>
@@ -1384,6 +1404,7 @@ export default function GuardApp() {
                 <SidebarMenu>
                   {navItems.map((item) => {
                     const IconComponent = iconMap[item.icon] || Home;
+                    const showDocBadge = item.key === 'documents' && docCount > 0;
                     return (
                       <SidebarMenuItem key={item.key}>
                         <SidebarMenuButton
@@ -1393,7 +1414,12 @@ export default function GuardApp() {
                           data-testid={`nav-${item.key}`}
                         >
                           <IconComponent className="h-4 w-4" />
-                          <span>{item.label}</span>
+                          <span className="flex-1">{item.label}</span>
+                          {showDocBadge && (
+                            <Badge variant="destructive" className="text-[10px] h-5 min-w-[20px]">
+                              {docCount > 9 ? '9+' : docCount}
+                            </Badge>
+                          )}
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
@@ -1506,6 +1532,7 @@ export default function GuardApp() {
               {navItems.map((item) => {
                 const IconComponent = iconMap[item.icon] || Home;
                 const isActive = activeTab === item.key;
+                const showBadge = item.key === 'documents' && docCount > 0;
                 return (
                   <button
                     key={item.key}
@@ -1517,7 +1544,14 @@ export default function GuardApp() {
                     }`}
                     data-testid={`bottom-nav-${item.key}`}
                   >
-                    <IconComponent className="h-5 w-5" />
+                    <div className="relative">
+                      <IconComponent className="h-5 w-5" />
+                      {showBadge && (
+                        <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold leading-none">
+                          {docCount > 9 ? '9+' : docCount}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] leading-tight text-center line-clamp-1 max-w-[54px]">{item.label}</span>
                   </button>
                 );
