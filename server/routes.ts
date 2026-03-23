@@ -6652,6 +6652,16 @@ GuardTrack Team`;
     } catch (e: any) { res.status(500).json({ error: e.message || "AI fill failed" }); }
   });
 
+  app.get("/download/android", (_req, res) => {
+    const filePath = path.join(process.cwd(), "uploads", "guardtrack-android-release.tar.gz");
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send("File not found");
+    }
+    res.setHeader("Content-Disposition", "attachment; filename=guardtrack-android-release.tar.gz");
+    res.setHeader("Content-Type", "application/gzip");
+    res.sendFile(filePath);
+  });
+
   app.get("/api/public/issue-report/:issueId", async (req: any, res) => {
     try {
       const { eq } = await import("drizzle-orm");
