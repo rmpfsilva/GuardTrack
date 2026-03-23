@@ -18,3 +18,9 @@ id = "5UkKN2iREcuInowVCXU2V"
 uri = "file://guardtrack-android-release.tar.gz"
 type = "unspecified"
 title = "GuardTrack Android Project (ready to build)"
+
+[[outputs]]
+id = "4zwe1n4P4PrHCn1MM7Jxw"
+uri = "file://GITHUB_BUILD_GUIDE.md"
+type = "text"
+title = "GitHub APK Build Guide — Step by Step"

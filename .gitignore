@@ -4,3 +4,8 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+# Android signing - never commit these
+*.jks
+*.keystore
+android/keystore.properties
+android/guardtrack-release-key.jks
