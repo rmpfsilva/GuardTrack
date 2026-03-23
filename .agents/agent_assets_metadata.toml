@@ -6,3 +6,9 @@ id = "n-kFagXLkj_mD211Rk78u"
 uri = "file://NCR-I-001-TES-Security-Test.pdf"
 type = "pdf"
 title = "NCR Test Report — Fire Alarm Activation (I-001)"
+
+[[outputs]]
+id = "Jc8HRLG4t5g_ukgMY6nJ_"
+uri = "file://guardtrack-android.tar.gz"
+type = "unspecified"
+title = "GuardTrack Android Project (synced + privacy fix)"
