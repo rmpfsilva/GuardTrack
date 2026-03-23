@@ -31,10 +31,10 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Set up Java 17
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
@@ -44,41 +44,35 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Generate or restore keystore
+      - name: Restore keystore from secret
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "Restoring keystore from secret..."
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/guardtrack-release-key.jks
-            echo "Keystore restored successfully ($(du -sh android/guardtrack-release-key.jks | cut -f1))"
-          else
-            echo "No KEYSTORE_BASE64 secret found — generating a new keystore..."
-            keytool -genkeypair \
-              -keystore android/guardtrack-release-key.jks \
-              -alias guardtrack-key \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass "GuardTrack@Store2024!" \
-              -keypass "GuardTrack@Key2024!" \
-              -dname "CN=GuardTrack,O=ProForce,L=London,C=GB" \
-              -noprompt
-            echo "Keystore generated!"
-            echo ""
-            echo "================================================================"
-            echo "IMPORTANT — Copy the text below and save it as the"
-            echo "KEYSTORE_BASE64 secret in GitHub Settings > Secrets."
-            echo "You only need to do this once."
-            echo "================================================================"
-            base64 -w 0 android/guardtrack-release-key.jks
-            echo ""
-            echo "================================================================"
-          fi
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/guardtrack-release-key.jks
+          echo "Keystore restored ($(du -sh android/guardtrack-release-key.jks | cut -f1))"
+
+      - name: Generate keystore (first run — no secret yet)
+        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
+        run: |
+          keytool -genkeypair \
+            -keystore android/guardtrack-release-key.jks \
+            -alias guardtrack-key \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "GuardTrack@Store2024!" \
+            -keypass "GuardTrack@Key2024!" \
+            -dname "CN=GuardTrack,O=ProForce,L=London,C=GB" \
+            -noprompt
+          echo "Keystore generated!"
+          echo ""
+          echo "========================================================"
+          echo "SAVE THIS — paste it as the KEYSTORE_BASE64 GitHub secret"
+          echo "========================================================"
+          base64 -w 0 android/guardtrack-release-key.jks
+          echo ""
+          echo "========================================================"
 
       - name: Write keystore.properties
         run: |
-          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
-            'GuardTrack@Store2024!' \
-            'GuardTrack@Key2024!' \
-            'guardtrack-key' \
-            '../guardtrack-release-key.jks' \
+          printf 'storePassword=GuardTrack@Store2024!\nkeyPassword=GuardTrack@Key2024!\nkeyAlias=guardtrack-key\nstoreFile=../guardtrack-release-key.jks\n' \
             > android/keystore.properties
 
       - name: Build signed release APK
@@ -93,8 +87,9 @@ jobs:
           retention-days: 30
 
       - name: Upload keystore artifact (save this on first run)
+        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: guardtrack-keystore
+          name: guardtrack-keystore-SAVE-THIS
           path: android/guardtrack-release-key.jks
           retention-days: 90
