@@ -1,4 +1,4 @@
-name: Build & Sign Android APK
+name: Build & Sign Android AAB
 
 on:
   push:
@@ -7,12 +7,23 @@ on:
 
 jobs:
   build:
-    name: Build Signed Release APK
+    name: Build Signed Release AAB
     runs-on: ubuntu-latest
+
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate signing secret
+        run: |
+          if [ -z "${{ env.KEYSTORE_BASE64 }}" ]; then
+            echo "ERROR: KEYSTORE_BASE64 secret is not set. Build cannot proceed without the permanent signing key."
+            exit 1
+          fi
+          echo "Signing secret found."
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -44,26 +55,17 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Generate keystore (PKCS12 format)
+      - name: Restore permanent signing keystore
         run: |
-          keytool -genkeypair \
-            -keystore android/guardtrack-release-key.jks \
-            -storetype PKCS12 \
-            -alias guardtrack-key \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass GuardTrackStore2024 \
-            -keypass GuardTrackStore2024 \
-            -dname "CN=GuardTrack,O=ProForce,L=London,C=GB" \
-            -noprompt
-          echo "Keystore generated (PKCS12 format):"
+          echo "${{ env.KEYSTORE_BASE64 }}" | base64 --decode > android/guardtrack-release-key.jks
+          echo "Keystore restored from secret:"
           ls -lh android/guardtrack-release-key.jks
 
       - name: Write keystore.properties
         run: |
           printf 'storePassword=GuardTrackStore2024\nkeyPassword=GuardTrackStore2024\nkeyAlias=guardtrack-key\nstoreFile=../guardtrack-release-key.jks\n' \
             > android/keystore.properties
-          echo "keystore.properties contents:"
-          cat android/keystore.properties
+          echo "keystore.properties written."
 
       - name: Build signed release AAB
         working-directory: android
@@ -75,10 +77,3 @@ jobs:
           name: guardtrack-release-${{ github.run_number }}
           path: android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 30
-
-      - name: Upload keystore artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: guardtrack-keystore-run-${{ github.run_number }}
-          path: android/guardtrack-release-key.jks
-          retention-days: 90
