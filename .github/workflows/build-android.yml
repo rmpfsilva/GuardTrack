@@ -44,31 +44,32 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Generate keystore
+      - name: Generate keystore (PKCS12 format)
         run: |
           keytool -genkeypair \
             -keystore android/guardtrack-release-key.jks \
+            -storetype PKCS12 \
             -alias guardtrack-key \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass "GuardTrack@Store2024!" \
-            -keypass "GuardTrack@Key2024!" \
+            -storepass GuardTrackStore2024 \
+            -keypass GuardTrackKey2024 \
             -dname "CN=GuardTrack,O=ProForce,L=London,C=GB" \
             -noprompt
-          echo "Keystore generated successfully"
-          echo "========================================================"
-          echo "Base64 value (save as KEYSTORE_BASE64 GitHub secret):"
-          echo "========================================================"
-          base64 -w 0 android/guardtrack-release-key.jks
-          echo ""
+          echo "Keystore generated (PKCS12 format):"
+          ls -lh android/guardtrack-release-key.jks
 
       - name: Write keystore.properties
         run: |
-          printf 'storePassword=GuardTrack@Store2024!\nkeyPassword=GuardTrack@Key2024!\nkeyAlias=guardtrack-key\nstoreFile=../guardtrack-release-key.jks\n' \
-            > android/keystore.properties
+          cat > android/keystore.properties << 'EOF'
+          storePassword=GuardTrackStore2024
+          keyPassword=GuardTrackKey2024
+          keyAlias=guardtrack-key
+          storeFile=../guardtrack-release-key.jks
+          EOF
 
       - name: Build signed release APK
         working-directory: android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease --no-build-cache
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
