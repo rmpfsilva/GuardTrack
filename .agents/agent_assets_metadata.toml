@@ -12,3 +12,9 @@ id = "Jc8HRLG4t5g_ukgMY6nJ_"
 uri = "file://guardtrack-android.tar.gz"
 type = "unspecified"
 title = "GuardTrack Android Project (synced + privacy fix)"
+
+[[outputs]]
+id = "5UkKN2iREcuInowVCXU2V"
+uri = "file://guardtrack-android-release.tar.gz"
+type = "unspecified"
+title = "GuardTrack Android Project (ready to build)"
