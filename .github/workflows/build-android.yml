@@ -52,7 +52,7 @@ jobs:
             -alias guardtrack-key \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass GuardTrackStore2024 \
-            -keypass GuardTrackKey2024 \
+            -keypass GuardTrackStore2024 \
             -dname "CN=GuardTrack,O=ProForce,L=London,C=GB" \
             -noprompt
           echo "Keystore generated (PKCS12 format):"
@@ -60,12 +60,10 @@ jobs:
 
       - name: Write keystore.properties
         run: |
-          cat > android/keystore.properties << 'EOF'
-          storePassword=GuardTrackStore2024
-          keyPassword=GuardTrackKey2024
-          keyAlias=guardtrack-key
-          storeFile=../guardtrack-release-key.jks
-          EOF
+          printf 'storePassword=GuardTrackStore2024\nkeyPassword=GuardTrackStore2024\nkeyAlias=guardtrack-key\nstoreFile=../guardtrack-release-key.jks\n' \
+            > android/keystore.properties
+          echo "keystore.properties contents:"
+          cat android/keystore.properties
 
       - name: Build signed release APK
         working-directory: android
