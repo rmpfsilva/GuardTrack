@@ -44,24 +44,46 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Decode keystore from secret
+      - name: Generate or restore keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/guardtrack-release-key.jks
-          ls -lh android/guardtrack-release-key.jks
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Restoring keystore from secret..."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/guardtrack-release-key.jks
+            echo "Keystore restored successfully ($(du -sh android/guardtrack-release-key.jks | cut -f1))"
+          else
+            echo "No KEYSTORE_BASE64 secret found — generating a new keystore..."
+            keytool -genkeypair \
+              -keystore android/guardtrack-release-key.jks \
+              -alias guardtrack-key \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "GuardTrack@Store2024!" \
+              -keypass "GuardTrack@Key2024!" \
+              -dname "CN=GuardTrack,O=ProForce,L=London,C=GB" \
+              -noprompt
+            echo "Keystore generated!"
+            echo ""
+            echo "================================================================"
+            echo "IMPORTANT — Copy the text below and save it as the"
+            echo "KEYSTORE_BASE64 secret in GitHub Settings > Secrets."
+            echo "You only need to do this once."
+            echo "================================================================"
+            base64 -w 0 android/guardtrack-release-key.jks
+            echo ""
+            echo "================================================================"
+          fi
 
       - name: Write keystore.properties
         run: |
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
-            '${{ secrets.KEYSTORE_STORE_PASSWORD }}' \
-            '${{ secrets.KEYSTORE_KEY_PASSWORD }}' \
-            '${{ secrets.KEYSTORE_ALIAS }}' \
+            'GuardTrack@Store2024!' \
+            'GuardTrack@Key2024!' \
+            'guardtrack-key' \
             '../guardtrack-release-key.jks' \
             > android/keystore.properties
-          echo "keystore.properties written"
 
       - name: Build signed release APK
         working-directory: android
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew assembleRelease
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -69,3 +91,10 @@ jobs:
           name: guardtrack-release-${{ github.run_number }}
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
+
+      - name: Upload keystore artifact (save this on first run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardtrack-keystore
+          path: android/guardtrack-release-key.jks
+          retention-days: 90
